@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { IPC_CHANNELS } from '../../shared/ipc/channels'
+import { aiEngines } from '../../shared/ai/engine'
 import { safeIpcMain, type SafeIpcMain } from './safeIpc'
 
 const settingsSchema = z.object({
@@ -12,6 +13,7 @@ const settingsSchema = z.object({
   diagnosticMode: z.boolean().optional(),
   theme: z.enum(['dark', 'light']).optional(),
   language: z.enum(['pt-BR', 'en']).optional(),
+  aiEngine: z.enum(aiEngines).optional(),
 }).strict()
 
 export function registerSettingsIpc(win: BrowserWindow, database: LocalDatabase, logger: Logger, registrar?: SafeIpcMain) {

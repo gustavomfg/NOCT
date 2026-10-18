@@ -1,6 +1,6 @@
 import type { ModelCapability, ModelReference } from './model'
 
-export const executionModes = ['build', 'review'] as const
+export const executionModes = ['build', 'review', 'docs'] as const
 export const contextSourceTypes = [
   'memory',
   'project-index',

@@ -3,6 +3,7 @@ import type {
   NormalizedFinishReason,
   NormalizedProviderError,
 } from './execution'
+import type { AgentToolCall, AgentToolDefinition, AgentTranscriptEntry } from './agentTools'
 import type { ModelDescriptor } from './model'
 import type { NormalizedTask } from './task'
 
@@ -15,6 +16,10 @@ export interface ProviderExecutionRequest {
   executionId: string
   task: NormalizedTask
   model: ModelDescriptor
+  /** Tools the model may call. Omitted for plain chat completions. */
+  tools?: AgentToolDefinition[]
+  /** Assistant tool calls and tool results produced after the user intent. */
+  transcript?: AgentTranscriptEntry[]
 }
 
 export interface ProviderExecutionControl {
@@ -23,7 +28,8 @@ export interface ProviderExecutionControl {
 }
 
 export interface ProviderExecutionResult {
-  finishReason: Extract<NormalizedFinishReason, 'stop' | 'length' | 'unknown'>
+  finishReason: Extract<NormalizedFinishReason, 'stop' | 'length' | 'tool-calls' | 'unknown'>
+  toolCalls?: AgentToolCall[]
 }
 
 export interface ExecutionOutcome {

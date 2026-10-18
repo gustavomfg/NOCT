@@ -202,7 +202,7 @@ describe('OpenAICompatibleAdapterFactory', () => {
         modelDiscovery: true,
         embeddings: true,
         streaming: true,
-        toolCalling: false,
+        toolCalling: true,
         cancellation: true,
         authentication: 'required',
       },
@@ -515,6 +515,56 @@ describe('OpenAICompatibleProviderAdapter', () => {
     })).rejects.toMatchObject({
       normalized: { code: 'invalid-response' },
     })
+  })
+
+  it('envia ferramentas oferecidas e normaliza tool calls fragmentadas', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(sse([
+      'data: {"choices":[{"delta":{"content":"Vou ler."}}]}',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read_","arguments":"{\\"pa"}}]}}]}',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"file","arguments":"th\\":\\"a.ts\\"}"}}]}}]}',
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+      'data: [DONE]',
+    ]))
+    const tools = [{ name: 'read_file', description: 'Lê um arquivo.', parameters: { type: 'object', properties: {} } }]
+    const transcript = [
+      { role: 'assistant' as const, content: '', toolCalls: [{ id: 'call-0', name: 'list_directory', arguments: '{}' }] },
+      { role: 'tool' as const, toolCallId: 'call-0', content: 'a.ts' },
+    ]
+    const emit = vi.fn()
+    await expect(adapter(request).execute({ ...execution(), tools, transcript }, {
+      signal: new AbortController().signal,
+      emit,
+    })).resolves.toEqual({
+      finishReason: 'tool-calls',
+      toolCalls: [{ id: 'call-1', name: 'read_file', arguments: '{"path":"a.ts"}' }],
+    })
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'message.delta', delta: 'Vou ler.' }))
+    const body = JSON.parse(String(request.mock.calls[0][1]?.body)) as { tools: unknown[]; messages: Array<Record<string, unknown>> }
+    expect(body.tools).toEqual([{ type: 'function', function: tools[0] }])
+    expect(body.messages.slice(-2)).toEqual([
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call-0', type: 'function', function: { name: 'list_directory', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'call-0', content: 'a.ts' },
+    ])
+  })
+
+  it('trata tool calls finalizadas como stop por runtimes locais', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(sse([
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c","function":{"name":"list_directory","arguments":"{}"}}]},"finish_reason":"stop"}]}',
+    ]))
+    const tools = [{ name: 'list_directory', description: 'Lista.', parameters: { type: 'object' } }]
+    await expect(adapter(request).execute({ ...execution(), tools }, {
+      signal: new AbortController().signal,
+      emit: vi.fn(),
+    })).resolves.toMatchObject({ finishReason: 'tool-calls', toolCalls: [{ id: 'c', name: 'list_directory' }] })
+  })
+
+  it('explica recusa provável de function calling quando ferramentas foram oferecidas', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ error: { message: 'tools unsupported' } }, { status: 400 }))
+    const tools = [{ name: 'list_directory', description: 'Lista.', parameters: { type: 'object' } }]
+    await expect(adapter(request).execute({ ...execution(), tools }, {
+      signal: new AbortController().signal,
+      emit: vi.fn(),
+    })).rejects.toMatchObject({ normalized: { code: 'invalid-response', message: expect.stringContaining('function calling') } })
   })
 
   it('propaga cancelamento pelo AbortSignal sem converter em falha de rede', async () => {

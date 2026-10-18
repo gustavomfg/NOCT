@@ -71,11 +71,11 @@ const taskBodySchema = z.object({
   }).strict(),
   tools: z.tuple([]),
 }).strict().superRefine((task, context) => {
-  if (task.mode === 'review' && task.permissions.workspaceAccess !== 'read-only') {
+  if (task.mode !== 'build' && task.permissions.workspaceAccess !== 'read-only') {
     context.addIssue({
       code: 'custom',
       path: ['permissions', 'workspaceAccess'],
-      message: 'Review Mode exige acesso somente leitura.',
+      message: task.mode === 'review' ? 'Review Mode exige acesso somente leitura.' : 'Docs Mode exige acesso somente leitura.',
     })
   }
   if (new Set(task.requirements).size !== task.requirements.length) {

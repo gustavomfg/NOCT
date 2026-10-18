@@ -13,6 +13,7 @@ export const normalizedErrorCodes = [
 export const normalizedFinishReasons = [
   'stop',
   'length',
+  'tool-calls',
   'cancelled',
   'error',
   'unknown',

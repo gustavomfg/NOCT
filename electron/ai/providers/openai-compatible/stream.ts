@@ -1,8 +1,20 @@
+import { AGENT_TOOL_LIMITS, type AgentToolCall } from '../../../../shared/ai/agentTools'
 import type {
   ProviderExecutionControl,
   ProviderExecutionResult,
 } from '../../../../shared/ai/providerExecution'
 import { OPENAI_COMPATIBLE_LIMITS } from './config'
+
+interface StreamOptions {
+  /** Tool calls are accepted only when the request offered tools. */
+  toolsOffered?: boolean
+}
+
+interface PartialToolCall {
+  id: string
+  name: string
+  arguments: string
+}
 
 export class OpenAICompatibleProtocolError extends Error {
   constructor(message = 'Resposta OpenAI-compatible inválida.') {
@@ -15,6 +27,7 @@ export async function consumeOpenAICompatibleStream(
   response: Response,
   executionId: string,
   control: ProviderExecutionControl,
+  options: StreamOptions = {},
 ): Promise<ProviderExecutionResult> {
   if (!response.body) throw new OpenAICompatibleProtocolError()
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
@@ -29,6 +42,7 @@ export async function consumeOpenAICompatibleStream(
   let finishReason: ProviderExecutionResult['finishReason'] | undefined
   let receivedTerminal = false
   let receivedDone = false
+  const toolCalls = new Map<number, PartialToolCall>()
 
   const consumeEvent = (event: string) => {
     if (receivedDone) return
@@ -68,16 +82,22 @@ export async function consumeOpenAICompatibleStream(
           delta: delta.content,
         })
       }
+      if (Array.isArray(delta?.tool_calls)) {
+        if (!options.toolsOffered) throw new OpenAICompatibleProtocolError()
+        for (const fragment of delta.tool_calls) accumulateToolCall(toolCalls, fragment)
+      }
       const nativeFinish = choice.finish_reason
       if (nativeFinish === null || nativeFinish === undefined) continue
       if (nativeFinish === 'tool_calls' || nativeFinish === 'function_call') {
-        throw new OpenAICompatibleProtocolError()
+        if (!options.toolsOffered) throw new OpenAICompatibleProtocolError()
+        finishReason = 'tool-calls'
+      } else {
+        finishReason = nativeFinish === 'stop'
+          ? 'stop'
+          : nativeFinish === 'length'
+            ? 'length'
+            : 'unknown'
       }
-      finishReason = nativeFinish === 'stop'
-        ? 'stop'
-        : nativeFinish === 'length'
-          ? 'length'
-          : 'unknown'
       receivedTerminal = true
     }
     const usage = normalizeUsage(payload.usage)
@@ -114,7 +134,40 @@ export async function consumeOpenAICompatibleStream(
   }
 
   if (!receivedTerminal) throw new OpenAICompatibleProtocolError()
+  const completedToolCalls = finalizeToolCalls(toolCalls)
+  // Some local runtimes report `stop` even when the turn ended in tool calls.
+  if (completedToolCalls.length > 0) return { finishReason: 'tool-calls', toolCalls: completedToolCalls }
+  if (finishReason === 'tool-calls') throw new OpenAICompatibleProtocolError()
   return { finishReason: finishReason ?? 'unknown' }
+}
+
+function accumulateToolCall(calls: Map<number, PartialToolCall>, value: unknown) {
+  const fragment = asRecord(value)
+  if (!fragment) throw new OpenAICompatibleProtocolError()
+  const index = typeof fragment.index === 'number' && Number.isInteger(fragment.index) && fragment.index >= 0
+    ? fragment.index
+    : calls.size
+  if (index >= AGENT_TOOL_LIMITS.toolCallsPerStep) throw new OpenAICompatibleProtocolError()
+  const current = calls.get(index) ?? { id: '', name: '', arguments: '' }
+  const nativeFunction = asRecord(fragment.function)
+  if (typeof fragment.id === 'string' && fragment.id) current.id = fragment.id
+  if (typeof nativeFunction?.name === 'string') current.name += nativeFunction.name
+  if (typeof nativeFunction?.arguments === 'string') current.arguments += nativeFunction.arguments
+  if (
+    current.id.length > AGENT_TOOL_LIMITS.toolCallIdCharacters
+    || current.name.length > AGENT_TOOL_LIMITS.toolNameCharacters
+    || current.arguments.length > AGENT_TOOL_LIMITS.toolArgumentCharacters
+  ) throw new OpenAICompatibleProtocolError()
+  calls.set(index, current)
+}
+
+function finalizeToolCalls(calls: Map<number, PartialToolCall>): AgentToolCall[] {
+  return [...calls.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([index, call]) => {
+      if (!call.name) throw new OpenAICompatibleProtocolError()
+      return { id: call.id || `call_${index}`, name: call.name, arguments: call.arguments || '{}' }
+    })
 }
 
 export async function readBoundedJson(response: Response, maxBytes = OPENAI_COMPATIBLE_LIMITS.modelsResponseBytes): Promise<unknown> {

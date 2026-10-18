@@ -890,6 +890,10 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const conversation = await api.conversations.create(workspace)
     await expect(api.ai.send(conversation.id, 'Revisar', ['../fora.txt'], 'review')).rejects.toThrow(/dentro do workspace/)
     expect(database!.listExecutions(workspace, conversation.id)).toEqual([])
+    // No AI is implicit: without a selection the run is refused before any execution is reserved.
+    await expect(api.ai.send(conversation.id, 'Revisar', [], 'review')).rejects.toThrow(/Nenhuma IA selecionada/)
+    expect(database!.listExecutions(workspace, conversation.id)).toEqual([])
+    await api.settings.set({ aiEngine: 'codex' })
 
     const missing = path.join(workspace, `missing-${randomUUID()}.txt`)
     await expect(api.ai.send(conversation.id, 'Revisar', [missing], 'review')).rejects.toThrow(/anexo não foi encontrado/)

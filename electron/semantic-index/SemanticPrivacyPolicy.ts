@@ -21,16 +21,25 @@ const secretNames = new Set([
 
 const secretExtensions = new Set(['.pem', '.key', '.p12', '.pfx', '.crt', '.cer'])
 
+/** Files whose content must not leave the machine through AI context or tools. */
+export function isPotentiallySensitivePath(relativePath: string) {
+  const baseName = path.posix.basename(relativePath.replace(/\\/g, '/')).toLowerCase()
+  const extension = path.posix.extname(baseName)
+  return secretNames.has(baseName)
+    || baseName.includes('secret')
+    || baseName.includes('credential')
+    || baseName.includes('token')
+    || secretExtensions.has(extension)
+}
+
 /** Applies semantic content rules after Project Index authorization and before any embedding call. */
 export class SemanticPrivacyPolicy {
   evaluate(file: Pick<ProjectIndexFile, 'relativePath' | 'classification' | 'excluded' | 'exclusionReason'>, remoteEmbeddingAllowed: boolean): SemanticPrivacyDecision {
     const relativePath = file.relativePath.replace(/\\/g, '/')
-    const baseName = path.posix.basename(relativePath).toLowerCase()
-    const extension = path.posix.extname(baseName)
     if (file.excluded || isIgnoredProjectDiscoveryRelativePath(relativePath)) {
       return { allowed: false, embeddingAllowed: false, reason: file.exclusionReason ?? 'Caminho excluído pelo Project Index.' }
     }
-    if (secretNames.has(baseName) || baseName.includes('secret') || baseName.includes('credential') || baseName.includes('token') || secretExtensions.has(extension)) {
+    if (isPotentiallySensitivePath(relativePath)) {
       return { allowed: false, embeddingAllowed: false, reason: 'Arquivo potencialmente sensível excluído da inteligência semântica.' }
     }
     if (file.classification === 'asset' || file.classification === 'lockfile') {

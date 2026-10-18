@@ -4,7 +4,11 @@ import { providerExecutionErrorSchema } from '../../shared/ai/providerExecutionS
 export class ProviderExecutionError extends Error {
   readonly normalized: NormalizedProviderError
 
-  constructor(error: unknown) {
+  constructor(
+    error: unknown,
+    /** The Provider likely rejected the request because it offered tools. */
+    readonly toolsRejected = false,
+  ) {
     const parsed = providerExecutionErrorSchema.parse(error)
     super(parsed.message)
     this.name = 'ProviderExecutionError'

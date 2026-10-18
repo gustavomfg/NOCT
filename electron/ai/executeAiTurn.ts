@@ -6,7 +6,7 @@ import { ModelRegistry } from './ModelRegistry'
 import { ProviderRegistry } from './ProviderRegistry'
 import { AIOrchestrator } from './AIOrchestrator'
 import type { NormalizedExecutionEvent } from '../../shared/ai/execution'
-import type { ExecutionHandle } from './AIOrchestrator'
+import type { AgentToolRuntime, ExecutionHandle } from './AIOrchestrator'
 import type { ExecutionOutcome } from '../../shared/ai/providerExecution'
 
 export interface ProviderAiTurn {
@@ -21,6 +21,7 @@ export async function startAiTurn(
   taskInput: NormalizedTaskInput,
   bindings: WorkspaceModelBindings,
   emit: (method: string, params: Record<string, unknown>) => void,
+  tools?: AgentToolRuntime,
 ): Promise<ProviderAiTurn> {
   const task = new TaskBuilder().build(taskInput)
   const resolver = new ModelResolver(models, providers)
@@ -37,6 +38,7 @@ export async function startAiTurn(
         executionError = event.error.message
       }
     },
+    tools,
   )
 
   return {

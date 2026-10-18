@@ -16,6 +16,9 @@ import type { Logger } from '../logging/Logger'
 import { BuildRollbackService } from '../ai/BuildRollbackService'
 import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
 import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
+import { createWorkspaceToolbox } from '../ai/agent/WorkspaceToolbox'
+import { CancellableProcessRunner } from '../validation/CancellableProcessRunner'
+import { selectAiEngine } from '../../shared/ai/engine'
 import { getAuthorizedConversation } from './conversationAccess'
 import { artifactType, assertInsideWorkspace } from './fileAccess'
 import { safeIpcMain, type SafeIpcMain } from './safeIpc'
@@ -49,6 +52,7 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
   const ownsRegistrar = !registrar
   const { database, logger, providerConfigurations, aiExecutions, buildRollback, changeControl, approvalDetails, readWorkspaceContext, projectIndex, semanticRetrieval } = dependencies
   const contextAssembly = new ContextAssemblyService()
+  const toolProcesses = new CancellableProcessRunner()
 
   ipcMain.handle(IPC_CHANNELS.ai.send, async (_event, value: unknown) => {
     const { conversationId, prompt, attachments, mode } = aiSendSchema.parse(value)
@@ -56,12 +60,13 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
     const contextStartedAt = new Date().toISOString()
     attachments.forEach((filePath) => assertInsideWorkspace(filePath, conversation.workspace))
 
+    const settings = database.getSettings()
     const bindings = database.workspaceModelBindings.get(conversation.workspace)
-    const enabledProviders = providerConfigurations.list().filter((provider) => provider.enabled)
-    const hasActiveModel = Boolean(enabledProviders.length > 0 && bindings?.defaultBinding)
-    const useCodex = mode !== 'review' || !hasActiveModel
-
-    if (!useCodex && (!bindings || !hasActiveModel)) throw new Error('Nenhuma IA configurada. Abra Configurações > IA para conectar um provedor.')
+    const defaultProviderId = bindings?.defaultBinding?.providerId
+    const providerReady = Boolean(defaultProviderId && providerConfigurations.list().some((provider) => provider.enabled && provider.id === defaultProviderId))
+    const engine = selectAiEngine({ preference: settings.aiEngine, providerReady, legacyCodexModel: settings.model })
+    if (!engine) throw new Error('Nenhuma IA selecionada para este workspace. Abra Configurações → IA, conecte uma API ou um modelo local e escolha o modelo.')
+    const useCodex = engine === 'codex'
 
     const history = database.listRecentMessages(conversationId, AI_TASK_LIMITS.messages)
     const workspaceMemory = await loadWorkspaceMemoryForAi(database, conversation.workspace, readWorkspaceContext)
@@ -191,19 +196,18 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
     const taskInput: NormalizedTaskInput = {
       workspace: { id: conversation.workspace, name: projectName },
       intent: prompt,
-      mode: mode === 'review' ? 'review' : 'build',
+      mode,
       messages,
       context: assembledContext.sources,
       constraints: [],
       requirements: ['chat', 'streaming'],
       selection: { type: 'workspace-default' },
       output: { format: 'markdown' },
-      permissions: { workspaceAccess: mode === 'review' ? 'read-only' : 'workspace-write' },
+      permissions: { workspaceAccess: mode === 'build' ? 'workspace-write' : 'read-only' },
       tools: [],
     }
 
     if (useCodex) {
-      const settings = database.getSettings()
       if (mode === 'build') {
         await changeControl.begin(executionId, conversation.workspace)
       }
@@ -236,7 +240,24 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
       return
     }
 
-    await aiExecutions.startProvider(conversationId, taskInput, bindings!, executionId)
+    if (mode === 'build') await changeControl.begin(executionId, conversation.workspace)
+    try {
+      await aiExecutions.startProvider(conversationId, taskInput, bindings!, {
+        executionId,
+        mode,
+        createTools: (bridge) => createWorkspaceToolbox({
+          workspace: conversation.workspace,
+          mode,
+          approvalPolicy: settings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request',
+          runner: toolProcesses,
+          emit: bridge.emit,
+          requestApproval: bridge.requestApproval,
+        }),
+      })
+    } catch (error) {
+      if (mode === 'build') changeControl.abort(executionId)
+      throw error
+    }
     database.markBrainMemoriesUsed(brainMemory.memoryIds)
     } catch (error) {
       const current = database.getExecution(executionId)

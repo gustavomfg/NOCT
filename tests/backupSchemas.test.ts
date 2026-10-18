@@ -25,6 +25,11 @@ describe('schema de backup', () => {
     expect(backupSchema.parse(valid())).toMatchObject({ schemaVersion: 5, conversations: [{ id: conversation.id }] })
   })
 
+  it('preserva a IA selecionada e recusa motores desconhecidos', () => {
+    expect(backupSchema.parse({ ...valid(), settings: { aiEngine: 'provider' } }).settings).toEqual({ aiEngine: 'provider' })
+    expect(() => backupSchema.parse({ ...valid(), settings: { aiEngine: 'unknown' } })).toThrow()
+  })
+
   it('rejeita campos desconhecidos e conteúdo excessivo', () => {
     expect(() => backupSchema.parse({ ...valid(), unexpected: true })).toThrow()
     expect(() => backupSchema.parse({ ...valid(), conversations: [{ ...conversation, title: 'x'.repeat(501) }] })).toThrow()

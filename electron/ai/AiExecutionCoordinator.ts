@@ -14,6 +14,8 @@ import type { CodexEvent } from '../codex/protocol'
 import type { ModelRegistry } from './ModelRegistry'
 import type { ProviderRegistry } from './ProviderRegistry'
 import { startAiTurn } from './executeAiTurn'
+import type { AgentToolRuntime } from './AIOrchestrator'
+import type { ToolApprovalRequest } from './agent/WorkspaceToolbox'
 import type { CompletedTurnSnapshot, PersistedTurn } from './TurnPersistence'
 import { IPC_CHANNELS } from '../../shared/ipc/channels'
 
@@ -36,7 +38,21 @@ interface ActiveExecution {
   cancelRequested: boolean
   sequence: number
   lifecycle: AgentRunState | null
+  /** Tool approvals waiting for a developer decision (Provider runs only). */
+  pendingApprovals: Map<string, (accepted: boolean) => void>
   cancel(reason?: string): Promise<void>
+}
+
+export interface ProviderTurnOptions {
+  executionId?: string
+  mode?: AgentMode
+  /** Builds the workspace tools for this run; omitted for plain chat completions. */
+  createTools?: (bridge: ProviderToolBridge) => AgentToolRuntime
+}
+
+export interface ProviderToolBridge {
+  emit(method: string, params: Record<string, unknown>): void
+  requestApproval(request: ToolApprovalRequest): Promise<boolean>
 }
 
 interface CodexTurnInput {
@@ -157,17 +173,23 @@ export class AiExecutionCoordinator {
     conversationId: string,
     taskInput: NormalizedTaskInput,
     bindings: WorkspaceModelBindings,
-    executionId?: string,
+    { executionId, mode = taskInput.mode, createTools }: ProviderTurnOptions = {},
   ) {
-    const active = this.reserve(conversationId, taskInput.workspace.id, taskInput.mode === 'review' ? 'review' : 'build', 'provider', executionId)
+    const active = this.reserve(conversationId, taskInput.workspace.id, mode, 'provider', executionId)
     const runId = active.runId
     try {
+      const emit = (method: string, params: Record<string, unknown>) => this.forwardEvent(method, params, conversationId, runId)
+      const tools = createTools?.({
+        emit,
+        requestApproval: (request) => this.requestToolApproval(active, request),
+      })
       const turn = await startAiTurn(
         this.models,
         this.providers,
         taskInput,
         bindings,
-        (method, params) => this.forwardEvent(method, params, conversationId, runId),
+        emit,
+        tools,
       )
       if (this.active?.runId !== runId) {
         turn.cancel('A execução perdeu seu contexto ativo.')
@@ -175,10 +197,12 @@ export class AiExecutionCoordinator {
       }
       this.active.cancel = async (reason = 'Execução cancelada pelo usuário.') => {
         active.cancelRequested = true
+        this.settlePendingApprovals(active, false)
         turn.cancel(reason)
       }
       if (active.cancelRequested) turn.cancel('Execução cancelada pelo usuário.')
-      this.pushExecutionStatus(active, 'running')
+      // A fast tool step may already be waiting for approval; do not overwrite it.
+      if (active.lifecycle?.state === 'planning') this.pushExecutionStatus(active, 'running')
       void turn.completion
         .then((outcome) => {
           return this.persistAndComplete(active, { turn: { id: turn.executionId, ...outcome } })
@@ -212,10 +236,48 @@ export class AiExecutionCoordinator {
   }
 
   async resolveApproval(key: string, accepted: boolean, forSession = false) {
-    if (this.active?.kind !== 'codex' || this.active.lifecycle?.state !== 'waiting-approval') {
-      throw new Error('Não existe uma execução Codex aguardando aprovação.')
+    const active = this.active
+    if (!active || active.lifecycle?.state !== 'waiting-approval') {
+      throw new Error('Não existe uma execução aguardando aprovação.')
     }
-    await this.codex.resolveApproval(key, accepted, forSession)
+    if (active.kind === 'codex') {
+      await this.codex.resolveApproval(key, accepted, forSession)
+      return
+    }
+    const resolve = active.pendingApprovals.get(key)
+    if (!resolve) throw new Error('A aprovação solicitada não pertence à execução ativa.')
+    active.pendingApprovals.delete(key)
+    if (active.pendingApprovals.size === 0) this.pushExecutionStatus(active, 'running')
+    resolve(accepted)
+  }
+
+  private requestToolApproval(active: ActiveExecution, request: ToolApprovalRequest) {
+    if (this.active !== active || active.cancelRequested || active.finishing) return Promise.resolve(false)
+    const approvalKey = `tool-approval-${this.createRunId()}`
+    this.approvalDetails.set(approvalKey, { command: request.command, risk: request.risk })
+    const decision = new Promise<boolean>((resolve) => active.pendingApprovals.set(approvalKey, resolve))
+    this.pushExecutionStatus(active, 'waiting-approval')
+    this.forwardEvent(
+      request.kind === 'command' ? 'item/commandExecution/requestApproval' : 'item/fileChange/requestApproval',
+      {
+        approvalKey,
+        reason: request.detail,
+        ...(request.command ? { command: request.command } : {}),
+        ...(request.risk ? { commandAssessment: { risk: request.risk } } : {}),
+      },
+      active.conversationId,
+      active.runId,
+    )
+    return decision
+  }
+
+  private settlePendingApprovals(active: ActiveExecution, accepted: boolean) {
+    const pending = [...active.pendingApprovals.entries()]
+    active.pendingApprovals.clear()
+    for (const [key, resolve] of pending) {
+      this.approvalDetails.delete(key)
+      resolve(accepted)
+    }
   }
 
   dispose() {
@@ -228,6 +290,7 @@ export class AiExecutionCoordinator {
     const active = this.active
     this.active = null
     if (active?.kind === 'provider') {
+      this.settlePendingApprovals(active, false)
       void active.cancel('Aplicação encerrando; execução interrompida.').catch((error: unknown) => {
         this.logger.warn('ai', 'O cancelamento do Provider durante shutdown falhou.', { error: error instanceof Error ? error.message : String(error) })
       })
@@ -258,6 +321,7 @@ export class AiExecutionCoordinator {
       cancelRequested: false,
       sequence: 0,
       lifecycle: null,
+      pendingApprovals: new Map(),
       cancel: async () => {
         active.cancelRequested = true
       },

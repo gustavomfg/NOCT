@@ -68,13 +68,13 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
         modelDiscovery: true,
         embeddings: true,
         streaming: true,
-        toolCalling: false,
+        toolCalling: true,
         cancellation: true,
         authentication: this.config.requiresAuthentication ? 'required' : 'none',
       },
       limitations: {
         requestTimeoutMs: { minimum: 1_000, maximum: 120_000 },
-        notes: ['Tool calling ainda não é normalizado por este adapter.'],
+        notes: ['O agente usa function calling OpenAI-compatible; o Build exige um modelo que suporte ferramentas.'],
       },
     }
     this.models = dependencies.models.map((model) => {
@@ -155,16 +155,19 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
           body: JSON.stringify(buildOpenAICompatibleRequest(
             execution.task,
             execution.model.modelId,
+            execution.tools,
+            execution.transcript,
           )),
           redirect: 'error',
           signal: request.signal,
         },
       )
-      if (!response.ok) throw await errorFromResponse(response)
+      if (!response.ok) throw await errorFromResponse(response, Boolean(execution.tools?.length))
       return await consumeOpenAICompatibleStream(
         response,
         execution.executionId,
         control,
+        { toolsOffered: Boolean(execution.tools?.length) },
       )
     } catch (error) {
       if (error instanceof ProviderExecutionError) throw error
@@ -430,7 +433,14 @@ function availabilityFromError(error: ProviderExecutionError): ProviderAvailabil
   }
 }
 
-async function errorFromResponse(response: Response) {
+async function errorFromResponse(response: Response, toolsOffered = false) {
+  if (toolsOffered && (response.status === 400 || response.status === 422)) {
+    return new ProviderExecutionError({
+      code: 'invalid-response',
+      message: 'O Provider recusou a solicitação. O modelo selecionado pode não suportar ferramentas (function calling), necessárias para o Build; escolha outro modelo.',
+      retryable: false,
+    }, true)
+  }
   if (response.status === 429) {
     try {
       if (isInsufficientCredits(await readBoundedJson(response))) {

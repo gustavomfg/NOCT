@@ -12,10 +12,14 @@ Review nunca altera arquivos por conta própria.
 
 ## Build Mode
 
-Build pode modificar arquivos somente dentro do workspace autorizado e sob as
-políticas atuais de aprovação e sandbox. O App Server Codex recebe política de
-escrita no workspace com rede desabilitada. Progresso, aprovações, arquivos
-alterados e diffs permanecem visíveis.
+Build pode modificar arquivos somente dentro do workspace autorizado e sob a
+política de aprovação ativa. Com um modelo de Provider, o agente usa as
+ferramentas de workspace do Nocturne: escritas ficam dentro da raiz autorizada
+(diretórios gerados, `.git`, `.nocturne` e prováveis segredos são recusados) e
+todo comando exige aprovação explícita e roda sem shell. Com o motor opcional
+Codex, o App Server recebe política de escrita no workspace com rede
+desabilitada. Progresso, aprovações, arquivos alterados e diffs permanecem
+visíveis.
 
 Rollback protegido só é oferecido quando o workspace estava limpo antes da
 execução, existe commit `HEAD` e o agente reportou caminhos contidos na raiz
