@@ -24,6 +24,9 @@ coverage
 *.local
 *.bak
 *.backup-*
+*.tsbuildinfo
+.eslintcache
+.vite
 
 # Local configuration and credentials
 .env
@@ -31,6 +34,8 @@ coverage
 !.env.example
 provider-credentials.json
 .provider-credentials.json.*.tmp
+*.pem
+*.key
 
 # Local application data
 *.db
@@ -50,6 +55,8 @@ nocturne-crash.log
 tmp
 *.pid
 *.sock
+# Interrupted atomic writes (writeAtomicFile temporary siblings)
+*.tmp-*
 
 # Test and tooling output
 .nyc_output
@@ -59,6 +66,8 @@ blob-report
 
 # Editor directories and files
 .idea
+.vscode/*
+!.vscode/extensions.json
 .DS_Store
 Thumbs.db
 *.suo
