@@ -95,6 +95,17 @@ describe('ModelResolver', () => {
     })
   })
 
+  it('trata capacidades não anunciadas pelo catálogo como desconhecidas', async () => {
+    const { models, resolver } = setup()
+    models.replaceProviderModels('openai', [
+      model({ providerId: 'openai', modelId: 'default' }, { capabilities: [] }),
+    ])
+    await expect(resolver.resolve(
+      task({ type: 'workspace-default' }, ['chat', 'streaming']),
+      bindings(),
+    )).resolves.toMatchObject({ model: { modelId: 'default' } })
+  })
+
   it('valida capacidades, disponibilidade do Provider e isolamento do Workspace', async () => {
     const { models, providers, resolver } = setup()
     models.replaceProviderModels('openai', [

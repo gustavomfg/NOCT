@@ -84,7 +84,10 @@ export class ModelResolver {
         { availability: model.availability },
       )
     }
-    const missing = task.requirements.filter(
+    // Many OpenAI-compatible catalogs do not advertise capabilities. An empty
+    // list means "not declared", not "unsupported"; the Provider is the final
+    // authority and reports incompatibility as a normalized error.
+    const missing = model.capabilities.length === 0 ? [] : task.requirements.filter(
       (capability) => !model.capabilities.includes(capability),
     )
     if (missing.length > 0) {
