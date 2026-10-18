@@ -20,7 +20,7 @@
 }
 
 .inspector-header span {
-  border: 1px solid #27262c;
+  border: 1px solid var(--color-surface-raised);
   border-radius: 10px;
 }
 
@@ -35,15 +35,15 @@
 }
 
 .inspector-empty div {
-  color: #777184;
-  background: #18171c;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
   place-items: center;
   margin: auto;
   display: grid;
 }
 
 .approval-card {
-  border: 1px solid #473b61;
+  border: 1px solid var(--color-border-strong);
   border-radius: 10px;
   margin-bottom: 12px;
   padding: 11px;
@@ -63,14 +63,14 @@
 }
 
 .approval-title span {
-  color: #ad91f2;
+  color: var(--color-accent);
 }
 
 .approval-card pre, .timeline-item pre {
   white-space: pre-wrap;
   word-break: break-word;
-  color: #9d9ba4;
-  background: #0f0f12;
+  color: var(--color-text-muted);
+  background: var(--color-canvas);
   max-height: 130px;
   font: 450 var(--font-code)/1.55 var(--font-mono);
   overflow: auto;
@@ -82,15 +82,15 @@
 }
 
 .approval-actions button {
-  border: 1px solid #343239;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   align-items: center;
   display: flex;
 }
 
 .approval-actions .accept {
-  background: #7456cf;
-  border-color: #7456cf;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .approval-card > small {
@@ -117,8 +117,8 @@
 
 .timeline-dot {
   z-index: 1;
-  color: #8b8994;
-  border: 1px solid #2b2a31;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   flex: 0 0 27px;
   place-items: center;
@@ -128,7 +128,7 @@
 }
 
 .timeline-dot.running {
-  color: #aa8ef5;
+  color: var(--color-accent);
 }
 
 .timeline-dot.running svg {
@@ -159,20 +159,20 @@
 }
 
 .diff-panel {
-  border: 1px solid #28272d;
+  border: 1px solid var(--color-surface-raised);
   border-radius: 9px;
   margin-top: 13px;
   overflow: hidden;
 }
 
 .diff-title {
-  border-bottom: 1px solid #28272d;
+  border-bottom: 1px solid var(--color-surface-raised);
   align-items: center;
   display: flex;
 }
 
 .diff-panel pre {
-  background: #0d0d10;
+  background: var(--color-canvas);
   max-height: 300px;
   margin: 0;
   font: 450 var(--font-code)/1.55 var(--font-mono);
@@ -207,12 +207,12 @@
 }
 
 .workspace-mini:hover, .workspace-mini.active {
-  color: #b7a4e9;
-  background: #17171b;
+  color: var(--color-accent);
+  background: var(--color-surface);
 }
 
 .settings-button {
-  color: #6f6e78;
+  color: var(--color-text-muted);
   border-radius: 6px;
   place-items: center;
   display: grid;
@@ -220,12 +220,12 @@
 
 .settings-button:hover {
   color: #bbb;
-  background: #202026;
+  background: var(--color-surface-raised);
 }
 
 .branch-pill {
-  color: #85838d;
-  border: 1px solid #29282e;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   align-items: center;
   gap: 5px;
@@ -240,9 +240,9 @@
 }
 
 .attachment-list > span {
-  color: #b9accd;
-  background: #211c2b;
-  border: 1px solid #35313f;
+  color: var(--color-text-secondary);
+  background: var(--color-accent-surface);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   align-items: center;
   gap: 5px;
@@ -252,7 +252,7 @@
 }
 
 .attachment-list button {
-  color: #7e7788;
+  color: var(--color-text-muted);
   place-items: center;
   padding: 0;
   display: grid;
@@ -266,8 +266,8 @@
 }
 
 .message-attachments span {
-  color: #a99aba;
-  border: 1px solid #443a58;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-strong);
   border-radius: 5px;
   align-items: center;
   gap: 3px;
@@ -331,9 +331,9 @@
 }
 
 .quick-actions button {
-  color: #74727c;
-  background: #111114;
-  border: 1px solid #28272d;
+  color: var(--color-text-muted);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-surface-raised);
   border-radius: 6px;
   align-items: center;
   gap: 4px;
@@ -343,20 +343,20 @@
 }
 
 .files-panel, .git-panel, .document-panel {
-  background: #111114;
-  border: 1px solid #28272d;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-surface-raised);
   border-radius: 9px;
   margin-top: 13px;
   overflow: hidden;
 }
 
 .diff-title > span {
-  color: #74727c;
+  color: var(--color-text-muted);
   margin-left: auto;
 }
 
 .changed-file {
-  border-top: 1px solid #1e1e23;
+  border-top: 1px solid var(--color-surface);
   align-items: center;
   display: flex;
 }
@@ -374,13 +374,13 @@
 }
 
 .changed-file > button:not(:nth-child(2)) {
-  color: #74727c;
+  color: var(--color-text-muted);
   place-items: center;
   display: grid;
 }
 
 .file-kind {
-  background: #25232a;
+  background: var(--color-surface-raised);
   border-radius: 4px;
   place-items: center;
   display: grid;
@@ -407,13 +407,13 @@
 }
 
 .commit-row {
-  border-top: 1px solid #242329;
+  border-top: 1px solid var(--color-surface-raised);
   display: flex;
 }
 
 .commit-row input {
-  background: #0d0d10;
-  border: 1px solid #29282e;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border);
   border-radius: 5px;
   outline: 0;
   flex: 1;
@@ -421,15 +421,15 @@
 }
 
 .commit-row button {
-  background: #6f53c7;
+  background: var(--color-accent);
   border-radius: 5px;
   place-items: center;
   display: grid;
 }
 
 .commit-row button:disabled {
-  color: #5e5d66;
-  background: #29282e;
+  color: var(--color-border-strong);
+  background: var(--color-border);
 }
 
 .export-actions {
@@ -438,13 +438,13 @@
 }
 
 .export-actions button {
-  color: #aaa8b1;
-  border: 1px solid #2c2b31;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
   border-radius: 5px;
   padding: 5px 2px;
 }
 
 .export-actions button:hover {
-  color: #c1adfa;
-  border-color: #6d57a4;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }

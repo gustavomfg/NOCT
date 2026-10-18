@@ -38,8 +38,8 @@ export function useChatViewport({ messages, historyHasNewer, loadLatestMessages,
     const scroller = chatScrollRef.current
     if (!scroller || !stickToBottomRef.current) return
     scroller.scrollTo({
-      top: scroller.scrollHeight,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      top: messages.length ? scroller.scrollHeight : 0,
+      behavior: !messages.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     })
     onNewContent(false)
   }, [chatScrollRef, messages, onNewContent, stickToBottomRef])

@@ -169,7 +169,7 @@
 .project-index-progress {
   height: 4px;
   margin-top: var(--spacing-sm);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--color-border-subtle);
   overflow: hidden;
 }
@@ -249,7 +249,7 @@
   padding: var(--spacing-2xs) var(--spacing-xs);
   color: var(--color-accent);
   font-size: var(--font-caption);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--color-accent-surface);
 }
 

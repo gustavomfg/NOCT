@@ -3,7 +3,7 @@ import {
   Activity,
   ArrowLeft,
   Atom,
-  Bot,
+  Cpu,
   Brain,
   Check,
   ChevronDown,
@@ -15,7 +15,7 @@ import {
   Plus,
   Search,
   Server,
-  Sparkles,
+  CircuitBoard,
   Trash2,
   UserRound,
   Wind,
@@ -48,7 +48,7 @@ interface ServicePreset {
 }
 
 const catalogIcons: Record<ProviderCatalogId, LucideIcon> = {
-  openai: Sparkles,
+  openai: CircuitBoard,
   gemini: Gem,
   openrouter: Network,
   deepseek: Brain,
@@ -420,9 +420,8 @@ export function AIConnectionPage({
       </div>
 
       <section className={`ai-active ${activeSummary ? 'ready' : 'empty'}`} aria-live="polite" aria-label={t('ai.activeAi')}>
-        <span className="ai-active-mark">{activeSummary ? <Check size={16}/> : <Bot size={16}/>}</span>
+        <span className="ai-active-mark">{activeSummary ? <Check size={16}/> : <Cpu size={16}/>}</span>
         <span className="ai-active-copy">
-          <small>{t('ai.activeAi')}</small>
           <strong>{activeSummary ? activeSummary.name : t('ai.noActiveAi')}</strong>
           <span>{activeSummary ? activeSummary.detail : workspaceId ? t('ai.noActiveAiHint') : t('ai.selectWorkspace')}</span>
         </span>
@@ -446,7 +445,7 @@ export function AIConnectionPage({
                   title={t('ai.chooseModel')}
                   disabled={connecting || !service.enabled}
                   onClick={() => void openProviderModels(service)}
-                ><Bot size={13}/></button>
+                ><Cpu size={13}/></button>
                 <button
                   className="ai-list-config"
                   aria-label={`${t('ai.diagnose')} ${service.displayName}`}
@@ -479,7 +478,7 @@ export function AIConnectionPage({
               title={t('ai.chooseModel')}
               disabled={loadingCodexModels || connecting}
               onClick={() => void openCodexModels()}
-            >{loadingCodexModels ? <LoaderCircle className="spin" size={13}/> : <Bot size={13}/>}</button>
+            >{loadingCodexModels ? <LoaderCircle className="spin" size={13}/> : <Cpu size={13}/>}</button>
             <button
               className="ai-list-remove"
               aria-label={t('ai.disconnectChatGpt')}

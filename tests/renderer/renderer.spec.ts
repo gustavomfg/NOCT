@@ -1240,7 +1240,35 @@ test('diferencia o estado vazio sem dados locais', async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
   await expect(page.getByText('Nenhuma conversa ainda')).toBeVisible()
-  await expect(page.getByText('Comece com uma revisão segura')).toBeVisible()
+  const welcome = page.getByRole('heading', { name: 'Área de trabalho' })
+  await expect(welcome).toBeVisible()
+  // Entry actions stay visible before preparing or sending a request.
+  await expect.poll(() => page.locator('.chat-scroll').evaluate((element) => element.scrollTop)).toBe(0)
+  await expect(page.getByRole('button', { name: 'Abrir projeto', exact: true })).toBeVisible()
+  await expect(page).toHaveScreenshot('welcome-workspace.png', { animations: 'disabled', fullPage: true })
+})
+
+test('mantém o erro inicial separado das ações e permite dispensá-lo', async ({ page }) => {
+  await installNocturneMock(page, { empty: true })
+  await ready(page)
+  for (const width of [1440, 520]) {
+    await page.setViewportSize({ width, height: 900 })
+    // Resizing preserves the open sidebar as a modal drawer on narrow windows.
+    if (width <= 980) await page.locator('#workspace-sidebar .sidebar-toggle').click()
+    await page.getByRole('button', { name: 'Memória do workspace' }).click()
+    const alert = page.locator('.welcome-content .error-card')
+    await expect(alert).toBeVisible()
+    await expect(alert).toContainText('Como resolver')
+    const errorBounds = await alert.boundingBox()
+    const welcomeBounds = await page.locator('.welcome').boundingBox()
+    expect(errorBounds).not.toBeNull()
+    expect(welcomeBounds).not.toBeNull()
+    expect(errorBounds!.y + errorBounds!.height).toBeLessThanOrEqual(welcomeBounds!.y)
+    expect(errorBounds!.width).toBeCloseTo(welcomeBounds!.width, 0)
+    await alert.getByRole('button', { name: 'Fechar' }).click()
+    await expect(alert).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Abrir projeto', exact: true })).toBeVisible()
+  }
 })
 
 test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page }) => {

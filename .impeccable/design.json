@@ -1,0 +1,963 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T21:22:41.121Z",
+  "title": "Design System: Nocturne Studio",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Dark · Canvas charcoal",
+        "tonalRamp": [
+          "oklch(from #18191c 15% c h)",
+          "oklch(from #18191c 26% c h)",
+          "oklch(from #18191c 38% c h)",
+          "oklch(from #18191c 49% c h)",
+          "oklch(from #18191c 61% c h)",
+          "oklch(from #18191c 72% c h)",
+          "oklch(from #18191c 84% c h)",
+          "oklch(from #18191c 95% c h)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Dark · Panel charcoal",
+        "tonalRamp": [
+          "oklch(from #141518 15% c h)",
+          "oklch(from #141518 26% c h)",
+          "oklch(from #141518 38% c h)",
+          "oklch(from #141518 49% c h)",
+          "oklch(from #141518 61% c h)",
+          "oklch(from #141518 72% c h)",
+          "oklch(from #141518 84% c h)",
+          "oklch(from #141518 95% c h)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Dark · Working surface",
+        "tonalRamp": [
+          "oklch(from #202125 15% c h)",
+          "oklch(from #202125 26% c h)",
+          "oklch(from #202125 38% c h)",
+          "oklch(from #202125 49% c h)",
+          "oklch(from #202125 61% c h)",
+          "oklch(from #202125 72% c h)",
+          "oklch(from #202125 84% c h)",
+          "oklch(from #202125 95% c h)"
+        ]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Dark · Selected surface",
+        "tonalRamp": [
+          "oklch(from #28292e 15% c h)",
+          "oklch(from #28292e 26% c h)",
+          "oklch(from #28292e 38% c h)",
+          "oklch(from #28292e 49% c h)",
+          "oklch(from #28292e 61% c h)",
+          "oklch(from #28292e 72% c h)",
+          "oklch(from #28292e 84% c h)",
+          "oklch(from #28292e 95% c h)"
+        ]
+      },
+      "surface-hover": {
+        "role": "neutral",
+        "displayName": "Dark · Hover surface",
+        "tonalRamp": [
+          "oklch(from #303137 15% c h)",
+          "oklch(from #303137 26% c h)",
+          "oklch(from #303137 38% c h)",
+          "oklch(from #303137 49% c h)",
+          "oklch(from #303137 61% c h)",
+          "oklch(from #303137 72% c h)",
+          "oklch(from #303137 84% c h)",
+          "oklch(from #303137 95% c h)"
+        ]
+      },
+      "border-subtle": {
+        "role": "neutral",
+        "displayName": "Dark · Border Subtle",
+        "tonalRamp": [
+          "oklch(from #303137 15% c h)",
+          "oklch(from #303137 26% c h)",
+          "oklch(from #303137 38% c h)",
+          "oklch(from #303137 49% c h)",
+          "oklch(from #303137 61% c h)",
+          "oklch(from #303137 72% c h)",
+          "oklch(from #303137 84% c h)",
+          "oklch(from #303137 95% c h)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Dark · Border",
+        "tonalRamp": [
+          "oklch(from #3d3f47 15% c h)",
+          "oklch(from #3d3f47 26% c h)",
+          "oklch(from #3d3f47 38% c h)",
+          "oklch(from #3d3f47 49% c h)",
+          "oklch(from #3d3f47 61% c h)",
+          "oklch(from #3d3f47 72% c h)",
+          "oklch(from #3d3f47 84% c h)",
+          "oklch(from #3d3f47 95% c h)"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Dark · Border Strong",
+        "tonalRamp": [
+          "oklch(from #61636f 15% c h)",
+          "oklch(from #61636f 26% c h)",
+          "oklch(from #61636f 38% c h)",
+          "oklch(from #61636f 49% c h)",
+          "oklch(from #61636f 61% c h)",
+          "oklch(from #61636f 72% c h)",
+          "oklch(from #61636f 84% c h)",
+          "oklch(from #61636f 95% c h)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Dark · Main text",
+        "tonalRamp": [
+          "oklch(from #ededef 15% c h)",
+          "oklch(from #ededef 26% c h)",
+          "oklch(from #ededef 38% c h)",
+          "oklch(from #ededef 49% c h)",
+          "oklch(from #ededef 61% c h)",
+          "oklch(from #ededef 72% c h)",
+          "oklch(from #ededef 84% c h)",
+          "oklch(from #ededef 95% c h)"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Dark · Supporting text",
+        "tonalRamp": [
+          "oklch(from #c4c5ce 15% c h)",
+          "oklch(from #c4c5ce 26% c h)",
+          "oklch(from #c4c5ce 38% c h)",
+          "oklch(from #c4c5ce 49% c h)",
+          "oklch(from #c4c5ce 61% c h)",
+          "oklch(from #c4c5ce 72% c h)",
+          "oklch(from #c4c5ce 84% c h)",
+          "oklch(from #c4c5ce 95% c h)"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Dark · Muted text",
+        "tonalRamp": [
+          "oklch(from #a0a2ae 15% c h)",
+          "oklch(from #a0a2ae 26% c h)",
+          "oklch(from #a0a2ae 38% c h)",
+          "oklch(from #a0a2ae 49% c h)",
+          "oklch(from #a0a2ae 61% c h)",
+          "oklch(from #a0a2ae 72% c h)",
+          "oklch(from #a0a2ae 84% c h)",
+          "oklch(from #a0a2ae 95% c h)"
+        ]
+      },
+      "text-subtle": {
+        "role": "neutral",
+        "displayName": "Dark · Quiet metadata",
+        "tonalRamp": [
+          "oklch(from #9395a2 15% c h)",
+          "oklch(from #9395a2 26% c h)",
+          "oklch(from #9395a2 38% c h)",
+          "oklch(from #9395a2 49% c h)",
+          "oklch(from #9395a2 61% c h)",
+          "oklch(from #9395a2 72% c h)",
+          "oklch(from #9395a2 84% c h)",
+          "oklch(from #9395a2 95% c h)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Dark · Restrained peach",
+        "tonalRamp": [
+          "oklch(from #efac87 15% c h)",
+          "oklch(from #efac87 26% c h)",
+          "oklch(from #efac87 38% c h)",
+          "oklch(from #efac87 49% c h)",
+          "oklch(from #efac87 61% c h)",
+          "oklch(from #efac87 72% c h)",
+          "oklch(from #efac87 84% c h)",
+          "oklch(from #efac87 95% c h)"
+        ]
+      },
+      "accent-strong": {
+        "role": "primary",
+        "displayName": "Dark · Peach emphasis",
+        "tonalRamp": [
+          "oklch(from #f5bea1 15% c h)",
+          "oklch(from #f5bea1 26% c h)",
+          "oklch(from #f5bea1 38% c h)",
+          "oklch(from #f5bea1 49% c h)",
+          "oklch(from #f5bea1 61% c h)",
+          "oklch(from #f5bea1 72% c h)",
+          "oklch(from #f5bea1 84% c h)",
+          "oklch(from #f5bea1 95% c h)"
+        ]
+      },
+      "accent-surface": {
+        "role": "primary",
+        "displayName": "Dark · Peach semantic surface",
+        "tonalRamp": [
+          "oklch(from #342a25 15% c h)",
+          "oklch(from #342a25 26% c h)",
+          "oklch(from #342a25 38% c h)",
+          "oklch(from #342a25 49% c h)",
+          "oklch(from #342a25 61% c h)",
+          "oklch(from #342a25 72% c h)",
+          "oklch(from #342a25 84% c h)",
+          "oklch(from #342a25 95% c h)"
+        ]
+      },
+      "success": {
+        "role": "neutral",
+        "displayName": "Dark · Success",
+        "tonalRamp": [
+          "oklch(from #8bc5a2 15% c h)",
+          "oklch(from #8bc5a2 26% c h)",
+          "oklch(from #8bc5a2 38% c h)",
+          "oklch(from #8bc5a2 49% c h)",
+          "oklch(from #8bc5a2 61% c h)",
+          "oklch(from #8bc5a2 72% c h)",
+          "oklch(from #8bc5a2 84% c h)",
+          "oklch(from #8bc5a2 95% c h)"
+        ]
+      },
+      "warning": {
+        "role": "neutral",
+        "displayName": "Dark · Warning",
+        "tonalRamp": [
+          "oklch(from #e5bc7a 15% c h)",
+          "oklch(from #e5bc7a 26% c h)",
+          "oklch(from #e5bc7a 38% c h)",
+          "oklch(from #e5bc7a 49% c h)",
+          "oklch(from #e5bc7a 61% c h)",
+          "oklch(from #e5bc7a 72% c h)",
+          "oklch(from #e5bc7a 84% c h)",
+          "oklch(from #e5bc7a 95% c h)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Dark · Danger",
+        "tonalRamp": [
+          "oklch(from #f19b9c 15% c h)",
+          "oklch(from #f19b9c 26% c h)",
+          "oklch(from #f19b9c 38% c h)",
+          "oklch(from #f19b9c 49% c h)",
+          "oklch(from #f19b9c 61% c h)",
+          "oklch(from #f19b9c 72% c h)",
+          "oklch(from #f19b9c 84% c h)",
+          "oklch(from #f19b9c 95% c h)"
+        ]
+      },
+      "info": {
+        "role": "neutral",
+        "displayName": "Dark · Info",
+        "tonalRamp": [
+          "oklch(from #9dbce3 15% c h)",
+          "oklch(from #9dbce3 26% c h)",
+          "oklch(from #9dbce3 38% c h)",
+          "oklch(from #9dbce3 49% c h)",
+          "oklch(from #9dbce3 61% c h)",
+          "oklch(from #9dbce3 72% c h)",
+          "oklch(from #9dbce3 84% c h)",
+          "oklch(from #9dbce3 95% c h)"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "Dark · On Accent",
+        "tonalRamp": [
+          "oklch(from #261e19 15% c h)",
+          "oklch(from #261e19 26% c h)",
+          "oklch(from #261e19 38% c h)",
+          "oklch(from #261e19 49% c h)",
+          "oklch(from #261e19 61% c h)",
+          "oklch(from #261e19 72% c h)",
+          "oklch(from #261e19 84% c h)",
+          "oklch(from #261e19 95% c h)"
+        ]
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Dark · Neutral primary control",
+        "tonalRamp": [
+          "oklch(from #ededef 15% c h)",
+          "oklch(from #ededef 26% c h)",
+          "oklch(from #ededef 38% c h)",
+          "oklch(from #ededef 49% c h)",
+          "oklch(from #ededef 61% c h)",
+          "oklch(from #ededef 72% c h)",
+          "oklch(from #ededef 84% c h)",
+          "oklch(from #ededef 95% c h)"
+        ]
+      },
+      "on-control": {
+        "role": "neutral",
+        "displayName": "Dark · Primary control foreground",
+        "tonalRamp": [
+          "oklch(from #202127 15% c h)",
+          "oklch(from #202127 26% c h)",
+          "oklch(from #202127 38% c h)",
+          "oklch(from #202127 49% c h)",
+          "oklch(from #202127 61% c h)",
+          "oklch(from #202127 72% c h)",
+          "oklch(from #202127 84% c h)",
+          "oklch(from #202127 95% c h)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Dark · Selection",
+        "tonalRamp": [
+          "oklch(from #554137 15% c h)",
+          "oklch(from #554137 26% c h)",
+          "oklch(from #554137 38% c h)",
+          "oklch(from #554137 49% c h)",
+          "oklch(from #554137 61% c h)",
+          "oklch(from #554137 72% c h)",
+          "oklch(from #554137 84% c h)",
+          "oklch(from #554137 95% c h)"
+        ]
+      },
+      "overlay": {
+        "role": "neutral",
+        "displayName": "Dark · Overlay",
+        "tonalRamp": [
+          "oklch(from rgb(8 9 12 / 76%) 15% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 26% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 38% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 49% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 61% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 72% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 84% c h)",
+          "oklch(from rgb(8 9 12 / 76%) 95% c h)"
+        ]
+      },
+      "light-canvas": {
+        "role": "neutral",
+        "displayName": "Light · Canvas charcoal",
+        "tonalRamp": [
+          "oklch(from #fafafa 15% c h)",
+          "oklch(from #fafafa 26% c h)",
+          "oklch(from #fafafa 38% c h)",
+          "oklch(from #fafafa 49% c h)",
+          "oklch(from #fafafa 61% c h)",
+          "oklch(from #fafafa 72% c h)",
+          "oklch(from #fafafa 84% c h)",
+          "oklch(from #fafafa 95% c h)"
+        ]
+      },
+      "light-panel": {
+        "role": "neutral",
+        "displayName": "Light · Panel charcoal",
+        "tonalRamp": [
+          "oklch(from #f1f1f3 15% c h)",
+          "oklch(from #f1f1f3 26% c h)",
+          "oklch(from #f1f1f3 38% c h)",
+          "oklch(from #f1f1f3 49% c h)",
+          "oklch(from #f1f1f3 61% c h)",
+          "oklch(from #f1f1f3 72% c h)",
+          "oklch(from #f1f1f3 84% c h)",
+          "oklch(from #f1f1f3 95% c h)"
+        ]
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "Light · Working surface",
+        "tonalRamp": [
+          "oklch(from #ffffff 15% c h)",
+          "oklch(from #ffffff 26% c h)",
+          "oklch(from #ffffff 38% c h)",
+          "oklch(from #ffffff 49% c h)",
+          "oklch(from #ffffff 61% c h)",
+          "oklch(from #ffffff 72% c h)",
+          "oklch(from #ffffff 84% c h)",
+          "oklch(from #ffffff 95% c h)"
+        ]
+      },
+      "light-surface-raised": {
+        "role": "neutral",
+        "displayName": "Light · Selected surface",
+        "tonalRamp": [
+          "oklch(from #e8e8ed 15% c h)",
+          "oklch(from #e8e8ed 26% c h)",
+          "oklch(from #e8e8ed 38% c h)",
+          "oklch(from #e8e8ed 49% c h)",
+          "oklch(from #e8e8ed 61% c h)",
+          "oklch(from #e8e8ed 72% c h)",
+          "oklch(from #e8e8ed 84% c h)",
+          "oklch(from #e8e8ed 95% c h)"
+        ]
+      },
+      "light-surface-hover": {
+        "role": "neutral",
+        "displayName": "Light · Hover surface",
+        "tonalRamp": [
+          "oklch(from #dedfe6 15% c h)",
+          "oklch(from #dedfe6 26% c h)",
+          "oklch(from #dedfe6 38% c h)",
+          "oklch(from #dedfe6 49% c h)",
+          "oklch(from #dedfe6 61% c h)",
+          "oklch(from #dedfe6 72% c h)",
+          "oklch(from #dedfe6 84% c h)",
+          "oklch(from #dedfe6 95% c h)"
+        ]
+      },
+      "light-border-subtle": {
+        "role": "neutral",
+        "displayName": "Light · Border Subtle",
+        "tonalRamp": [
+          "oklch(from #e1e2e8 15% c h)",
+          "oklch(from #e1e2e8 26% c h)",
+          "oklch(from #e1e2e8 38% c h)",
+          "oklch(from #e1e2e8 49% c h)",
+          "oklch(from #e1e2e8 61% c h)",
+          "oklch(from #e1e2e8 72% c h)",
+          "oklch(from #e1e2e8 84% c h)",
+          "oklch(from #e1e2e8 95% c h)"
+        ]
+      },
+      "light-border": {
+        "role": "neutral",
+        "displayName": "Light · Border",
+        "tonalRamp": [
+          "oklch(from #c3c5cf 15% c h)",
+          "oklch(from #c3c5cf 26% c h)",
+          "oklch(from #c3c5cf 38% c h)",
+          "oklch(from #c3c5cf 49% c h)",
+          "oklch(from #c3c5cf 61% c h)",
+          "oklch(from #c3c5cf 72% c h)",
+          "oklch(from #c3c5cf 84% c h)",
+          "oklch(from #c3c5cf 95% c h)"
+        ]
+      },
+      "light-border-strong": {
+        "role": "neutral",
+        "displayName": "Light · Border Strong",
+        "tonalRamp": [
+          "oklch(from #9497a6 15% c h)",
+          "oklch(from #9497a6 26% c h)",
+          "oklch(from #9497a6 38% c h)",
+          "oklch(from #9497a6 49% c h)",
+          "oklch(from #9497a6 61% c h)",
+          "oklch(from #9497a6 72% c h)",
+          "oklch(from #9497a6 84% c h)",
+          "oklch(from #9497a6 95% c h)"
+        ]
+      },
+      "light-text": {
+        "role": "neutral",
+        "displayName": "Light · Main text",
+        "tonalRamp": [
+          "oklch(from #202127 15% c h)",
+          "oklch(from #202127 26% c h)",
+          "oklch(from #202127 38% c h)",
+          "oklch(from #202127 49% c h)",
+          "oklch(from #202127 61% c h)",
+          "oklch(from #202127 72% c h)",
+          "oklch(from #202127 84% c h)",
+          "oklch(from #202127 95% c h)"
+        ]
+      },
+      "light-text-secondary": {
+        "role": "neutral",
+        "displayName": "Light · Supporting text",
+        "tonalRamp": [
+          "oklch(from #484a56 15% c h)",
+          "oklch(from #484a56 26% c h)",
+          "oklch(from #484a56 38% c h)",
+          "oklch(from #484a56 49% c h)",
+          "oklch(from #484a56 61% c h)",
+          "oklch(from #484a56 72% c h)",
+          "oklch(from #484a56 84% c h)",
+          "oklch(from #484a56 95% c h)"
+        ]
+      },
+      "light-text-muted": {
+        "role": "neutral",
+        "displayName": "Light · Muted text",
+        "tonalRamp": [
+          "oklch(from #626573 15% c h)",
+          "oklch(from #626573 26% c h)",
+          "oklch(from #626573 38% c h)",
+          "oklch(from #626573 49% c h)",
+          "oklch(from #626573 61% c h)",
+          "oklch(from #626573 72% c h)",
+          "oklch(from #626573 84% c h)",
+          "oklch(from #626573 95% c h)"
+        ]
+      },
+      "light-text-subtle": {
+        "role": "neutral",
+        "displayName": "Light · Quiet metadata",
+        "tonalRamp": [
+          "oklch(from #6a6d7b 15% c h)",
+          "oklch(from #6a6d7b 26% c h)",
+          "oklch(from #6a6d7b 38% c h)",
+          "oklch(from #6a6d7b 49% c h)",
+          "oklch(from #6a6d7b 61% c h)",
+          "oklch(from #6a6d7b 72% c h)",
+          "oklch(from #6a6d7b 84% c h)",
+          "oklch(from #6a6d7b 95% c h)"
+        ]
+      },
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Light · Restrained peach",
+        "tonalRamp": [
+          "oklch(from #88502e 15% c h)",
+          "oklch(from #88502e 26% c h)",
+          "oklch(from #88502e 38% c h)",
+          "oklch(from #88502e 49% c h)",
+          "oklch(from #88502e 61% c h)",
+          "oklch(from #88502e 72% c h)",
+          "oklch(from #88502e 84% c h)",
+          "oklch(from #88502e 95% c h)"
+        ]
+      },
+      "light-accent-strong": {
+        "role": "primary",
+        "displayName": "Light · Peach emphasis",
+        "tonalRamp": [
+          "oklch(from #794325 15% c h)",
+          "oklch(from #794325 26% c h)",
+          "oklch(from #794325 38% c h)",
+          "oklch(from #794325 49% c h)",
+          "oklch(from #794325 61% c h)",
+          "oklch(from #794325 72% c h)",
+          "oklch(from #794325 84% c h)",
+          "oklch(from #794325 95% c h)"
+        ]
+      },
+      "light-accent-surface": {
+        "role": "primary",
+        "displayName": "Light · Peach semantic surface",
+        "tonalRamp": [
+          "oklch(from #f5e9df 15% c h)",
+          "oklch(from #f5e9df 26% c h)",
+          "oklch(from #f5e9df 38% c h)",
+          "oklch(from #f5e9df 49% c h)",
+          "oklch(from #f5e9df 61% c h)",
+          "oklch(from #f5e9df 72% c h)",
+          "oklch(from #f5e9df 84% c h)",
+          "oklch(from #f5e9df 95% c h)"
+        ]
+      },
+      "light-success": {
+        "role": "neutral",
+        "displayName": "Light · Success",
+        "tonalRamp": [
+          "oklch(from #306b49 15% c h)",
+          "oklch(from #306b49 26% c h)",
+          "oklch(from #306b49 38% c h)",
+          "oklch(from #306b49 49% c h)",
+          "oklch(from #306b49 61% c h)",
+          "oklch(from #306b49 72% c h)",
+          "oklch(from #306b49 84% c h)",
+          "oklch(from #306b49 95% c h)"
+        ]
+      },
+      "light-warning": {
+        "role": "neutral",
+        "displayName": "Light · Warning",
+        "tonalRamp": [
+          "oklch(from #83591c 15% c h)",
+          "oklch(from #83591c 26% c h)",
+          "oklch(from #83591c 38% c h)",
+          "oklch(from #83591c 49% c h)",
+          "oklch(from #83591c 61% c h)",
+          "oklch(from #83591c 72% c h)",
+          "oklch(from #83591c 84% c h)",
+          "oklch(from #83591c 95% c h)"
+        ]
+      },
+      "light-danger": {
+        "role": "neutral",
+        "displayName": "Light · Danger",
+        "tonalRamp": [
+          "oklch(from #b33d48 15% c h)",
+          "oklch(from #b33d48 26% c h)",
+          "oklch(from #b33d48 38% c h)",
+          "oklch(from #b33d48 49% c h)",
+          "oklch(from #b33d48 61% c h)",
+          "oklch(from #b33d48 72% c h)",
+          "oklch(from #b33d48 84% c h)",
+          "oklch(from #b33d48 95% c h)"
+        ]
+      },
+      "light-info": {
+        "role": "neutral",
+        "displayName": "Light · Info",
+        "tonalRamp": [
+          "oklch(from #3e6396 15% c h)",
+          "oklch(from #3e6396 26% c h)",
+          "oklch(from #3e6396 38% c h)",
+          "oklch(from #3e6396 49% c h)",
+          "oklch(from #3e6396 61% c h)",
+          "oklch(from #3e6396 72% c h)",
+          "oklch(from #3e6396 84% c h)",
+          "oklch(from #3e6396 95% c h)"
+        ]
+      },
+      "light-on-accent": {
+        "role": "primary",
+        "displayName": "Light · On Accent",
+        "tonalRamp": [
+          "oklch(from #fffaf7 15% c h)",
+          "oklch(from #fffaf7 26% c h)",
+          "oklch(from #fffaf7 38% c h)",
+          "oklch(from #fffaf7 49% c h)",
+          "oklch(from #fffaf7 61% c h)",
+          "oklch(from #fffaf7 72% c h)",
+          "oklch(from #fffaf7 84% c h)",
+          "oklch(from #fffaf7 95% c h)"
+        ]
+      },
+      "light-control": {
+        "role": "neutral",
+        "displayName": "Light · Neutral primary control",
+        "tonalRamp": [
+          "oklch(from #292a31 15% c h)",
+          "oklch(from #292a31 26% c h)",
+          "oklch(from #292a31 38% c h)",
+          "oklch(from #292a31 49% c h)",
+          "oklch(from #292a31 61% c h)",
+          "oklch(from #292a31 72% c h)",
+          "oklch(from #292a31 84% c h)",
+          "oklch(from #292a31 95% c h)"
+        ]
+      },
+      "light-on-control": {
+        "role": "neutral",
+        "displayName": "Light · Primary control foreground",
+        "tonalRamp": [
+          "oklch(from #ffffff 15% c h)",
+          "oklch(from #ffffff 26% c h)",
+          "oklch(from #ffffff 38% c h)",
+          "oklch(from #ffffff 49% c h)",
+          "oklch(from #ffffff 61% c h)",
+          "oklch(from #ffffff 72% c h)",
+          "oklch(from #ffffff 84% c h)",
+          "oklch(from #ffffff 95% c h)"
+        ]
+      },
+      "light-selection": {
+        "role": "neutral",
+        "displayName": "Light · Selection",
+        "tonalRamp": [
+          "oklch(from #edd7c8 15% c h)",
+          "oklch(from #edd7c8 26% c h)",
+          "oklch(from #edd7c8 38% c h)",
+          "oklch(from #edd7c8 49% c h)",
+          "oklch(from #edd7c8 61% c h)",
+          "oklch(from #edd7c8 72% c h)",
+          "oklch(from #edd7c8 84% c h)",
+          "oklch(from #edd7c8 95% c h)"
+        ]
+      },
+      "light-overlay": {
+        "role": "neutral",
+        "displayName": "Light · Overlay",
+        "tonalRamp": [
+          "oklch(from rgb(20 21 28 / 42%) 15% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 26% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 38% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 49% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 61% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 72% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 84% c h)",
+          "oklch(from rgb(20 21 28 / 42%) 95% c h)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Start heading; effective studio override."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Settings page headings and major sections."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Compact page and dialog titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Task text, conversations, and fields."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Navigation, metadata, modes, and compact controls; 13px floor."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Code and keyboard shortcuts in Geist Mono."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-sm",
+        "value": "0 1px 2px rgb(0 0 0 / 28%)",
+        "purpose": "Existing dark structural overlay elevation; working surfaces remain flat."
+      },
+      {
+        "name": "shadow-md",
+        "value": "0 12px 36px rgb(0 0 0 / 36%)",
+        "purpose": "Existing dark structural overlay elevation; working surfaces remain flat."
+      },
+      {
+        "name": "shadow-lg",
+        "value": "0 28px 90px rgb(0 0 0 / 55%)",
+        "purpose": "Existing dark structural overlay elevation; working surfaces remain flat."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 3px rgb(239 172 135 / 24%)",
+        "purpose": "Shared keyboard focus halo; pair with the visible outline."
+      },
+      {
+        "name": "light-shadow-sm",
+        "value": "0 1px 2px rgb(28 35 53 / 12%)",
+        "purpose": "Light theme structural overlay elevation."
+      },
+      {
+        "name": "light-shadow-md",
+        "value": "0 12px 36px rgb(28 35 53 / 16%)",
+        "purpose": "Light theme structural overlay elevation."
+      },
+      {
+        "name": "light-shadow-lg",
+        "value": "0 28px 90px rgb(28 35 53 / 22%)",
+        "purpose": "Light theme structural overlay elevation."
+      },
+      {
+        "name": "light-focus-ring",
+        "value": "0 0 0 3px rgb(136 80 46 / 22%)",
+        "purpose": "Light theme keyboard focus halo."
+      },
+      {
+        "name": "sidebar-drawer",
+        "value": "24px 0 70px #00000094",
+        "purpose": "Existing left drawer shadow at the canonical drawer breakpoint."
+      },
+      {
+        "name": "inspector-drawer",
+        "value": "-24px 0 70px #00000094",
+        "purpose": "Existing right drawer shadow at the canonical drawer breakpoint."
+      }
+    ],
+    "motion": [
+      {
+        "name": "motion-fast",
+        "value": "120ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-card",
+        "value": "140ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-tab",
+        "value": "150ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-base",
+        "value": "160ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-panel",
+        "value": "180ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-dialog",
+        "value": "140ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-slow",
+        "value": "240ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "motion-fade",
+        "value": "100ms",
+        "purpose": "Existing renderer timing; preserve reduced-motion overrides."
+      },
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(.2, .8, .2, 1)",
+        "purpose": "Shared easing for short state transitions."
+      },
+      {
+        "name": "transition-interactive",
+        "value": "color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard)",
+        "purpose": "Existing semantic transition composition."
+      },
+      {
+        "name": "transition-panel",
+        "value": "opacity var(--motion-fade) var(--ease-standard)",
+        "purpose": "Existing semantic transition composition."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "520px"
+      },
+      {
+        "name": "compact",
+        "value": "720px"
+      },
+      {
+        "name": "drawers",
+        "value": "980px"
+      },
+      {
+        "name": "desktop-compact",
+        "value": "1120px"
+      },
+      {
+        "name": "desktop",
+        "value": "1320px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Shared neutral save action; the color pair remaps with the active theme.",
+      "html": "<button class=\"ds-primary\" type=\"button\">Save changes</button>",
+      "css": ".ds-primary {font-family:var(--font-sans); font-size:var(--font-body); font-weight:450; transition:var(--transition-interactive); min-height:var(--control-md); padding:var(--spacing-sm) var(--spacing-lg); border:1px solid transparent; border-radius:var(--radius-sm); background:var(--color-control); color:var(--color-on-control); } .ds-primary:hover { background:var(--color-control); color:var(--color-on-control); } .ds-primary:active { transform:none; } .ds-primary:disabled { opacity:.48; cursor:not-allowed; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet secondary dialog action using the shared control scale.",
+      "html": "<button class=\"ds-secondary\" type=\"button\">Cancel</button>",
+      "css": ".ds-secondary {font-family:var(--font-sans); font-size:var(--font-body); font-weight:450; transition:var(--transition-interactive); min-height:var(--control-md); padding:var(--spacing-sm) var(--spacing-lg); border:1px solid var(--color-border); border-radius:var(--radius-sm); background:transparent; color:var(--color-text); } .ds-secondary:hover { background:var(--color-surface-hover); border-color:var(--color-border-strong); } .ds-secondary:active { transform:none; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+    },
+    {
+      "name": "Search field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Transparent sidebar search gains a surface and stronger border on focus.",
+      "html": "<label class=\"ds-search\"><input aria-label=\"Search conversations\" placeholder=\"Search conversations\"></label>",
+      "css": ".ds-search { display:flex; align-items:center; min-height:var(--control-md); padding:0 var(--spacing-sm); border:1px solid transparent; border-radius:var(--radius-sm); background:transparent; transition:var(--transition-interactive); } .ds-search input { font-family:var(--font-sans); font-size:var(--font-small); color:var(--color-text); background:transparent; border:0; width:100%; outline:none; } .ds-search input::placeholder { color:var(--color-text-subtle); } .ds-search:focus-within { background:var(--color-surface); border-color:var(--color-border-strong); }"
+    },
+    {
+      "name": "Selected navigation",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Neutral selected sidebar tool; selection remains textual and structural.",
+      "html": "<nav aria-label=\"Workspace\"><button class=\"ds-nav\" type=\"button\" aria-current=\"page\">Conversations</button></nav>",
+      "css": ".ds-nav {font-family:var(--font-sans); font-size:var(--font-body); font-weight:450; transition:var(--transition-interactive); width:100%; text-align:left; min-height:var(--control-md); padding:0 var(--spacing-sm); border:0; border-radius:var(--radius-sm); color:var(--color-text); background:var(--color-surface-raised); font-size:var(--font-small); } .ds-nav:hover { background:var(--color-surface-raised); } .ds-nav:active { transform:none; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+    },
+    {
+      "name": "Branch metadata",
+      "kind": "chip",
+      "refersTo": "branch-chip",
+      "description": "Presentational branch chip with no action attached.",
+      "html": "<span class=\"ds-branch\"><svg aria-hidden=\"true\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><circle cx=\"6\" cy=\"5\" r=\"3\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"19\" r=\"3\"/><path d=\"M6 8v8m12-7a9 9 0 0 1-9 9\"/></svg>main</span>",
+      "css": ".ds-branch { display:inline-flex; align-items:center; gap:5px; min-height:30px; padding:4px; border:1px solid transparent; border-radius:var(--radius-sm); color:var(--color-text-muted); background:transparent; font-family:var(--font-sans); font-size:var(--font-small); font-weight:520; letter-spacing:-.005em; }"
+    },
+    {
+      "name": "Activity container",
+      "kind": "card",
+      "refersTo": "activity-container",
+      "description": "Flat evidence container with a large disclosure target and subtle border.",
+      "html": "<details class=\"ds-activity\"><summary>Activity</summary><p>Validation results appear here.</p></details>",
+      "css": ".ds-activity { font-family:var(--font-sans); font-size:var(--font-small); color:var(--color-text-secondary); background:transparent; border:1px solid var(--color-border-subtle); border-radius:var(--radius-md); overflow:hidden; } .ds-activity summary { display:flex; align-items:center; min-height:var(--control-lg); padding:0 var(--spacing-md); font-weight:450; cursor:pointer; list-style:none; } .ds-activity summary:hover { background:var(--color-surface-raised); } .ds-activity[open] summary { background:var(--color-surface-raised); border-bottom:1px solid var(--color-border); } .ds-activity summary:focus-visible { outline:2px solid var(--color-accent); outline-offset:-2px; } .ds-activity p { padding:var(--spacing-md); color:var(--color-text-muted); }"
+    },
+    {
+      "name": "Composer mode header",
+      "kind": "custom",
+      "refersTo": "mode-selected",
+      "description": "Current mode has a neutral selected surface and an accessible visible description.",
+      "html": "<div class=\"ds-mode-header\"><div class=\"ds-modes\" role=\"radiogroup\" aria-label=\"Agent mode\"><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-checked=\"false\" tabindex=\"-1\">Build</button><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-checked=\"true\" aria-describedby=\"ds-mode-description\">Review</button><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-checked=\"false\" tabindex=\"-1\">Docs</button></div><p id=\"ds-mode-description\">Analysis only. No workspace changes.</p></div>",
+      "css": ".ds-mode-header { display:flex; align-items:center; justify-content:space-between; gap:var(--spacing-md); max-width:var(--content-width); } .ds-modes { display:flex; flex-shrink:0; gap:var(--spacing-2xs); } .ds-mode { font-family:var(--font-sans); font-size:var(--font-small); font-weight:520; min-height:var(--control-sm); padding:var(--spacing-xs) var(--spacing-sm); border:0; border-radius:var(--radius-sm); color:var(--color-text-muted); background:transparent; transition:var(--transition-interactive); } .ds-mode[aria-checked=\"true\"] { color:var(--color-text); background:var(--color-surface-hover); } .ds-mode:hover { color:var(--color-text); background:var(--color-surface); } .ds-mode-header p { margin:0; color:var(--color-text-muted); font-family:var(--font-sans); font-size:var(--font-caption); line-height:var(--leading-ui); text-align:right; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+    },
+    {
+      "name": "Start command row",
+      "kind": "custom",
+      "refersTo": "command-row",
+      "description": "Task preparation command with useful supporting copy and a stable row target.",
+      "html": "<button class=\"ds-command\" type=\"button\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m8 8-4 4 4 4m8-8 4 4-4 4m-3-9-2 18\"/></svg><span><strong>Analyze project</strong><small>Understand the structure and next steps.</small></span><svg class=\"ds-command-arrow\" aria-hidden=\"true\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-command { display:flex; align-items:center; gap:var(--spacing-lg); width:100%; min-height:64px; padding:var(--spacing-sm) 0; text-align:left; color:var(--color-text-muted); background:transparent; border:0; border-radius:var(--radius-md); font-family:var(--font-sans); transition:var(--transition-interactive); } .ds-command > svg { margin-left:var(--spacing-sm); flex-shrink:0; } .ds-command > span { display:flex; flex-direction:column; gap:var(--spacing-2xs); } .ds-command strong { font-size:var(--font-body); font-weight:500; color:var(--color-text-secondary); } .ds-command small { font-size:var(--font-caption); color:var(--color-text-muted); } .ds-command .ds-command-arrow { margin-left:auto; margin-right:var(--spacing-sm); } .ds-command:hover { background:var(--color-surface); } .ds-command:active { transform:none; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "Flat compact message surface; focus strengthens the border without decorative elevation.",
+      "html": "<label class=\"ds-composer\"><textarea aria-label=\"Message\" placeholder=\"Describe the task\" rows=\"2\"></textarea></label>",
+      "css": ".ds-composer { display:block; max-width:var(--content-width); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface); transition:var(--transition-interactive); } .ds-composer:hover { border-color:var(--color-border-strong); } .ds-composer:focus-within { border-color:var(--color-text-subtle); box-shadow:none; } .ds-composer textarea { display:block; width:100%; min-height:60px; padding:var(--spacing-lg); border:0; outline:none; resize:none; font-family:var(--font-sans); font-size:var(--font-body); color:var(--color-text); background:transparent; caret-color:var(--color-accent); } .ds-composer textarea::placeholder { color:var(--color-text-muted); }"
+    },
+    {
+      "name": "Settings field",
+      "kind": "input",
+      "refersTo": "settings-field",
+      "description": "Shared settings field with readable labels and theme-aware focus.",
+      "html": "<label class=\"ds-setting\">Project name<input type=\"text\" value=\"Nocturne Studio\"></label>",
+      "css": ".ds-setting { display:flex; flex-direction:column; gap:var(--spacing-xs); color:var(--color-text-secondary); font-family:var(--font-sans); font-size:var(--font-small); } .ds-setting input { min-height:40px; padding:var(--spacing-sm) var(--spacing-md); color:var(--color-text); background:var(--color-panel); border:1px solid var(--color-border); border-radius:var(--radius-sm); font-family:var(--font-sans); font-size:var(--font-body); transition:var(--transition-interactive); } .ds-setting input:hover:not(:focus) { border-color:var(--color-border-strong); background:var(--color-surface); } .ds-setting input:focus { outline:2px solid var(--color-accent); outline-offset:2px; border-color:var(--color-accent); box-shadow:var(--focus-ring); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Desktop",
+    "overview": "A precise desktop workspace whose hierarchy comes from alignment, readable text, and useful content. Neutral charcoal surfaces, pale primary controls, quiet separators, and restrained peach details support long engineering sessions. The light theme follows the same neutral structure with dark primary controls.\n\nZed, Linear, and Raycast inform the compact desktop grammar. Nocturne retains its own small generated raster N in ivory and muted peach in the brand and assistant identity. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. Navigation, conversation, and evidence remain visibly distinct.",
+    "keyCharacteristics": [
+      "Neutral dark and light surfaces with clear reading contrast.",
+      "Neutral primary controls; peach marks focus and selected semantic details.",
+      "Compact rows, restrained corners, and flat working surfaces.",
+      "One small generated pixel-art N image; conventional interface and code typography."
+    ],
+    "rules": [
+      {
+        "name": "The Control Pair Rule",
+        "body": "Use color-control with color-on-control for neutral primary actions in both themes. Use color-accent with color-on-accent for the semantic filled accent controls that remain, such as checked settings boxes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Small Mark Rule",
+        "body": "Keep the generated pixel-art N image at the small brand and assistant sizes. Do not expand it into a mascot, scene, or large illustration.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Workspace Rule",
+        "body": "Use tonal layers and quiet separators for working regions. Keep the composer, command rows, and primary actions flat; reserve structural elevation for overlays and drawers.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the shared semantic tokens and inspect both dark and light themes.",
+      "Do keep interface text at or above the 13px floor and actionable pointer targets at or above 32px.",
+      "Do preserve immediate visible focus, keyboard navigation, dialog focus containment and restoration, and reduced-motion behavior.",
+      "Do keep the small generated N mark crisp and the interface text in Geist, with Geist Mono for code and shortcuts.",
+      "Do preserve canonical responsive drawers, independent scrolling, bounded histories, and stable control geometry.",
+      "Do keep the selected mode description visible and associated with the current mode control."
+    ],
+    "donts": [
+      "Don't bring back the owl, a mascot, a large illustration, or the rejected workshop scene.",
+      "Don't introduce a sage theme or decorative accent washes across the neutral workspace.",
+      "Don't use peach as the fill for every primary action; preserve the neutral control pair.",
+      "Don't encode mode, approval, status, or errors through color alone.",
+      "Don't turn isolated legacy hardcoded colors or uppercase metadata into new system tokens.",
+      "Don't move or resize controls on hover, focus, or click."
+    ]
+  }
+}

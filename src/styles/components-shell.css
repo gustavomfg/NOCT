@@ -34,13 +34,13 @@ button {
 }
 
 .brand-mark {
-  color: #bdaaff;
+  color: var(--color-accent);
   place-items: center;
   display: grid;
 }
 
 .brand b {
-  color: #bda8fc;
+  color: var(--color-accent);
 }
 
 .sidebar-toggle {
@@ -53,7 +53,7 @@ button {
 }
 
 .new-chat {
-  background: linear-gradient(135deg, #8267e1, #694cce);
+  background: var(--color-accent);
   align-items: center;
   display: flex;
 }
@@ -63,7 +63,7 @@ button {
 }
 
 .search-box {
-  border: 1px solid #24242a;
+  border: 1px solid var(--color-surface-raised);
   align-items: center;
   display: flex;
 }
@@ -106,7 +106,7 @@ button {
 }
 
 .conversation-icon {
-  color: #8d79cf;
+  color: var(--color-accent);
   place-items: center;
   display: grid;
 }
@@ -127,13 +127,13 @@ button {
 }
 
 .conversation-copy small {
-  color: #6f6e77;
+  color: var(--color-text-muted);
   font-size: var(--font-caption);
 }
 
 .delete-button {
   opacity: 0;
-  color: #85838d;
+  color: var(--color-text-muted);
   padding: 4px;
 }
 
@@ -146,7 +146,7 @@ button {
 }
 
 .sidebar-footer {
-  border-top: 1px solid #202025;
+  border-top: 1px solid var(--color-surface-raised);
 }
 
 .workspace-card {
@@ -157,8 +157,8 @@ button {
 }
 
 .workspace-icon {
-  color: #a58aea;
-  background: #1c1a24;
+  color: var(--color-accent);
+  background: var(--color-accent-surface);
   place-items: center;
   display: grid;
 }
@@ -172,7 +172,7 @@ button {
 }
 
 .workspace-card small, .profile small {
-  color: #73727c;
+  color: var(--color-text-muted);
   font-size: var(--font-caption);
 }
 
@@ -190,7 +190,7 @@ button {
 }
 
 .avatar, .mini-avatar {
-  background: linear-gradient(145deg, #7557ce, #423470);
+  background: var(--color-accent-surface);
   border-radius: 50%;
   place-items: center;
   font-weight: 600;
@@ -206,11 +206,11 @@ button {
 
 .status-dot.ready {
   background: var(--green);
-  box-shadow: 0 0 8px #66d19e88;
+  box-shadow: none;
 }
 
 .status-dot.running, .status-dot.starting {
-  background: #a98cff;
+  background: var(--color-accent);
 }
 
 .main-panel {
@@ -222,8 +222,8 @@ button {
 
 .topbar {
   border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(10px);
-  background: #0d0d10dd;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--color-canvas) 87%, transparent);
   flex: 0 0 61px;
   align-items: center;
   height: 61px;
@@ -250,8 +250,8 @@ button {
 .path-pill {
   flex: 0 1 auto;
   min-width: 0;
-  color: #87858f;
-  border: 1px solid #29282e;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   align-items: center;
   gap: 5px;
@@ -299,8 +299,8 @@ button {
 }
 
 .connection.running > span, .connection.starting > span {
-  background: #a78af8;
-  box-shadow: 0 0 7px #a78af8;
+  background: var(--color-accent);
+  box-shadow: none;
 }
 
 .connection.error > span {
@@ -323,7 +323,7 @@ button {
 
 .date-divider:before, .date-divider:after {
   content: "";
-  background: #1e1e23;
+  background: var(--color-surface);
   flex: 1;
   height: 1px;
 }
@@ -335,7 +335,7 @@ button {
 }
 
 .user-message {
-  border: 1px solid #332b47;
+  border: 1px solid var(--color-border-strong);
 }
 
 .mini-avatar {
@@ -347,9 +347,9 @@ button {
 }
 
 .assistant-avatar {
-  color: #b99eff;
-  background: #211a36;
-  border: 1px solid #392d59;
+  color: var(--color-accent);
+  background: var(--color-accent-surface);
+  border: 1px solid var(--color-border-strong);
   flex: 0 0 27px;
   place-items: center;
   display: grid;
@@ -361,12 +361,12 @@ button {
 }
 
 .assistant-content pre {
-  border: 1px solid #29282e;
+  border: 1px solid var(--color-border);
   overflow: auto;
 }
 
 .assistant-content pre code {
-  color: #c5c4ca;
+  color: var(--color-text-secondary);
   background: none;
   padding: 0;
 }
@@ -377,7 +377,7 @@ button {
 
 .caret {
   vertical-align: -2px;
-  background: #9a7ced;
+  background: var(--color-accent);
   height: 13px;
   animation: 1s infinite blink;
   display: inline-block;
@@ -402,11 +402,11 @@ button {
 }
 
 .composer-wrap {
-  background: linear-gradient(#0000, #0c0c0f 25%);
+  background: var(--color-surface);
 }
 
 .composer {
-  border: 1px solid #302e36;
+  border: 1px solid var(--color-border);
   max-width: 760px;
   margin: auto;
   overflow: hidden;
@@ -427,7 +427,7 @@ button {
 }
 
 .composer-tools button {
-  color: #888691;
+  color: var(--color-text-muted);
   place-items: center;
   display: grid;
 }
@@ -438,8 +438,8 @@ button {
 }
 
 .send-button {
-  color: #fff;
-  background: #8062df;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
   place-items: center;
   margin-left: auto;
   display: grid;
@@ -447,7 +447,7 @@ button {
 
 .send-button:disabled {
   color: #666;
-  background: #29282f;
+  background: var(--color-border);
 }
 
 .composer-hint {
@@ -466,9 +466,9 @@ button {
 }
 
 .welcome-orb {
-  color: #b89eff;
-  background: radial-gradient(circle at 35% 30%, #4e3b7f, #21182f 65%);
-  border: 1px solid #51406f;
+  color: var(--color-accent);
+  background: var(--color-accent-surface);
+  border: 1px solid var(--color-border-strong);
   place-items: center;
   display: grid;
 }
@@ -482,15 +482,15 @@ button {
 }
 
 .welcome-actions button {
-  background: #17161b;
-  border: 1px solid #302d39;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   align-items: center;
   display: flex;
 }
 
 .welcome-actions button:first-child {
-  background: #8062df;
-  border-color: #8062df;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .suggestions {
@@ -501,8 +501,8 @@ button {
 
 .suggestions button {
   text-align: left;
-  color: #8776bb;
-  border: 1px solid #242329;
+  color: var(--color-accent);
+  border: 1px solid var(--color-surface-raised);
   display: flex;
 }
 

@@ -1,0 +1,5 @@
+# Local visual review evidence; regression fixtures live under tests/renderer.
+/review/
+/mocks/
+/build/
+/references/

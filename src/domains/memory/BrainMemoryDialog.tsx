@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { Archive, Brain, Check, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
+import { Archive, Brain, Check, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Layers, Trash2, X } from 'lucide-react'
 import type { BrainMemory, BrainMemoryHistoryEntry, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus } from '../../../shared/brainMemory'
 import { errorMessage, relativeTime } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
@@ -77,7 +77,7 @@ export function BrainMemoryDialog({ conversationId, onClose, onNotify }: { conve
     <nav className="brain-mobile-tabs" role="tablist" aria-label={t('memory.secondBrainSections')}><button role="tab" aria-selected={mobileView === 'library'} onClick={() => setMobileView('library')}>{t('memory.library')}</button><button role="tab" aria-selected={mobileView === 'create'} onClick={() => setMobileView('create')}>{t('memory.create')}</button></nav>
     <div className="brain-layout" data-mobile-view={mobileView}>
       <form className="brain-create" onSubmit={(event) => void create(event)} aria-labelledby="brain-create-title">
-        <div className="brain-create-heading"><span><Sparkles size={16}/></span><div><strong id="brain-create-title">{t('memory.capture')}</strong><p>{t('memory.captureHint')}</p></div></div>
+        <div className="brain-create-heading"><span><Layers size={16}/></span><div><strong id="brain-create-title">{t('memory.capture')}</strong><p>{t('memory.captureHint')}</p></div></div>
         <div className="brain-review-note"><ShieldCheck size={14}/><span><strong>{t('memory.reviewRequired')}</strong><small>{t('memory.newCandidate')}</small></span></div>
         <div className="brain-create-options"><label>{t('memory.type')}<select value={kind} onChange={(event) => setKind(event.target.value as BrainMemoryKind)}>{memoryKinds.map((value) => <option key={value} value={value}>{kindLabel(value, t)}</option>)}</select></label><label>{t('memory.scope')}<select value={scope} onChange={(event) => setScope(event.target.value as BrainMemoryScope)}><option value="workspace">{t('agent.workspace')}</option><option value="conversation">{t('memory.currentConversation')}</option></select></label></div>
         <label className="brain-content-label">{t('memory.content')}<textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={8_000} aria-describedby="brain-content-help" placeholder={t('memory.contentPlaceholder')}/><span id="brain-content-help"><small>{scope === 'workspace' ? t('memory.availableWorkspace') : t('memory.onlyConversation')}</small><small>{content.length.toLocaleString(language === 'en' ? 'en-US' : 'pt-BR')} / 8.000</small></span></label>

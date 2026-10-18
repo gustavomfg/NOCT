@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, Bot, Folder, Monitor, Settings, Star, X, type LucideIcon } from 'lucide-react'
+import { Activity, Cpu, Folder, Monitor, Settings, Star, X, type LucideIcon } from 'lucide-react'
 import type { AppSettings, Workspace } from '../../types'
 import { errorMessage } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
@@ -12,7 +12,7 @@ import { UpdateSettingsSection } from '../updates/UpdateSettingsSection'
 type SettingsPage = 'ai' | 'workspace' | 'application' | 'diagnostics'
 
 const settingsPages: Array<{ id: SettingsPage; labelKey: string; descriptionKey: string; icon: LucideIcon }> = [
-  { id: 'ai', labelKey: 'settings.ai', descriptionKey: 'settings.aiDescription', icon: Bot },
+  { id: 'ai', labelKey: 'settings.ai', descriptionKey: 'settings.aiDescription', icon: Cpu },
   { id: 'workspace', labelKey: 'settings.workspace', descriptionKey: 'settings.workspaceDescription', icon: Folder },
   { id: 'application', labelKey: 'settings.application', descriptionKey: 'settings.applicationDescription', icon: Monitor },
   { id: 'diagnostics', labelKey: 'settings.diagnostics', descriptionKey: 'settings.diagnosticsDescription', icon: Activity },
