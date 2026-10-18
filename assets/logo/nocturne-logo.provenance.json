@@ -1,0 +1,6 @@
+{
+  "tool": "Built-in image_gen.imagegen",
+  "generatedAt": "2026-10-18",
+  "source": "nocturne-logo.png",
+  "prompt": "Use case: logo-brand. Create ONE finished raster logo image for Nocturne Studio, a personal desktop engineering workspace. Design an original, beautifully balanced pixel-art N emblem, built from two interlocking angular ribbon strokes with a clear diagonal and generous negative space. The silhouette must remain immediately readable as N at 24px; broad confident strokes, a handful of deliberate stair-step corners, consistent large pixels, precise optical balance. Flat warm ivory as the main plane, muted peach/copper as one small secondary plane, at most three flat solid colors. Clean contemporary game-studio identity, understated and memorable, designed as a real small application mark. Center one unified emblem in a square image, occupying about 76% of the canvas with equal clear space on all sides. Genuine transparent background. No words or wordmark, no owl, no moon, no stars, no sparkles, no mascot, no scenery, no decorative frame, no mockup, no presentation sheet, no alternate options, no gradients, no glow, no shadows, no bevels, no 3D, no fine texture, no watermark. This is the original Nocturne Studio identity, not an OpenAI or Codex logo."
+}

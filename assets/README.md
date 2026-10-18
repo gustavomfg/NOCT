@@ -1,28 +1,14 @@
 # Nocturne Studio brand assets
 
-The crescent-and-stars mark is the canonical Nocturne Studio identity. Keep its geometry, dark base, and restrained violet gradient unchanged.
+`logo/nocturne-logo.png` is the canonical generated raster logo: an ivory and muted-peach pixel-art N with interlocking strokes on a transparent background. It was produced with the built-in Imagegen tool. The exact prompt and source are recorded in `logo/nocturne-logo.provenance.json`.
 
-## Logo files
+Use this image as the only source of the mark. Do not redraw its contours in SVG, CSS or individual rectangles. Preserve the native alpha and proportions. Small UI instances use normal image sampling so the high-resolution artwork remains readable.
 
-- `logo/nocturne-mark.svg`: canonical square mark.
-- `logo/nocturne-mark-dark.svg`: bordered mark for dark surfaces that need separation.
-- `logo/nocturne-mark-monochrome.svg`: single-color treatment for print and constrained contexts.
-- `logo/nocturne-logo.svg`: horizontal wordmark for repository and documentation headers.
+## Application copies and exports
 
-## Raster icons
+- `../public/nocturne.png`: 128px transparent renderer copy.
+- `icons/nocturne-{32,128,512}.png`: transparent size exports.
+- `icons/favicon.png` and `../public/favicon.png`: small mark on the charcoal app tile.
+- `icons/electron.png`, `icons/github.png` and `../build/icon.png`: 512px application tile.
 
-- `icons/nocturne-32.png`: small UI/favicon source.
-- `icons/nocturne-128.png`: medium application and launcher contexts.
-- `icons/nocturne-512.png`: large application and store contexts.
-- `icons/favicon.png`: browser/documentation favicon.
-- `icons/electron.png`: Electron packaging source.
-- `icons/github.png`: repository avatar source.
-
-## Usage
-
-- Preserve clear space equal to at least 12.5% of the mark width.
-- Do not rotate, skew, recolor, add glow, or separate elements of the mark.
-- Use the canonical mark on neutral dark surfaces.
-- Use the dark variant when the surrounding surface is too close to `#0D0D12`.
-- Use monochrome only where gradients or color are unavailable.
-- Never place body text inside the mark's clear space.
+The tile keeps the pale artwork visible in browser tabs and launchers. Raster exports only resize or place the original image on its background; they do not alter the illustration. Each PNG embeds its prompt or source origin. Keep the logo small in navigation and assistant identity; no large decorative illustration is used in the application.

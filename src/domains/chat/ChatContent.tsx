@@ -22,5 +22,5 @@ export const MessageBubble = memo(function MessageBubble({ message }: { message:
 export function AssistantMessage({ content, streaming }: { content: string; streaming?: boolean }) {
   const { t } = useI18n()
   const renderAsText = Boolean(streaming) || content.length > 300_000
-  return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Studio {streaming && <span>{t('chat.writing')}</span>}</div>{renderAsText ? <>{!streaming && <p>{t('chat.longResponse')}</p>}<pre className={`large-response${streaming ? ' streaming-response' : ''}`}>{streaming ? content : content.slice(-300_000)}</pre></> : <SafeMarkdown>{content}</SafeMarkdown>}{streaming && <span className="caret"/>}</div></div>
+  return <div className="assistant-row"><div className="assistant-avatar"><img src="./nocturne.png" alt="" width="28" height="28"/></div><div className="assistant-content"><div className="assistant-name">Nocturne Studio {streaming && <span>{t('chat.writing')}</span>}</div>{renderAsText ? <>{!streaming && <p>{t('chat.longResponse')}</p>}<pre className={`large-response${streaming ? ' streaming-response' : ''}`}>{streaming ? content : content.slice(-300_000)}</pre></> : <SafeMarkdown>{content}</SafeMarkdown>}{streaming && <span className="caret"/>}</div></div>
 }
