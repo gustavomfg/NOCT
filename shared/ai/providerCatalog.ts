@@ -2,8 +2,12 @@ import type { ProviderConfigurationInput } from './providerConfiguration'
 
 export type ProviderCatalogId =
   | 'openai'
+  | 'gemini'
   | 'openrouter'
   | 'deepseek'
+  | 'groq'
+  | 'mistral'
+  | 'xai'
   | 'ollama'
   | 'lm-studio'
 
@@ -55,6 +59,24 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     ],
   },
   {
+    id: 'gemini',
+    displayName: 'Google Gemini',
+    description: 'Modelos Gemini pelo endpoint OpenAI-compatible do Google AI Studio.',
+    source: 'remote',
+    integrationStatus: 'available',
+    protocol: 'OpenAI-compatible',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    requiresAuthentication: true,
+    connectionMethods: [
+      {
+        kind: 'api-key',
+        label: 'Chave do Google AI Studio',
+        status: 'available',
+        detail: 'Crie a chave no Google AI Studio; o uso segue os limites da sua conta Google.',
+      },
+    ],
+  },
+  {
     id: 'openrouter',
     displayName: 'OpenRouter',
     description: 'Um catálogo amplo de modelos usando sua chave OpenRouter.',
@@ -87,6 +109,60 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
         label: 'Chave DeepSeek',
         status: 'available',
         detail: 'O uso da API segue os preços e limites da conta DeepSeek.',
+      },
+    ],
+  },
+  {
+    id: 'groq',
+    displayName: 'Groq',
+    description: 'Modelos abertos com inferência de baixa latência usando sua chave Groq.',
+    source: 'remote',
+    integrationStatus: 'available',
+    protocol: 'OpenAI-compatible',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    requiresAuthentication: true,
+    connectionMethods: [
+      {
+        kind: 'api-key',
+        label: 'Chave Groq',
+        status: 'available',
+        detail: 'O uso da API segue os preços e limites da conta Groq.',
+      },
+    ],
+  },
+  {
+    id: 'mistral',
+    displayName: 'Mistral AI',
+    description: 'Modelos Mistral usando sua chave da plataforma La Plateforme.',
+    source: 'remote',
+    integrationStatus: 'available',
+    protocol: 'OpenAI-compatible',
+    baseUrl: 'https://api.mistral.ai/v1',
+    requiresAuthentication: true,
+    connectionMethods: [
+      {
+        kind: 'api-key',
+        label: 'Chave Mistral',
+        status: 'available',
+        detail: 'O uso da API segue os preços e limites da conta Mistral.',
+      },
+    ],
+  },
+  {
+    id: 'xai',
+    displayName: 'xAI',
+    description: 'Modelos Grok usando sua chave da xAI.',
+    source: 'remote',
+    integrationStatus: 'available',
+    protocol: 'OpenAI-compatible',
+    baseUrl: 'https://api.x.ai/v1',
+    requiresAuthentication: true,
+    connectionMethods: [
+      {
+        kind: 'api-key',
+        label: 'Chave xAI',
+        status: 'available',
+        detail: 'O uso da API segue os preços e limites da conta xAI.',
       },
     ],
   },

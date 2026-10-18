@@ -34,7 +34,10 @@ O cliente publicado `v1.0.0` continua compatível com o slug histórico
 
 ## Requisitos de IA
 
-Review pode usar um Provider OpenAI-compatible. Build e Docs exigem uma
+Nenhuma IA específica é obrigatória. Review, Build e Docs funcionam com
+qualquer Provider configurado (veja [Providers](providers.pt-BR.md)); o Build
+exige um modelo com function calling. O Codex CLI é opcional e só é usado
+quando uma conta ChatGPT é escolhida como motor. Nesse caso, ele exige uma
 instalação autenticada do Codex CLI/App Server:
 
 - CLI mínimo suportado: `0.145.0`;

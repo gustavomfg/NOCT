@@ -5,6 +5,7 @@ import { errorMessage, formatBytes, relativeTime } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
 import { SafeMarkdown } from '../../shared/SafeMarkdown'
 import { useI18n } from '../../shared/i18n'
+import { selectAiEngine } from '../../../shared/ai/engine'
 
 export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss, onComplete }: { workspace: string; onWorkspace(): void; onSettings(): void; onDismiss(): void; onComplete(): void }) {
   const { t } = useI18n()
@@ -17,23 +18,23 @@ export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss
     void Promise.all([
       window.nocturne.providers.list(),
       workspace ? window.nocturne.models.bindings(workspace) : Promise.resolve(null),
-      window.nocturne.codex.status(),
-    ]).then(([providers, bindings, codex]) => {
-      if (!active) return
+      window.nocturne.settings.get(),
+    ]).then(async ([providers, bindings, settings]) => {
       const providerReady = Boolean(
         bindings?.defaultBinding
         && providers.some((provider) => (
           provider.id === bindings.defaultBinding?.providerId && provider.enabled
         )),
       )
-      setAiReady(Boolean(
-        providerReady
-        || (
-          codex.installed
-          && codex.compatible
-          && codex.authenticated
-          && codex.authenticationMethod === 'chatgpt'
-        ),
+      const engine = selectAiEngine({ preference: settings.aiEngine, providerReady, legacyCodexModel: settings.model })
+      // The optional Codex CLI is probed only when it is the selected engine.
+      const codex = engine === 'codex' ? await window.nocturne.codex.status() : null
+      if (!active) return
+      setAiReady(engine === 'provider' || Boolean(
+        codex?.installed
+        && codex.compatible
+        && codex.authenticated
+        && codex.authenticationMethod === 'chatgpt',
       ))
     }).catch(() => {
       if (active) setAiReady(false)

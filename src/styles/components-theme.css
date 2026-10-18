@@ -434,6 +434,28 @@
   font-size: var(--font-caption);
 }
 
+/* Active AI chip: always visible so the user knows which model will run. */
+.composer-ai {
+  min-width: 0;
+  max-width: min(320px, 45%);
+  min-height: var(--control-sm);
+  margin-left: var(--spacing-xs);
+  padding: 0 var(--spacing-sm);
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-caption);
+  display: inline-flex;
+  cursor: pointer;
+  transition: var(--transition-interactive);
+}
+.composer-ai span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-ai:hover { color: var(--color-text-secondary); background: var(--color-surface-hover); border-color: var(--color-border); }
+.composer-ai.missing { color: var(--color-warning); border-color: var(--color-warning); }
+
 .send-button {
   border-radius: var(--radius-sm);
 }

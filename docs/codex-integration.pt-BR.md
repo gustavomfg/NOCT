@@ -2,7 +2,12 @@
 
 [English](codex-integration.md)
 
-O Nocturne Studio integra-se ao Codex CLI pelo App Server.
+O Nocturne Studio pode usar opcionalmente o Codex CLI pelo App Server. O Codex
+CLI não é obrigatório: qualquer Provider configurado (veja
+[Providers](providers.pt-BR.md)) executa Review, Build e Docs sozinho. O Codex é
+usado apenas quando uma conta ChatGPT é escolhida como motor em Configurações →
+IA, ou em instalações da 1.0.x que escolheram um modelo Codex e não têm modelo
+de Provider.
 
 - CLI mínimo suportado: `0.145.0`;
 - CLI recomendado: `0.146.0`;

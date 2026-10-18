@@ -1,13 +1,14 @@
 # Nocturne Studio
 
-> Um workspace desktop local-first para entender, revisar e evoluir projetos de software reais com IA.
+> Um workspace desktop local-first para entender, revisar e evoluir projetos de software reais com a IA que você escolher.
 
 [English](README.md)
 
 O Nocturne Studio mantém juntos o workspace de um projeto, suas conversas,
 achados de engenharia e conhecimento durável. Ele é um workspace desktop de
 engenharia, não uma IDE, uma substituição autônoma do desenvolvedor nem um
-produto oficial da OpenAI.
+produto oficial de qualquer fornecedor de IA. Ele não depende de uma IA
+específica: você conecta um provedor, escolhe o modelo e começa a trabalhar.
 
 Ele enfrenta a fragmentação de contexto dos tools baseados apenas em prompts:
 estado do projeto, evidências de revisão, decisões e conhecimento aprovado
@@ -22,8 +23,9 @@ continuam conectados em vez de serem reconstruídos a cada conversa.
   selecionados novamente.
 - **Review Mode:** análise somente leitura com sugestões baseadas em evidências
   e reconciliação de achados novos, persistentes e resolvidos.
-- **Build Mode:** alterações assistidas pelo Codex dentro do workspace autorizado,
-  com aprovações, progresso, diff visível e rollback protegido quando suas
+- **Build Mode:** alterações assistidas por agente dentro do workspace
+  autorizado com qualquer modelo que suporte ferramentas, com aprovação de
+  comandos, progresso, diff visível e rollback protegido quando suas
   precondições são atendidas.
 - **Docs Mode:** preview, comparação e aplicação incremental de Markdown com
   confirmação, verificação de concorrência e escrita atômica.
@@ -31,8 +33,9 @@ continuam conectados em vez de serem reconstruídos a cada conversa.
   escopo, atualidade e explicação do contexto selecionado para cada execução.
 - **Conversas e Git:** conversas persistentes, históricos paginados, estado Git
   do workspace e preparação de commits.
-- **Camada de Providers:** conta ChatGPT pelo Codex CLI/App Server e endpoints
-  remotos e locais compatíveis com OpenAI.
+- **Camada de Providers:** OpenAI, Google Gemini, OpenRouter, DeepSeek, Groq,
+  Mistral, xAI, Ollama, LM Studio ou qualquer endpoint compatível com OpenAI;
+  a conta ChatGPT pelo Codex CLI continua disponível como motor opcional.
 
 O desenvolvedor continua responsável pela intenção, aprovação, revisão e
 alteração final no projeto.
@@ -53,12 +56,32 @@ assinado por GPG no ambiente protegido, enquanto Windows e macOS atualmente
 publicam checksums sem assinatura de plataforma nem notarização; consulte
 [instalação](docs/installation.pt-BR.md) e [compatibilidade](docs/compatibility.pt-BR.md).
 
-## Conexões de IA
+## Escolha sua IA
 
-Review pode usar um Provider OpenAI-compatible configurado. Build e Docs usam o
-Codex CLI/App Server. Os destinos compatíveis incluem OpenAI API, OpenRouter,
-DeepSeek, Ollama, LM Studio e endpoints customizados compatíveis. Uma assinatura
-ChatGPT é conectada pelo Codex CLI e é separada da cobrança da OpenAI Platform.
+1. Abra **Configurações → IA** (ou clique no indicador de IA abaixo da caixa de
+   mensagem).
+2. Clique em **Conectar uma IA** e escolha um serviço: chave de API (OpenAI,
+   Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI), runtime local (Ollama,
+   LM Studio) ou qualquer URL compatível com OpenAI (vLLM, llama.cpp, LiteLLM…).
+3. Escolha o modelo do workspace atual. O indicador no compositor mostra qual
+   serviço e modelo a próxima execução usará.
+
+Review, Build e Docs passam todos pelo Provider selecionado. O Nocturne oferece
+ao modelo um pequeno conjunto de ferramentas executadas no processo principal:
+`list_directory`, `read_file` e `search_text` em todos os modos, além de
+`write_file`, `edit_file` e `run_command` apenas no Build. Todo caminho fica
+limitado à raiz autorizada, diretórios gerados e prováveis segredos (`.env`,
+chaves, credenciais) são recusados, todo comando aguarda sua aprovação e roda
+sem shell, e toda alteração do Build é capturada em BEFORE/AFTER para revisão e
+rollback. Opcionalmente, Configurações → IA também pode pedir aprovação antes de
+cada alteração de arquivo. Build exige um modelo com function calling; Review e
+Docs usam apenas o contexto selecionado pelo Nocturne quando um modelo só de
+chat recusa ferramentas.
+
+O Codex CLI é opcional. Se estiver instalado e autenticado, uma conta ChatGPT
+pode ser escolhida como motor no lugar de um Provider de API. A assinatura
+ChatGPT é separada da cobrança de API. Modelos Claude podem ser usados pelo
+OpenRouter ou por um gateway compatível com OpenAI.
 
 As credenciais de API dos Providers são cifradas pelo armazenamento seguro do
 sistema operacional, ficam no processo principal e não entram em backups ou
@@ -84,7 +107,9 @@ O renderer usa isolamento, sandbox e nenhuma integração Node.js. Capacidades
 nativas atravessam APIs nomeadas do preload e handlers IPC validados. Caminhos
 do workspace são contidos e rechecados, Review permanece somente leitura e
 Providers remotos usam HTTPS com validação de endereços. O Nocturne é local-first,
-mas prompts, contexto e anexos selecionados são enviados ao Provider escolhido.
+mas prompts, contexto, anexos e a saída das ferramentas chamadas pelo modelo são
+enviados ao Provider escolhido; um runtime local como o Ollama os mantém na
+máquina.
 Consulte [segurança](docs/security.pt-BR.md), [privacidade](docs/privacy.pt-BR.md)
 e [SECURITY.md](SECURITY.pt-BR.md).
 
@@ -107,16 +132,17 @@ O repositório contém a preparação local do candidato não publicado `v1.0.2`
 A linha estável publicada `v1.0.1` continua presa ao SHA aprovado; validação do
 SHA final, gates multiplataforma e aprovação da release estável protegida ainda
 são necessários.
-O contrato do Codex App
+O contrato opcional do Codex App
 Server é experimental; o CLI mínimo suportado é `0.145.0` e o recomendado é
 `0.146.0`. Versões mais novas precisam passar pelo handshake de compatibilidade
 em tempo de execução.
 
-Limitações conhecidas da 1.0 incluem o contrato experimental do Codex App
-Server, adapters OpenAI-compatible sem tool calling normalizado e recursos
-avançados de automação/autonomia fora dos modos protegidos atuais. Adapters
-nativos dedicados para Anthropic, Gemini e GitHub Copilot, marketplace,
-colaboração em nuvem e orquestração multiagente não fazem parte deste contrato.
+Limitações conhecidas: agentes de Provider dependem da qualidade de function
+calling do modelo, comandos rodam no host sem sandbox do sistema operacional (a
+aprovação é a fronteira) e uma execução para após um número limitado de etapas
+de ferramenta. Adapters nativos (não OpenAI-compatible) para Anthropic e GitHub
+Copilot, marketplace, colaboração em nuvem e orquestração multiagente não fazem
+parte deste contrato.
 
 ## Documentação
 

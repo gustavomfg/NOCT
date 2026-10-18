@@ -109,6 +109,33 @@
 .ai-list-heading { margin: 0; font-size: var(--font-title); font-weight: 650; color: var(--color-text); }
 .ai-list-sub { margin: var(--spacing-2xs) 0 0; font-size: var(--font-caption); color: var(--color-text-muted); }
 
+/* Active AI summary: one stable card whose geometry does not change between states. */
+.ai-active {
+  display: flex; align-items: center; gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-panel);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+.ai-active.ready { border-color: var(--color-accent); background: var(--color-accent-surface); }
+.ai-active-mark {
+  width: var(--control-sm); height: var(--control-sm); flex: 0 0 var(--control-sm);
+  display: grid; place-items: center;
+  color: var(--color-text-muted); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+}
+.ai-active.ready .ai-active-mark { color: var(--color-success); border-color: var(--color-success); }
+.ai-active-copy { min-width: 0; display: flex; flex-direction: column; gap: var(--spacing-2xs); }
+.ai-active-copy small { color: var(--color-text-muted); font-size: var(--font-caption); text-transform: uppercase; letter-spacing: .04em; }
+.ai-active-copy strong { color: var(--color-text); font-size: var(--font-body); font-weight: 650; }
+.ai-active-copy > span { color: var(--color-text-secondary); font-size: var(--font-caption); overflow-wrap: anywhere; }
+.ai-active-badge {
+  flex: 0 0 auto; padding: 0 var(--spacing-xs);
+  color: var(--color-accent); background: var(--color-accent-surface);
+  border-radius: var(--radius-xs); font-size: var(--font-caption); font-style: normal; font-weight: 600;
+}
+.ai-list-row-actions { display: flex; align-items: center; gap: var(--spacing-2xs); flex: 0 0 auto; }
+
 .ai-list-connections {
   background: var(--color-panel);
   border: 1px solid var(--color-border-subtle);
@@ -229,6 +256,8 @@
   color: #c7b5f5; background: var(--color-accent-surface);
   border: 1px solid #3c3052; border-radius: var(--radius-sm); display: grid;
 }
+.ai-service-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: var(--spacing-2xs); }
+.ai-service-copy small { color: var(--color-text-muted); font-size: var(--font-caption); line-height: var(--leading-ui); }
 .ai-service-name { flex: 1; font-weight: 500; }
 .ai-service-arrow { color: var(--color-text-subtle); transform: rotate(180deg); flex: 0 0 auto; transition: transform var(--motion-fast) var(--ease-standard); }
 .ai-service-opt:hover .ai-service-arrow { transform: rotate(180deg) translateX(-2px); color: var(--color-text-muted); }
@@ -344,7 +373,11 @@
 .ai-model-opt:disabled { cursor: not-allowed; opacity: .48; }
 .ai-model-check { opacity: 0; color: var(--color-accent); transition: opacity var(--motion-fast) var(--ease-standard); }
 .ai-model-opt.active .ai-model-check { opacity: 1; }
-.ai-model-name { font-size: var(--font-body); font-weight: 500; }
+.ai-model-name { font-size: var(--font-body); font-weight: 500; overflow-wrap: anywhere; }
+.ai-model-opt small { margin-left: auto; color: var(--color-text-muted); font-size: var(--font-caption); overflow-wrap: anywhere; }
+.ai-model-filter { position: relative; display: flex; align-items: center; }
+.ai-model-filter > svg { position: absolute; left: var(--spacing-md); color: var(--color-text-muted); pointer-events: none; }
+.ai-model-filter .ai-input { padding-left: calc(var(--spacing-md) * 2 + 14px); }
 
 .ai-use-btn {
   min-height: var(--control-md); padding: var(--spacing-sm) var(--spacing-lg);

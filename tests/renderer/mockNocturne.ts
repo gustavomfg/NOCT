@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test'
 import type { ValidationKind } from '../../shared/codeIntelligence'
 import type { UpdateState } from '../../shared/updates'
 
-export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; signedOut?: boolean; messageCount?: number; firstRun?: boolean } = {}) {
-  await page.addInitScript(({ empty, unauthorized, moved, signedOut, messageCount, firstRun }) => {
+export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; signedOut?: boolean; messageCount?: number; firstRun?: boolean; aiEngine?: 'codex' | 'provider' } = {}) {
+  await page.addInitScript(({ empty, unauthorized, moved, signedOut, messageCount, firstRun, aiEngine }) => {
     if (firstRun) localStorage.removeItem('nocturne.onboarding.completed')
     else localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
@@ -47,7 +47,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       { providerId: 'legacy-provider', modelId: 'offline-model', displayName: 'Modelo anterior', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'offline' as const },
     ]
     let modelBindings: MockModelBindings | null = null
-    let appSettings = { model: '', sandbox: 'workspace-write' as const, approvalPolicy: 'on-request' as const, theme: 'dark' as 'dark' | 'light', defaultAgentMode: 'review' as const, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }
+    let appSettings = { ...(aiEngine ? { aiEngine } : {}), model: '', sandbox: 'workspace-write' as const, approvalPolicy: 'on-request' as const, theme: 'dark' as 'dark' | 'light', defaultAgentMode: 'review' as const, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }
     const noop = async () => undefined
     const api = {
       recovery: { list: async () => [] },
@@ -299,5 +299,5 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       calls: () => ({ selectedExpected, memoryReads }),
       performanceReports: () => structuredClone(rendererPerformanceReports),
     } })
-  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0, firstRun: Boolean(options.firstRun) })
+  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0, firstRun: Boolean(options.firstRun), aiEngine: options.aiEngine })
 }

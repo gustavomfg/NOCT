@@ -34,8 +34,11 @@ packages use the canonical repository directly.
 
 ## AI requirements
 
-Review can use an OpenAI-compatible provider. Build and Docs require an
-authenticated Codex CLI/App Server installation:
+No specific AI is required. Review, Build and Docs run with any configured
+provider (see [providers](providers.md)); Build needs a model with function
+calling. The Codex CLI is optional and is used only when a ChatGPT account is
+selected as the engine. In that case it needs an authenticated Codex CLI/App
+Server installation:
 
 - minimum supported Codex CLI: `0.145.0`;
 - recommended version: `0.146.0`;

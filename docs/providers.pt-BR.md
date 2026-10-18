@@ -2,33 +2,58 @@
 
 [English](providers.md)
 
-## Conta ChatGPT
+## Escolhendo a IA
 
-Conecte uma conta ChatGPT pelo Codex CLI. O Nocturne não recebe senha ou token
-da conta: usa o App Server autenticado do Codex e lista os modelos retornados
-para aquela conta. Uma assinatura ChatGPT não fornece créditos da OpenAI
-Platform API.
-
-Build e Docs usam esse caminho do Codex. Review pode usá-lo quando nenhum modelo
-de API compatível estiver selecionado.
+O Nocturne não depende de uma IA específica. Em Configurações → IA, conecte um
+serviço, escolha um modelo para o workspace e a seleção passa a ser o motor de
+Review, Build e Docs. O indicador abaixo da caixa de mensagem mostra o serviço e
+o modelo ativos e abre a mesma página. Sem seleção, a execução é recusada com
+uma mensagem clara em vez de recorrer a outra IA.
 
 ## Conexões OpenAI-compatible
 
-O adapter atual suporta OpenAI API, OpenRouter, DeepSeek, Ollama, LM Studio e
-endpoints customizados que implementem os recursos compatíveis de modelos e
-chat completions. Endpoints remotos exigem HTTPS. HTTP simples é aceito apenas
-para Providers locais em loopback.
+Os presets cobrem OpenAI, Google Gemini, OpenRouter, DeepSeek, Groq, Mistral,
+xAI, Ollama e LM Studio. **Outro** aceita qualquer endpoint que implemente os
+recursos compatíveis `/models` e `/chat/completions` (vLLM, llama.cpp,
+LiteLLM…); a chave de API é opcional e uma URL de loopback é tratada como
+local. Endpoints remotos exigem HTTPS. HTTP simples é aceito apenas para
+Providers locais em loopback.
 
-O adapter oferece descoberta de modelos, streaming, cancelamento e o recurso
-OpenAI-compatible `/embeddings` quando o modelo selecionado declara a
-capacidade `embeddings`. Tool calling não é normalizado por esse adapter e
-aparece como limitação. Atualize o catálogo antes de associar um modelo ao
-workspace. Modelos de embeddings são associados separadamente do modelo de
-conversa.
+O adapter oferece descoberta de modelos, streaming, cancelamento, function
+calling e o recurso OpenAI-compatible `/embeddings` quando o modelo selecionado
+declara a capacidade `embeddings`. Catálogos que não declaram capacidades são
+tratados como "não declarado", não como "sem suporte". Use o botão de modelo de
+uma conexão para atualizar o catálogo e trocar de modelo. Modelos de embeddings
+são associados separadamente do modelo de conversa.
 
 Embeddings remotos exigem consentimento explícito do workspace. Sem modelo de
 embeddings, sem consentimento ou diante de falha do adapter, o índice semântico
 continua disponível por recuperação lexical e estrutural local.
+
+## Ferramentas do agente
+
+Execuções com Provider usam um ciclo limitado de ferramentas executado no
+processo principal:
+
+| Ferramenta | Modos | Observações |
+| --- | --- | --- |
+| `list_directory`, `read_file`, `search_text` | Review, Build, Docs | Caminhos limitados à raiz autorizada; diretórios gerados e prováveis segredos são ignorados ou recusados. |
+| `write_file`, `edit_file` | Build | Escrita atômica; `.git`, `.nocturne` e diretórios ignorados são recusados. Aprovação por alteração opcional. |
+| `run_command` | Build | Sem shell, timeout de 120 s, saída limitada, aprovação explícita sempre; elevação de privilégio e comandos destrutivos são bloqueados. |
+
+Build exige um modelo com function calling; se um Provider recusar uma
+solicitação de Build que ofereceu ferramentas, o erro informa isso. Review e
+Docs repetem uma vez sem ferramentas e respondem com o contexto selecionado
+pelo Nocturne. A saída das ferramentas é dado não confiável e é enviada ao
+Provider escolhido como qualquer outro contexto.
+
+## Conta ChatGPT (opcional)
+
+Uma conta ChatGPT pode ser conectada por um Codex CLI instalado. O Nocturne não
+recebe senha ou token da conta: usa o App Server autenticado do Codex e lista os
+modelos retornados para aquela conta. Escolher um modelo Codex torna o Codex o
+motor de todos os modos até que outro modelo seja escolhido. Uma assinatura
+ChatGPT não fornece créditos da OpenAI Platform API.
 
 ## Credenciais e diagnóstico
 

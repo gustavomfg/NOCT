@@ -4,6 +4,7 @@ import type { AppSettings, Workspace } from '../../types'
 import { errorMessage } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
 import { AISettingsPage } from './AISettingsPage'
+import type { AiSelection } from './useSettingsController'
 import { useI18n, type Language } from '../../shared/i18n'
 import { useUpdates } from '../updates/useUpdateStore'
 import { UpdateSettingsSection } from '../updates/UpdateSettingsSection'
@@ -17,7 +18,7 @@ const settingsPages: Array<{ id: SettingsPage; labelKey: string; descriptionKey:
   { id: 'diagnostics', labelKey: 'settings.diagnostics', descriptionKey: 'settings.diagnosticsDescription', icon: Activity },
 ]
 
-export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, onCodexModelChange, onNotify, onOnboarding }: { value: AppSettings; workspace: string; workspaces: Workspace[]; onClose(): void; onSave(value: AppSettings): void | Promise<void>; onCodexModelChange(modelId: string): Promise<void>; onNotify(message: string): void; onOnboarding(): void }) {
+export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, onAiSelectionChange, onNotify, onOnboarding }: { value: AppSettings; workspace: string; workspaces: Workspace[]; onClose(): void; onSave(value: AppSettings): void | Promise<void>; onAiSelectionChange(selection: AiSelection): Promise<void>; onNotify(message: string): void; onOnboarding(): void }) {
   const { t } = useI18n()
   const updates = useUpdates()
   const [form, setForm] = useState(value)
@@ -34,9 +35,9 @@ export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, 
   const dialogRef = useDialogA11y<HTMLDivElement>(() => requestExit())
   useEffect(() => { if (page === 'diagnostics') setDiagnostic(t('settings.systemLoaded')) }, [page, t])
   const save = async () => { if (saving) return; setSaving(true); setSaveError(null); try { await onSave(form) } catch (error) { setSaveError(errorMessage(error)) } finally { setSaving(false) } }
-  const selectCodexModel = async (modelId: string) => {
-    await onCodexModelChange(modelId)
-    setForm((current) => ({ ...current, model: modelId }))
+  const selectAi = async (selection: AiSelection) => {
+    await onAiSelectionChange(selection)
+    setForm((current) => ({ ...current, ...selection }))
   }
   const runOperation = async (name: string, operationTask: () => Promise<string | null | void>, success: string) => {
     if (operation) return
@@ -68,7 +69,7 @@ export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, 
         </nav>
         <main className="settings-content">
           <div className="settings-page-title"><span><currentPage.icon size={19}/></span><div><h2>{t(currentPage.labelKey)}</h2><p>{t(currentPage.descriptionKey)}</p></div></div>
-          {page === 'ai' && <AISettingsPage workspaceId={workspace} onNotify={onNotify} onCodexModelChange={selectCodexModel}/>}
+          {page === 'ai' && <><AISettingsPage workspaceId={workspace} activeEngine={form.aiEngine} codexModel={form.model} onNotify={onNotify} onAiSelectionChange={selectAi}/><SettingsSection title={t('settings.agentSafety')}><label className="check-label"><input type="checkbox" checked={form.approvalPolicy === 'untrusted'} onChange={(event) => setForm({ ...form, approvalPolicy: event.target.checked ? 'untrusted' : 'on-request' })}/><span><strong>{t('settings.approveFileChanges')}</strong><small>{t('settings.approveFileChangesHint')}</small></span></label></SettingsSection></>}
           {page === 'workspace' && <SettingsSection title={t('settings.recentProjects')}><div className="settings-workspaces">{workspaces.slice(0, 6).map((workspace) => <div key={workspace.path}><span className="workspace-setting-icon"><Folder size={15}/></span><span><strong title={workspace.name}>{workspace.name}</strong><small title={workspace.path}>{workspace.path}</small></span>{workspace.favorite && <Star className="workspace-setting-star" size={13} fill="currentColor"/>}</div>)}{!workspaces.length && <p className="settings-empty">{t('settings.noRecentWorkspaces')}</p>}</div></SettingsSection>}
           {page === 'application' && <><SettingsSection title={t('settings.preferences')}><div className="settings-columns"><label>{t('settings.theme')}<select value={form.theme === 'light' ? 'light' : 'dark'} onChange={(event) => setForm({ ...form, theme: event.target.value === 'light' ? 'light' : 'dark' })}><option value="dark">{t('settings.darkTheme')}</option><option value="light">{t('settings.lightTheme')}</option></select></label><label>{t('settings.language')}<select value={form.language === 'en' ? 'en' : 'pt-BR'} onChange={(event) => setForm({ ...form, language: event.target.value as Language })}><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select><small>{t('settings.languageHint')}</small></label></div><label className="check-label"><input type="checkbox" checked={Boolean(form.diagnosticMode)} onChange={(event) => setForm({ ...form, diagnosticMode: event.target.checked })}/><span><strong>{t('settings.detailedLogs')}</strong><small>{t('settings.detailedLogsHint')}</small></span></label><button className="secondary-setting" onClick={() => requestExit('onboarding')}>{t('settings.reopenOnboarding')}</button></SettingsSection><SettingsSection title={t('updates.title')}><UpdateSettingsSection state={updates.state} connectionError={updates.connectionError} onCheck={() => { void updates.check() }} onDownload={() => { void updates.download() }} onRetry={() => { void updates.retry() }} onInstall={() => { void updates.install() }}/></SettingsSection></>}
           {page === 'diagnostics' && <SettingsSection title={t('settings.systemInfo')}><pre className="diagnostic-summary" aria-live="polite">{diagnostic}</pre><div className="diagnostic-actions"><button disabled={Boolean(operation)} onClick={() => void runOperation('logs', () => window.nocturne.diagnostics.openLogs(), t('settings.logsOpened'))}>{t('settings.openLogs')}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('copy', async () => { const content = await window.nocturne.diagnostics.copy(); await window.nocturne.clipboard.writeText(content); setCopied(true) }, t('settings.diagnosticCopied'))}>{operation === 'copy' ? t('settings.copying') : copied ? t('settings.infoCopied') : t('settings.copyInfo')}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('diagnostic-export', () => window.nocturne.diagnostics.export(), t('settings.diagnosticExported'))}>{operation === 'diagnostic-export' ? t('settings.exportingDiagnostic') : t('settings.exportDiagnostic')}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('export', () => window.nocturne.data.export(), t('settings.backupExported'))}>{operation === 'export' ? t('settings.exporting') : t('settings.exportData')}</button><button disabled={Boolean(operation)} onClick={() => void restoreBackup()}>{operation === 'import' ? t('settings.restoring') : t('settings.restoreBackup')}</button></div></SettingsSection>}

@@ -1,3 +1,31 @@
+## Unreleased
+
+### Changed
+
+- Nocturne no longer depends on the Codex CLI. The AI selected in Settings → AI
+  (OpenAI, Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI, Ollama, LM Studio
+  or any OpenAI-compatible endpoint) runs Review, Build and Docs. Codex remains
+  an optional engine; 1.0.x installations that chose a Codex model keep it until
+  a provider model is selected. Without a selection, runs are refused explicitly.
+- Provider runs use a bounded tool loop (`list_directory`, `read_file`,
+  `search_text`; `write_file`, `edit_file` and approved `run_command` in Build)
+  with workspace containment, secret-file refusal, BEFORE/AFTER change capture
+  and command approvals in the agent panel.
+- The AI settings page shows the active AI, lets each connection switch models,
+  filters long catalogs and derives presets from the shared provider catalog.
+  The composer shows the active AI. An option asks for approval before every
+  file change.
+
+### Fixed
+
+- Models discovered without advertised capabilities no longer fail every run
+  with "does not meet the required capabilities".
+- Provider Reviews now receive the Review instructions, so structured
+  suggestions are produced instead of an "absent snapshot" warning.
+- Docs runs through a provider are persisted as Docs instead of Build.
+- LM Studio and loopback custom endpoints are configured as local providers.
+- Connection action buttons in AI settings are laid out in a row.
+
 ## 1.0.2 — Release candidate (unreleased)
 
 ### Fixed

@@ -1,18 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ArrowLeft,
+  Atom,
   Bot,
   Brain,
   Check,
   ChevronDown,
+  Gem,
   Globe,
   Laptop,
   LoaderCircle,
+  Network,
   Plus,
+  Search,
+  Server,
   Sparkles,
   Trash2,
   UserRound,
+  Wind,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react'
 import type { ProviderDiagnostic } from '../../../shared/ai/provider'
 import type {
@@ -21,51 +29,87 @@ import type {
 } from '../../../shared/ai/providerConfiguration'
 import type { ModelDescriptor, ModelReference } from '../../../shared/ai/model'
 import type { WorkspaceModelBindings } from '../../../shared/ai/bindings'
+import { providerCatalog, type ProviderCatalogId } from '../../../shared/ai/providerCatalog'
+import { selectAiEngine, type AiEngine } from '../../../shared/ai/engine'
 import type { CodexAccountStatus } from '../../../shared/types'
 import type { CodexModel } from '../../../shared/codexModels'
 import { errorMessage } from '../../shared/format'
 import { useI18n } from '../../shared/i18n'
+import type { AiSelection } from './useSettingsController'
 
 type Step = 'list' | 'service' | 'auth' | 'model' | 'codex-model'
 
 interface ServicePreset {
-  id: string
+  id: ProviderCatalogId | 'other' | 'codex'
   name: string
-  icon: typeof Bot
+  icon: LucideIcon
   baseUrl: string
   authType: 'account' | 'api-key' | 'local'
 }
 
+const catalogIcons: Record<ProviderCatalogId, LucideIcon> = {
+  openai: Sparkles,
+  gemini: Gem,
+  openrouter: Network,
+  deepseek: Brain,
+  groq: Zap,
+  mistral: Wind,
+  xai: Atom,
+  ollama: Laptop,
+  'lm-studio': Server,
+}
+
+const keyPlaceholders: Partial<Record<ServicePreset['id'], string>> = {
+  openai: 'sk-proj-…',
+  deepseek: 'sk-…',
+  openrouter: 'sk-or-v1-…',
+  gemini: 'AIza…',
+  groq: 'gsk_…',
+  xai: 'xai-…',
+}
+
 const presets: ServicePreset[] = [
-  { id: 'codex', name: 'Conta ChatGPT', icon: UserRound, baseUrl: '', authType: 'account' },
-  { id: 'openai', name: 'OpenAI API', icon: Sparkles, baseUrl: 'https://api.openai.com/v1', authType: 'api-key' },
-  { id: 'deepseek', name: 'DeepSeek', icon: Brain, baseUrl: 'https://api.deepseek.com', authType: 'api-key' },
-  { id: 'openrouter', name: 'OpenRouter', icon: Bot, baseUrl: 'https://openrouter.ai/api/v1', authType: 'api-key' },
-  { id: 'ollama', name: 'Ollama', icon: Laptop, baseUrl: 'http://127.0.0.1:11434/v1', authType: 'local' },
+  ...providerCatalog.map((entry) => ({
+    id: entry.id,
+    name: entry.displayName,
+    icon: catalogIcons[entry.id],
+    baseUrl: entry.baseUrl ?? '',
+    authType: entry.source === 'local' ? 'local' as const : 'api-key' as const,
+  })),
   { id: 'other', name: 'Outro', icon: Globe, baseUrl: '', authType: 'api-key' },
+  { id: 'codex', name: 'Conta ChatGPT', icon: UserRound, baseUrl: '', authType: 'account' },
 ]
+
+const MODEL_FILTER_THRESHOLD = 8
+
 interface AIConnectionPageProps {
   workspaceId: string
+  activeEngine?: AiEngine
+  codexModel: string
   onNotify(message: string): void
-  onCodexModelChange(modelId: string): Promise<void>
+  onAiSelectionChange(selection: AiSelection): Promise<void>
 }
 
 export function AIConnectionPage({
   workspaceId,
+  activeEngine,
+  codexModel,
   onNotify,
-  onCodexModelChange,
+  onAiSelectionChange,
 }: AIConnectionPageProps) {
   const { t } = useI18n()
   const [services, setServices] = useState<ProviderConfigurationSummary[]>([])
   const [codexAccount, setCodexAccount] = useState<CodexAccountStatus | null>(null)
   const [codexModels, setCodexModels] = useState<CodexModel[]>([])
-  const [codexModelId, setCodexModelId] = useState('')
   const [selectedCodexModel, setSelectedCodexModel] = useState<CodexModel | null>(null)
   const [step, setStep] = useState<Step>('list')
   const [selectedPreset, setSelectedPreset] = useState<ServicePreset | null>(null)
+  const [modelProvider, setModelProvider] = useState<{ id: string; name: string } | null>(null)
   const [credential, setCredential] = useState('')
   const [customUrl, setCustomUrl] = useState('')
+  const [catalog, setCatalog] = useState<ModelDescriptor[]>([])
   const [models, setModels] = useState<ModelDescriptor[]>([])
+  const [modelFilter, setModelFilter] = useState('')
   const [selectedModel, setSelectedModel] = useState<ModelReference | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [loadingCodexModels, setLoadingCodexModels] = useState(false)
@@ -75,7 +119,6 @@ export function AIConnectionPage({
   const [diagnosingId, setDiagnosingId] = useState<string | null>(null)
   const [providerDiagnostics, setProviderDiagnostics] = useState<Record<string, ProviderDiagnostic>>({})
   const [workspaceBindings, setWorkspaceBindings] = useState<WorkspaceModelBindings | null>(null)
-  const [embeddingModels, setEmbeddingModels] = useState<ModelDescriptor[]>([])
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState<ModelReference | null>(null)
   const [remoteEmbeddingAllowed, setRemoteEmbeddingAllowed] = useState(false)
   const [embeddingSaving, setEmbeddingSaving] = useState(false)
@@ -84,18 +127,13 @@ export function AIConnectionPage({
 
   useEffect(() => {
     let active = true
-    void Promise.all([
-      window.nocturne.providers.list(),
-      window.nocturne.codex.status(),
-      window.nocturne.settings.get(),
-    ])
-      .then(([items, account, settings]) => {
-        if (!active) return
-        setServices(items)
-        setCodexAccount(account)
-        setCodexModelId(settings.model || '')
-      })
+    void window.nocturne.providers.list()
+      .then((items) => { if (active) setServices(items) })
       .catch((failure) => { if (active) setError(errorMessage(failure)) })
+    // Codex is optional: its status is informative and never blocks the page.
+    void window.nocturne.codex.status()
+      .then((account) => { if (active) setCodexAccount(account) })
+      .catch(() => undefined)
     return () => { active = false }
   }, [])
 
@@ -103,16 +141,14 @@ export function AIConnectionPage({
     let active = true
     if (!workspaceId) {
       setWorkspaceBindings(null)
-      setEmbeddingModels([])
       setSelectedEmbeddingModel(null)
       setRemoteEmbeddingAllowed(false)
       return () => { active = false }
     }
     void Promise.all([window.nocturne.models.list(), window.nocturne.models.bindings(workspaceId)])
-      .then(([catalog, bindings]) => {
+      .then(([items, bindings]) => {
         if (!active) return
-        const available = catalog.filter((model) => model.capabilities.includes('embeddings') && model.availability === 'available')
-        setEmbeddingModels(available)
+        setCatalog(items)
         setWorkspaceBindings(bindings)
         setSelectedEmbeddingModel(bindings?.embeddingBinding ?? null)
         setRemoteEmbeddingAllowed(bindings?.remoteEmbeddingAllowed === true)
@@ -121,12 +157,25 @@ export function AIConnectionPage({
     return () => { active = false }
   }, [workspaceId])
 
+  const defaultBinding = workspaceBindings?.defaultBinding
+  const boundService = services.find((service) => service.id === defaultBinding?.providerId && service.enabled)
+  const engine = selectAiEngine({ preference: activeEngine, providerReady: Boolean(boundService), legacyCodexModel: codexModel })
+  const boundModel = defaultBinding ? catalog.find((model) => model.providerId === defaultBinding.providerId && model.modelId === defaultBinding.modelId) : undefined
+  const embeddingModels = catalog.filter((model) => model.capabilities.includes('embeddings') && model.availability === 'available')
+  const filteredModels = useMemo(() => {
+    const query = modelFilter.trim().toLowerCase()
+    if (!query) return models
+    return models.filter((model) => model.modelId.toLowerCase().includes(query) || model.displayName.toLowerCase().includes(query))
+  }, [modelFilter, models])
+
   const resetWizard = () => {
     setStep('list')
     setSelectedPreset(null)
+    setModelProvider(null)
     setCredential('')
     setCustomUrl('')
     setModels([])
+    setModelFilter('')
     setSelectedModel(null)
     setSelectedCodexModel(null)
     setShowAdvanced(false)
@@ -142,18 +191,46 @@ export function AIConnectionPage({
       const available = await window.nocturne.codex.models()
       setCodexModels(available)
       setSelectedCodexModel(
-        available.find((model) => model.model === codexModelId)
+        available.find((model) => model.model === codexModel)
         ?? available.find((model) => model.isDefault)
         ?? available[0]
         ?? null,
       )
-      if (available.length === 0) {
-        setError(t('ai.noAccountModels'))
-      }
+      if (available.length === 0) setError(t('ai.noAccountModels'))
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
       setLoadingCodexModels(false)
+    }
+  }
+
+  const loadProviderModels = async (providerId: string) => {
+    await window.nocturne.models.refresh(providerId)
+    const items = await window.nocturne.models.list()
+    setCatalog(items)
+    const available = items.filter((model) => model.providerId === providerId && !model.capabilities.includes('embeddings'))
+    setModels(available)
+    const current = defaultBinding?.providerId === providerId
+      ? available.find((model) => model.modelId === defaultBinding.modelId)
+      : undefined
+    const preferred = current ?? available.find((model) => model.availability === 'available')
+    setSelectedModel(preferred ? { providerId, modelId: preferred.modelId } : null)
+  }
+
+  const openProviderModels = async (service: ProviderConfigurationSummary) => {
+    if (connecting) return
+    setModelProvider({ id: service.id, name: service.displayName })
+    setModels([])
+    setModelFilter('')
+    setStep('model')
+    setConnecting(true)
+    setError(null)
+    try {
+      await loadProviderModels(service.id)
+    } catch (failure) {
+      setError(errorMessage(failure))
+    } finally {
+      setConnecting(false)
     }
   }
 
@@ -180,35 +257,33 @@ export function AIConnectionPage({
         return
       }
       const effectiveUrl = customUrl.trim() || selectedPreset.baseUrl
-      if (selectedPreset.authType === 'api-key' && !credential.trim()) {
-        setError(t('ai.enterApiKey'))
-        setConnecting(false)
-        return
-      }
       if (selectedPreset.id === 'other' && !effectiveUrl) {
         setError(t('ai.enterServiceUrl'))
-        setConnecting(false)
         return
       }
+      // Custom endpoints may be local servers (vLLM, llama.cpp…) that need no key.
+      const keyRequired = selectedPreset.authType === 'api-key' && selectedPreset.id !== 'other'
+      if (keyRequired && !credential.trim()) {
+        setError(t('ai.enterApiKey'))
+        return
+      }
+      const local = selectedPreset.authType === 'local' || (selectedPreset.id === 'other' && isLoopbackUrl(effectiveUrl))
       const config: ProviderConfigurationInput = {
         providerType: 'openai-compatible',
-        displayName: selectedPreset.name,
-        source: selectedPreset.id === 'ollama' ? 'local' : 'remote',
+        displayName: selectedPreset.id === 'other' ? hostLabel(effectiveUrl) : selectedPreset.name,
+        source: local ? 'local' : 'remote',
         baseUrl: effectiveUrl,
         enabled: true,
-        requiresAuthentication: selectedPreset.authType === 'api-key',
-        timeoutMs: 30_000,
+        requiresAuthentication: keyRequired || Boolean(credential.trim()),
+        timeoutMs: local ? 120_000 : 60_000,
       }
-      const saved = await window.nocturne.providers.create(config, credential || undefined)
-      await window.nocturne.models.refresh(saved.id)
-      const catalog = await window.nocturne.models.list()
-      const available = catalog.filter((m) => m.providerId === saved.id)
-      setModels(available)
-      setServices((current) => [saved, ...current])
-      if (available.length > 0) {
-        setSelectedModel({ providerId: saved.id, modelId: available[0].modelId })
-      }
+      const saved = await window.nocturne.providers.create(config, credential.trim() || undefined)
+      setServices((current) => [saved, ...current.filter((item) => item.id !== saved.id)])
+      setModelProvider({ id: saved.id, name: saved.displayName })
+      setModels([])
+      setModelFilter('')
       setStep('model')
+      await loadProviderModels(saved.id)
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -222,6 +297,7 @@ export function AIConnectionPage({
     setError(null)
     try {
       setCodexAccount(await window.nocturne.codex.logout())
+      if (engine === 'codex') await onAiSelectionChange({ aiEngine: 'provider' })
       onNotify(t('ai.disconnectedChatGpt'))
     } catch (failure) {
       setError(errorMessage(failure))
@@ -231,7 +307,7 @@ export function AIConnectionPage({
   }
 
   const saveAndBind = async () => {
-    if (!selectedPreset || !selectedModel || saving) return
+    if (!modelProvider || !selectedModel || saving) return
     if (!workspaceId) {
       setError(t('ai.selectWorkspace'))
       return
@@ -246,6 +322,7 @@ export function AIConnectionPage({
       }
       const saved = await window.nocturne.models.setBindings(nextBindings)
       setWorkspaceBindings(saved)
+      await onAiSelectionChange({ aiEngine: 'provider' })
       onNotify(t('ai.usingModel', { model: selectedModel.modelId }))
       resetWizard()
     } catch (failure) {
@@ -287,8 +364,7 @@ export function AIConnectionPage({
     setSaving(true)
     setError(null)
     try {
-      await onCodexModelChange(selectedCodexModel.model)
-      setCodexModelId(selectedCodexModel.model)
+      await onAiSelectionChange({ aiEngine: 'codex', model: selectedCodexModel.model })
       onNotify(t('ai.usingCodexModel', { model: selectedCodexModel.displayName }))
       resetWizard()
     } catch (failure) {
@@ -328,56 +404,60 @@ export function AIConnectionPage({
     }
   }
 
+  const activeSummary = engine === 'codex'
+    ? { name: t('ai.chatGptAccount'), detail: codexModel ? `${codexModel} · Codex CLI` : 'Codex CLI' }
+    : engine === 'provider' && boundService && defaultBinding
+      ? { name: boundService.displayName, detail: boundModel?.displayName ?? defaultBinding.modelId }
+      : null
+
   return <div className="ai-page">
     {error && <div className="provider-feedback error" role="alert">{error}</div>}
 
     {step === 'list' && <>
       <div className="ai-list-header">
-        <h4 className="ai-list-heading">{t('ai.connect')}</h4>
-        <p className="ai-list-sub">{t('ai.connectHint')}</p>
+        <h4 className="ai-list-heading">{t('ai.chooseYourAi')}</h4>
+        <p className="ai-list-sub">{t('ai.chooseYourAiHint')}</p>
       </div>
 
-      {codexAccount && codexAccount.state !== 'ready' && <CodexStatusSummary value={codexAccount}/>}
+      <section className={`ai-active ${activeSummary ? 'ready' : 'empty'}`} aria-live="polite" aria-label={t('ai.activeAi')}>
+        <span className="ai-active-mark">{activeSummary ? <Check size={16}/> : <Bot size={16}/>}</span>
+        <span className="ai-active-copy">
+          <small>{t('ai.activeAi')}</small>
+          <strong>{activeSummary ? activeSummary.name : t('ai.noActiveAi')}</strong>
+          <span>{activeSummary ? activeSummary.detail : workspaceId ? t('ai.noActiveAiHint') : t('ai.selectWorkspace')}</span>
+        </span>
+      </section>
 
       {(codexAccount?.authenticated || services.length > 0) && <div className="ai-list-connections">
-        {codexAccount?.authenticated && <div className="ai-list-row">
-          <div className="ai-list-row-info">
-            <span className="ai-list-dot"/>
-            <span><strong>{t('ai.chatGptAccount')}</strong><small>Codex CLI {codexAccount.version}{codexModelId ? ` · ${codexModelId}` : ''}</small></span>
-          </div>
-          <div className="ai-list-row-actions">
-            <button
-              className="ai-list-config"
-              aria-label={t('ai.chooseCodexModel')}
-              disabled={loadingCodexModels || connecting}
-              onClick={() => void openCodexModels()}
-            >{loadingCodexModels ? <LoaderCircle className="spin" size={13}/> : <Bot size={13}/>}</button>
-            <button
-              className="ai-list-remove"
-              aria-label={t('ai.disconnectChatGpt')}
-              disabled={connecting}
-              onClick={() => void disconnectCodex()}
-            >{connecting ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
-          </div>
-        </div>}
         {services.map((service) => {
           const diagnostic = providerDiagnostics[service.id]
+          const isActive = engine === 'provider' && boundService?.id === service.id
           return <div key={service.id} className="ai-list-provider">
             <div className="ai-list-row">
               <div className="ai-list-row-info">
                 <span className={`ai-list-dot ${diagnostic?.availability.status ?? ''}`}/>
-                <span><strong>{service.displayName}</strong><small>{service.baseUrl}</small></span>
+                <span><strong>{service.displayName}</strong><small>{isActive && defaultBinding ? defaultBinding.modelId : service.baseUrl}</small></span>
+                {isActive && <em className="ai-active-badge">{t('ai.activeBadge')}</em>}
               </div>
               <div className="ai-list-row-actions">
                 <button
                   className="ai-list-config"
+                  aria-label={t('ai.chooseModelFor', { service: service.displayName })}
+                  title={t('ai.chooseModel')}
+                  disabled={connecting || !service.enabled}
+                  onClick={() => void openProviderModels(service)}
+                ><Bot size={13}/></button>
+                <button
+                  className="ai-list-config"
                   aria-label={`${t('ai.diagnose')} ${service.displayName}`}
+                  title={t('ai.diagnose')}
                   disabled={Boolean(diagnosingId)}
                   onClick={() => void diagnose(service.id)}
                 >{diagnosingId === service.id ? <LoaderCircle className="spin" size={13}/> : <Activity size={13}/>}</button>
                 <button
                   className="ai-list-remove"
                   aria-label={`${t('common.remove')} ${service.displayName}`}
+                  title={t('common.remove')}
                   disabled={removingId === service.id}
                   onClick={() => void remove(service.id)}
                 >{removingId === service.id ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
@@ -386,6 +466,29 @@ export function AIConnectionPage({
             {diagnostic && <ProviderDiagnosticSummary value={diagnostic}/>}
           </div>
         })}
+        {codexAccount?.authenticated && <div className="ai-list-provider"><div className="ai-list-row">
+          <div className="ai-list-row-info">
+            <span className="ai-list-dot"/>
+            <span><strong>{t('ai.chatGptAccount')}</strong><small>Codex CLI {codexAccount.version}{codexModel ? ` · ${codexModel}` : ''}</small></span>
+            {engine === 'codex' && <em className="ai-active-badge">{t('ai.activeBadge')}</em>}
+          </div>
+          <div className="ai-list-row-actions">
+            <button
+              className="ai-list-config"
+              aria-label={t('ai.chooseCodexModel')}
+              title={t('ai.chooseModel')}
+              disabled={loadingCodexModels || connecting}
+              onClick={() => void openCodexModels()}
+            >{loadingCodexModels ? <LoaderCircle className="spin" size={13}/> : <Bot size={13}/>}</button>
+            <button
+              className="ai-list-remove"
+              aria-label={t('ai.disconnectChatGpt')}
+              title={t('ai.disconnectChatGpt')}
+              disabled={connecting}
+              onClick={() => void disconnectCodex()}
+            >{connecting ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
+          </div>
+        </div></div>}
       </div>}
 
       <button className="ai-add-btn" onClick={() => setStep('service')}>
@@ -408,9 +511,12 @@ export function AIConnectionPage({
       <div className="ai-service-list">
         {presets.map((preset) => {
           const Icon = preset.icon
-          return <button key={preset.id} className="ai-service-opt" onClick={() => pickService(preset)}>
+          return <button key={preset.id} className="ai-service-opt" aria-label={presetName(preset, t)} aria-describedby={`ai-preset-${preset.id}`} onClick={() => pickService(preset)}>
             <span className="ai-service-mark"><Icon size={17}/></span>
-            <span className="ai-service-name">{presetName(preset, t)}</span>
+            <span className="ai-service-copy">
+              <span className="ai-service-name">{presetName(preset, t)}</span>
+              <small id={`ai-preset-${preset.id}`}>{t(`ai.preset.${preset.id}`)}</small>
+            </span>
             <ArrowLeft className="ai-service-arrow" size={14}/>
           </button>
         })}
@@ -431,44 +537,12 @@ export function AIConnectionPage({
             : t('ai.pasteProviderKey', { service: presetName(selectedPreset, t) })
       }</p>
 
-      {selectedPreset.authType === 'account' && codexAccount && !codexAccount.installed && (
-        <p className="ai-local-note">{t('ai.installCodex', { minimum: codexAccount.minimumVersion, recommended: codexAccount.recommendedVersion })}</p>
-      )}
-      {selectedPreset.authType === 'account' && codexAccount?.installed && !codexAccount.compatible && (
-        <p className="ai-local-note">
-          {t('ai.codexIncompatible', { version: codexAccount.version || t('common.unknown'), minimum: codexAccount.minimumVersion })}
-        </p>
-      )}
-      {selectedPreset.authType === 'account' && codexAccount?.state === 'internal-error' && (
-        <p className="ai-local-note" role="alert">{codexAccount.error}</p>
-      )}
+      {selectedPreset.authType === 'account' && codexAccount && <CodexStatusSummary value={codexAccount}/>}
 
       {selectedPreset.authType === 'api-key' && <>
-        <label className="ai-field-label" htmlFor="ai-credential">
-          <span>{t('ai.apiKey')}</span>
-          <input
-            id="ai-credential"
-            className="ai-input"
-            type="password"
-            autoComplete="new-password"
-            value={credential}
-            onChange={(e) => setCredential(e.target.value)}
-            placeholder={
-              selectedPreset.id === 'openai'
-                ? 'Ex.: sk-proj-...'
-                : selectedPreset.id === 'deepseek'
-                  ? 'Ex.: sk-...'
-                  : selectedPreset.id === 'openrouter'
-                    ? 'Ex.: sk-or-v1-...'
-                    : selectedPreset.id === 'other'
-                ? t('ai.pasteApiKey')
-                : t('ai.apiKey')
-            }
-          />
-        </label>
         {selectedPreset.id === 'other' && (
           <label className="ai-field-label" htmlFor="ai-custom-url">
-            <span>{t('ai.customUrl')}</span>
+            <span>{t('ai.serviceUrl')}</span>
             <input
               id="ai-custom-url"
               className="ai-input"
@@ -479,9 +553,21 @@ export function AIConnectionPage({
             />
           </label>
         )}
+        <label className="ai-field-label" htmlFor="ai-credential">
+          <span>{selectedPreset.id === 'other' ? t('ai.optionalApiKey') : t('ai.apiKey')}</span>
+          <input
+            id="ai-credential"
+            className="ai-input"
+            type="password"
+            autoComplete="new-password"
+            value={credential}
+            onChange={(e) => setCredential(e.target.value)}
+            placeholder={keyPlaceholders[selectedPreset.id] ? `Ex.: ${keyPlaceholders[selectedPreset.id]}` : t('ai.pasteApiKey')}
+          />
+        </label>
         {selectedPreset.id !== 'other' && (
           <div className="ai-advanced">
-            <button type="button" className="ai-advanced-toggle" onClick={() => setShowAdvanced(!showAdvanced)}>
+            <button type="button" className="ai-advanced-toggle" aria-expanded={showAdvanced} onClick={() => setShowAdvanced(!showAdvanced)}>
               <ChevronDown size={11} className={`ai-chevron${showAdvanced ? ' open' : ''}`}/>
               {t('ai.advanced')}
             </button>
@@ -494,7 +580,7 @@ export function AIConnectionPage({
                   type="url"
                   value={customUrl}
                   onChange={(e) => setCustomUrl(e.target.value)}
-                  placeholder={t('ai.customUrlExample')}
+                  placeholder={selectedPreset.baseUrl || t('ai.customUrlExample')}
                 />
               </label>
             )}
@@ -519,33 +605,43 @@ export function AIConnectionPage({
       </button>
     </div>}
 
-    {step === 'model' && selectedPreset && <div className="ai-step-box">
+    {step === 'model' && modelProvider && <div className="ai-step-box">
       <div className="ai-step-top">
-        <button className="ai-step-back" aria-label={t('ai.back')} onClick={() => setStep('auth')}><ArrowLeft size={16}/></button>
-        <div className="ai-step-copy"><strong>{t('ai.chooseModel')}</strong><small>{t('ai.chooseModelHint')}</small></div>
+        <button className="ai-step-back" aria-label={t('ai.back')} onClick={() => selectedPreset ? setStep('auth') : resetWizard()}><ArrowLeft size={16}/></button>
+        <div className="ai-step-copy"><strong>{t('ai.chooseModel')}</strong><small>{t('ai.chooseModelHintFor', { service: modelProvider.name })}</small></div>
       </div>
       <div className="ai-step-body">
         {connecting
           ? <div className="ai-searching"><LoaderCircle className="spin" size={20}/><span>{t('ai.searchingModels')}</span></div>
           : <>
+              {models.length > MODEL_FILTER_THRESHOLD && <label className="ai-model-filter" htmlFor="ai-model-filter">
+                <Search size={14} aria-hidden="true"/>
+                <span className="sr-only">{t('ai.filterModels')}</span>
+                <input id="ai-model-filter" className="ai-input" type="search" value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} placeholder={t('ai.filterModels')}/>
+              </label>}
               {models.length === 0
                 ? <p className="ai-no-models">{t('ai.noModels')}</p>
-                : <div className="ai-model-list">{models.map((m) => (
+                : filteredModels.length === 0
+                  ? <p className="ai-no-models">{t('ai.noMatchingModels')}</p>
+                  : <div className="ai-model-list" role="group" aria-label={t('ai.chooseModel')}>{filteredModels.map((m) => (
                     <button
                       key={`${m.providerId}/${m.modelId}`}
+                      aria-pressed={selectedModel?.modelId === m.modelId}
                       className={`ai-model-opt ${selectedModel?.modelId === m.modelId ? 'active' : ''}`}
                       disabled={m.availability !== 'available'}
                       onClick={() => setSelectedModel({ providerId: m.providerId, modelId: m.modelId })}
                     >
                       <Check size={14} className="ai-model-check"/>
                       <span className="ai-model-name">{m.displayName}</span>
+                      {m.displayName !== m.modelId && <small>{m.modelId}</small>}
                     </button>
                   ))}</div>}
+              <p className="ai-local-note">{t('ai.toolsHint')}</p>
             </>}
       </div>
       <div className="ai-step-foot">
         {!workspaceId && <span className="ai-workspace-required">{t('ai.selectWorkspace')}</span>}
-        <button disabled={saving || !selectedModel || !workspaceId} className="ai-use-btn" onClick={() => void saveAndBind()}>
+        <button disabled={saving || connecting || !selectedModel || !workspaceId} className="ai-use-btn" onClick={() => void saveAndBind()}>
           {saving ? t('settings.saving') : t('ai.useModel')}
         </button>
       </div>
@@ -553,7 +649,7 @@ export function AIConnectionPage({
 
     {step === 'codex-model' && <div className="ai-step-box">
       <div className="ai-step-top">
-        <button className="ai-step-back" aria-label={t('ai.back')} onClick={() => setStep('list')}><ArrowLeft size={16}/></button>
+        <button className="ai-step-back" aria-label={t('ai.back')} onClick={() => resetWizard()}><ArrowLeft size={16}/></button>
         <div className="ai-step-copy"><strong>{t('ai.codexModel')}</strong><small>{t('ai.codexModelHint')}</small></div>
       </div>
       <div className="ai-step-body">
@@ -561,9 +657,10 @@ export function AIConnectionPage({
           ? <div className="ai-searching"><LoaderCircle className="spin" size={20}/><span>{t('ai.searchingModels')}</span></div>
           : codexModels.length === 0
             ? <p className="ai-no-models">{t('ai.noAccountModels')}</p>
-            : <div className="ai-model-list">{codexModels.map((model) => (
+            : <div className="ai-model-list" role="group" aria-label={t('ai.codexModel')}>{codexModels.map((model) => (
                 <button
                   key={model.model}
+                  aria-pressed={selectedCodexModel?.model === model.model}
                   className={`ai-model-opt ${selectedCodexModel?.model === model.model ? 'active' : ''}`}
                   onClick={() => setSelectedCodexModel(model)}
                 >
@@ -596,14 +693,31 @@ function presetName(preset: ServicePreset, t: (key: string) => string) {
   return preset.id === 'codex' ? t('ai.chatGptAccount') : preset.id === 'other' ? t('ai.other') : preset.name
 }
 
+function isLoopbackUrl(value: string) {
+  try {
+    const hostname = new URL(value).hostname.replace(/^\[(.*)]$/, '$1').toLowerCase()
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  } catch {
+    return false
+  }
+}
+
+function hostLabel(value: string) {
+  try {
+    return new URL(value).host || value
+  } catch {
+    return value
+  }
+}
+
 function CodexStatusSummary({ value }: { value: CodexAccountStatus }) {
   const { t } = useI18n()
+  if (value.state === 'ready') return null
   const message = {
-    'not-installed': t('ai.codexNotInstalled', { version: value.recommendedVersion }),
+    'not-installed': t('ai.installCodex', { minimum: value.minimumVersion, recommended: value.recommendedVersion }),
     'not-authenticated': t('ai.codexNotAuthenticated'),
     incompatible: t('ai.codexIncompatible', { version: value.version ?? t('common.unknown'), minimum: value.minimumVersion }),
     'internal-error': value.error ?? t('ai.codexInternalError'),
-    ready: '',
   }[value.state]
   return <div
     className={`provider-feedback ${value.state === 'not-authenticated' ? '' : 'error'}`}

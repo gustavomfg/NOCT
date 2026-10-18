@@ -5,9 +5,12 @@
 1. Open Nocturne Studio and complete the first-use screen.
 2. Select a project folder. The explicit selection authorizes only that root.
 3. Open **Settings > AI**.
-4. Connect a ChatGPT account through the Codex CLI, configure an
-   OpenAI-compatible API, or register a local runtime.
-5. Refresh the model catalog, choose a model and bind it to the workspace.
+4. Click **Connect an AI** and choose any service: an API key (OpenAI, Gemini,
+   OpenRouter, DeepSeek, Groq, Mistral, xAI), a local runtime (Ollama,
+   LM Studio), any OpenAI-compatible URL or, optionally, a ChatGPT account
+   through an installed Codex CLI.
+5. Choose a model for the workspace. The AI chip under the message box shows
+   the active service and model.
 6. Create a conversation and start in Review Mode for a read-only analysis.
 7. Review evidence and suggestions before accepting, deferring, rejecting or
    preparing an application.

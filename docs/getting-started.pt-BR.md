@@ -6,9 +6,12 @@
 2. Selecione uma pasta de projeto. A seleção explícita autoriza somente essa
    raiz.
 3. Abra **Configurações > IA**.
-4. Conecte uma conta ChatGPT pelo Codex CLI, configure uma API
-   OpenAI-compatible ou registre um runtime local.
-5. Atualize o catálogo, escolha um modelo e associe-o ao workspace.
+4. Clique em **Conectar uma IA** e escolha qualquer serviço: chave de API
+   (OpenAI, Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI), runtime local
+   (Ollama, LM Studio), qualquer URL compatível com OpenAI ou, opcionalmente,
+   uma conta ChatGPT por um Codex CLI instalado.
+5. Escolha um modelo para o workspace. O indicador de IA abaixo da caixa de
+   mensagem mostra o serviço e o modelo ativos.
 6. Crie uma conversa e comece em Review Mode para uma análise somente leitura.
 7. Revise evidências e sugestões antes de aceitar, adiar, rejeitar ou preparar
    uma aplicação.
