@@ -39,7 +39,7 @@ export class ContextAssemblyService {
     ))
     const explicit = new Set(input.explicitSourceIds ?? [])
     const dropped: ContextAssemblyResult['dropped'] = []
-    const deduplicated = new Map<string, ContextSource & { priority: number; fingerprint: string }>()
+    const deduplicated = new Map<string, { source: ContextSource; priority: number }>()
     const fingerprints = new Set<string>()
 
     for (const source of input.sources) {
@@ -59,14 +59,14 @@ export class ContextAssemblyService {
       fingerprints.add(fingerprint)
       const priority = (explicit.has(source.id) ? 10_000 : 0) + sourcePriority[source.type] + (source.relevance ?? 0)
       const current = deduplicated.get(source.id)
-      if (!current || priority > current.priority) deduplicated.set(source.id, { ...source, priority, fingerprint })
+      if (!current || priority > current.priority) deduplicated.set(source.id, { source, priority })
       else dropped.push({ id: source.id, reason: 'duplicate' })
     }
 
-    const sorted = [...deduplicated.values()].sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))
+    const sorted = [...deduplicated.values()].sort((left, right) => right.priority - left.priority || left.source.id.localeCompare(right.source.id))
     const selected: ContextSource[] = []
     let estimatedTokens = 0
-    for (const source of sorted) {
+    for (const { source } of sorted) {
       const remainingTokens = budget - estimatedTokens
       if (remainingTokens <= 0) {
         dropped.push({ id: source.id, reason: 'budget' })

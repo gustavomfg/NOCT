@@ -18,6 +18,7 @@ import { CheckpointService } from '../electron/change-control/CheckpointService'
 import { WorkspaceCheckpointStore } from '../electron/change-control/WorkspaceCheckpointStore'
 import { ChangeCaptureService } from '../electron/change-control/ChangeCaptureService'
 import { canonicalTestPath, expectUserOnlyMode, removeTestDirectory } from './helpers/platform'
+import { FakeProviderAdapter } from './helpers/FakeProviderAdapter'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -184,6 +185,8 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
   let root: string
   let workspace: string
   let flushLogger: (() => Promise<void>) | null = null
+  let testModelRegistry: import('../electron/ai/ModelRegistry').ModelRegistry
+  let testProviderRegistry: import('../electron/ai/ProviderRegistry').ProviderRegistry
   const electronMock = electron
   let updateState: UpdateState = { status: 'up-to-date', currentVersion: '1.0.1', platform: 'linux', lastCheckedAt: '2026-09-07T10:00:00.000Z' }
   const updateListeners = new Set<(state: UpdateState) => void>()
@@ -218,9 +221,9 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const providers = new SimulatedProviderConfigurations()
     const simulatedModelCatalog = new SimulatedModelCatalog()
     simulatedModelCatalog.models.push(simulatedModel)
-    const testModelRegistry = new ModelRegistry()
+    testModelRegistry = new ModelRegistry()
     testModelRegistry.register(simulatedModel)
-    const testProviderRegistry = new ProviderRegistry()
+    testProviderRegistry = new ProviderRegistry()
 
     const mockBrowserWindow = { isDestroyed: () => false, webContents: electronMock.mainWebContents }
     reinstallIpc = () => registerIpc(
@@ -904,4 +907,44 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     expect(execution).toMatchObject({ status: 'failed', error: 'Falha ao preparar a execução de IA.', finishedAt: expect.any(String) })
   })
 
+  it('envia contexto pelo preload até o Provider e persiste a resposta concluída', async () => {
+    await disposeIpc?.()
+    disposeIpc = reinstallIpc!()
+    electron.dialogs.open.push({ canceled: false, filePaths: [workspace] })
+    await api.workspace.select()
+    const conversation = await api.conversations.create(workspace)
+    await api.memory.set(conversation.id, 'Contexto do projeto para o agente.', 'Preserve a intenção do usuário.')
+    const provider = await api.providers.create({ providerType: 'chat-completions', displayName: 'Context Test', baseUrl: 'http://127.0.0.1:11434/v1', source: 'local', requiresAuthentication: false, enabled: true, timeoutMs: 30000 })
+    const descriptor: ModelDescriptor = { providerId: provider.id, modelId: 'context-model', displayName: 'Context Model', source: 'local', capabilities: ['chat', 'streaming'], availability: 'available' }
+    testModelRegistry.register(descriptor)
+    const adapter = new FakeProviderAdapter([descriptor], { events: [{ type: 'message.delta', messageId: 'assistant', delta: 'Resposta com contexto preservada.' }] })
+    testProviderRegistry.register(adapter)
+    await api.models.setBindings({ workspaceId: workspace, defaultBinding: { providerId: provider.id, modelId: descriptor.modelId } })
+    const events: Array<{ method: string; params: Record<string, unknown> }> = []
+    const unsubscribe = api.ai.onEvent((event) => events.push(event))
+    try {
+      await expect(api.ai.send(conversation.id, 'Explique o projeto.', [], 'review')).resolves.toBeUndefined()
+      await vi.waitFor(() => {
+        expect(database!.listMessages(conversation.id)).toEqual(expect.arrayContaining([
+          expect.objectContaining({ role: 'assistant', content: 'Resposta com contexto preservada.' }),
+        ]))
+        expect(events).toEqual(expect.arrayContaining([
+          expect.objectContaining({ method: 'turn/completed', params: expect.objectContaining({ turn: expect.objectContaining({ status: 'completed' }) }) }),
+        ]))
+      })
+      expect(adapter.requests).toHaveLength(1)
+      expect(adapter.requests[0].task.context).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'memory', content: expect.stringContaining('Contexto do projeto para o agente.') }),
+      ]))
+      expect(database!.listExecutions(workspace, conversation.id)).toEqual([
+        expect.objectContaining({ status: 'completed', error: null }),
+      ])
+    } finally {
+      unsubscribe()
+      await api.conversations.delete(conversation.id)
+      await api.providers.remove(provider.id)
+      testModelRegistry.deleteProviderModels(provider.id)
+      await testProviderRegistry.unregister(provider.id)
+    }
+  })
 })

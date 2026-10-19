@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ContextAssemblyService } from '../electron/ai/ContextAssemblyService'
+import { TaskBuilder } from '../electron/ai/TaskBuilder'
 
 function source(id: string, type: 'explicit-user' | 'semantic-index' | 'memory', content: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -14,6 +15,26 @@ function source(id: string, type: 'explicit-user' | 'semantic-index' | 'memory',
 }
 
 describe('ContextAssemblyService', () => {
+  it('entrega fontes compatíveis com o contrato estrito da tarefa sem metadados de ranking', () => {
+    const memory = source('workspace-memory', 'memory', '# Regras do projeto\nRevise antes de alterar.')
+    const context = new ContextAssemblyService().assemble({ sources: [memory] }).sources
+
+    const task = new TaskBuilder().build({
+      workspace: { id: '/workspace', name: 'Project' },
+      intent: 'Explique o projeto.',
+      mode: 'review',
+      messages: [],
+      context,
+      constraints: [],
+      requirements: ['chat', 'streaming'],
+      selection: { type: 'workspace-default' },
+      output: { format: 'markdown' },
+      permissions: { workspaceAccess: 'read-only' },
+      tools: [],
+    })
+    expect(task.context).toEqual([memory])
+  })
+
   it('prioriza contexto explicitamente selecionado', () => {
     const result = new ContextAssemblyService().assemble({
       sources: [source('semantic', 'semantic-index', 'semantic'), source('explicit', 'explicit-user', 'explicit')],
