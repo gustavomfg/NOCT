@@ -2,7 +2,7 @@ import type { AgentToolDefinition, AgentTranscriptEntry } from '../../../../shar
 import type { NormalizedTask } from '../../../../shared/ai/task'
 import { agentModeInstructions } from '../../../../shared/suggestions'
 
-type OpenAICompatibleMessage =
+type ChatCompletionsMessage =
   | { role: 'system' | 'user'; content: string }
   | {
     role: 'assistant'
@@ -15,25 +15,25 @@ type OpenAICompatibleMessage =
   }
   | { role: 'tool'; tool_call_id: string; content: string }
 
-interface OpenAICompatibleTool {
+interface ChatCompletionsTool {
   type: 'function'
   function: AgentToolDefinition
 }
 
-export interface OpenAICompatibleRequestBody {
+export interface ChatCompletionsRequestBody {
   model: string
   stream: true
-  messages: OpenAICompatibleMessage[]
-  tools?: OpenAICompatibleTool[]
+  messages: ChatCompletionsMessage[]
+  tools?: ChatCompletionsTool[]
 }
 
-export function buildOpenAICompatibleRequest(
+export function buildChatCompletionsRequest(
   task: NormalizedTask,
   modelId: string,
   tools: readonly AgentToolDefinition[] = [],
   transcript: readonly AgentTranscriptEntry[] = [],
-): OpenAICompatibleRequestBody {
-  const messages: OpenAICompatibleMessage[] = []
+): ChatCompletionsRequestBody {
+  const messages: ChatCompletionsMessage[] = []
   const system = buildSystemContext(task, tools.length > 0)
   if (system) messages.push({ role: 'system', content: system })
   messages.push(...task.messages)

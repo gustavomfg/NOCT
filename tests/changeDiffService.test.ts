@@ -35,7 +35,7 @@ describe('ChangeDiffService', () => {
     fs.writeFileSync(path.join(workspace, 'file.txt'), 'antes\nigual\n')
     const before = await checkpoints.capture(executionId, workspace, 'before')
     fs.writeFileSync(path.join(workspace, 'file.txt'), 'depois\nigual\n')
-    const result = await capture.capture(executionId, workspace, before.checkpoint.id, 'codex-file-change', ['file.txt'])
+    const result = await capture.capture(executionId, workspace, before.checkpoint.id, 'agent-file-change', ['file.txt'])
     const diff = await new ChangeDiffService(checkpoints, database.changeSets).get(result.changes[0].id, executionId)
     expect(diff).toMatchObject({ kind: 'text', additions: 1, deletions: 1, truncated: false })
     expect(diff?.unifiedDiff).toContain('-antes')
@@ -49,7 +49,7 @@ describe('ChangeDiffService', () => {
     const before = await checkpoints.capture(executionId, workspace, 'before')
     fs.writeFileSync(path.join(workspace, 'binary.bin'), Buffer.from([0, 9, 8, 7]))
     fs.writeFileSync(path.join(workspace, 'large.txt'), 'b'.repeat(1_024 * 1_024 + 1))
-    const result = await capture.capture(executionId, workspace, before.checkpoint.id, 'codex-command', ['binary.bin', 'large.txt'])
+    const result = await capture.capture(executionId, workspace, before.checkpoint.id, 'agent-command', ['binary.bin', 'large.txt'])
     const service = new ChangeDiffService(checkpoints, database.changeSets)
     const diffs = await service.list(result.changeSet.id, executionId)
     expect(diffs.map((diff) => [diff.relativePath, diff.kind, diff.truncated])).toEqual([

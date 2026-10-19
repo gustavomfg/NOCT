@@ -6,7 +6,7 @@ permanecer estáveis durante a linha 1.x.
 | Finalidade | Identificador |
 | --- | --- |
 | Nome de exibição e processo | `Nocturne Studio` |
-| Pacote npm e cliente do Codex App Server | `nocturne-studio` |
+| Pacote npm | `nocturne-studio` |
 | App ID de distribuição | `com.nocturne.codex` |
 | Diretório atual de dados | `Nocturne Studio` |
 | Diretório legado de dados | `Nocturne Codex` |
@@ -46,3 +46,7 @@ canônico.
 Qualquer mudança futura nesses identificadores exige um plano explícito de
 migração, validação de atualização nas plataformas afetadas e documentação de
 rollback.
+
+O App ID legado e o nome do diretório antigo são identificadores de continuidade
+de instalação e recuperação, não dependências de um fornecedor. O produto usa
+Providers escolhidos pelo usuário, sem exigir CLI, conta ou SDK de uma empresa.

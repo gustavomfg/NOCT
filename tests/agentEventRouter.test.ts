@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { routeAgentEvent } from '../src/domains/agent/routeCodexEvent'
+import { routeAgentEvent } from '../src/domains/agent/routeAgentEvent'
 
 const handlers = () => ({ stream: vi.fn(), activityDetail: vi.fn(), diff: vi.fn(), plan: vi.fn(), hasPlan: vi.fn(() => false), itemStarted: vi.fn(), itemCompleted: vi.fn(), fsChanged: vi.fn(), approval: vi.fn(), turnCompleted: vi.fn(), error: vi.fn(), warning: vi.fn() })
 

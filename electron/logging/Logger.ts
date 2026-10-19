@@ -3,7 +3,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
-export type LogCategory = 'app' | 'codex' | 'ai' | 'ipc' | 'workspace' | 'index' | 'semantic-index' | 'validation' | 'engineering-intelligence' | 'git' | 'artifacts' | 'export' | 'persistence' | 'update'
+export type LogCategory = 'app' | 'ai' | 'ipc' | 'workspace' | 'index' | 'semantic-index' | 'validation' | 'engineering-intelligence' | 'git' | 'artifacts' | 'export' | 'persistence' | 'update'
 
 export class Logger {
   private readonly file: string
@@ -60,8 +60,8 @@ function serializeError(error: unknown) {
 }
 
 const TOKEN_PATTERNS = [
-  /sk-[a-zA-Z0-9]{20,}/, // OpenAI / Anthropic
-  /pk-[a-zA-Z0-9]{20,}/, // OpenAI Project Key
+  /sk-[a-zA-Z0-9]{20,}/, // Provider secret keys
+  /pk-[a-zA-Z0-9]{20,}/, // Provider project keys
   /gh[opsu]_[a-zA-Z0-9]{36,}/, // GitHub
   /glpat-[a-zA-Z0-9_-]{20,}/, // GitLab
   /npm_[a-zA-Z0-9]{36,}/, // npm

@@ -906,25 +906,6 @@
   color: var(--color-text-muted);
 }
 
-.codex-info {
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-}
-
-.codex-info div {
-  gap: var(--spacing-2xs);
-}
-
-.codex-info strong {
-  font-size: var(--font-body);
-}
-
-.codex-info small {
-  color: var(--color-text-muted);
-  font-size: var(--font-small);
-}
-
 .settings-dialog label {
   gap: var(--spacing-xs);
   margin: var(--spacing-md) 0;
@@ -1185,11 +1166,6 @@
   margin-bottom: var(--spacing-lg);
   color: var(--color-text-secondary);
   font-size: var(--font-caption);
-}
-
-.beta-settings .codex-info {
-  background: var(--color-surface);
-  transition: var(--transition-interactive);
 }
 
 .beta-settings label {

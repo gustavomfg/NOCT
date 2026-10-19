@@ -3,14 +3,11 @@ import { turnOutcome } from '../../shared/turnOutcome'
 import type { BrowserWindow } from 'electron'
 import type { WorkspaceModelBindings } from '../../shared/ai/bindings'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
-import { isAgentState, type AgentState } from '../../shared/agentState'
+import type { AgentState } from '../../shared/agentState'
 import { isTerminalAgentState, reduceAgentLifecycle, type AgentLifecycleDetails, type AgentLifecycleEvent, type AgentRunState } from '../../shared/agentLifecycle'
-import type { AgentMode, AppSettings } from '../../shared/types'
+import type { AgentMode } from '../../shared/types'
 import { PERSISTENCE_LIMITS } from '../../shared/constants'
-import { assessCommand } from '../security/ExecutionPolicy'
 import type { Logger } from '../logging/Logger'
-import { CodexClient } from '../codex/CodexClient'
-import type { CodexEvent } from '../codex/protocol'
 import type { ModelRegistry } from './ModelRegistry'
 import type { ProviderRegistry } from './ProviderRegistry'
 import { startAiTurn } from './executeAiTurn'
@@ -27,8 +24,6 @@ interface ActiveExecution {
   conversationId: string
   workspace: string
   mode: AgentMode
-  kind: 'codex' | 'provider'
-  threadId?: string
   content: string
   diff: string
   files: string[]
@@ -55,19 +50,6 @@ export interface ProviderToolBridge {
   requestApproval(request: ToolApprovalRequest): Promise<boolean>
 }
 
-interface CodexTurnInput {
-  conversationId: string
-  executionId?: string
-  workspace: string
-  prompt: string
-  initialPrompt: string
-  attachments: string[]
-  memory: string
-  mode: AgentMode
-  settings: AppSettings
-  threadId?: string | null
-}
-
 export class AiExecutionCoordinator {
   private active: ActiveExecution | null = null
   private disposed = false
@@ -80,94 +62,10 @@ export class AiExecutionCoordinator {
     private readonly logger: Logger,
     private readonly approvalDetails: ApprovalDetails,
     private readonly finalizeTurn: (snapshot: CompletedTurnSnapshot) => PersistedTurn | Promise<PersistedTurn>,
-    private readonly persistCodexThread: (conversationId: string, threadId: string) => void = () => undefined,
     private readonly createRunId: () => string = randomUUID,
     private readonly now: () => Date = () => new Date(),
     private readonly persistExecutionState: (executionId: string, lifecycle: AgentRunState) => void = () => undefined,
-    private readonly codex = new CodexClient(),
-  ) {
-    this.codex.on('event', this.onCodexEvent)
-    this.codex.on('status', this.onCodexStatus)
-    this.codex.on('log', this.onCodexLog)
-    this.codex.on('diagnostic', this.onCodexDiagnostic)
-  }
-
-  async startCodex(input: CodexTurnInput) {
-    const active = this.reserve(input.conversationId, input.workspace, input.mode, 'codex', input.executionId)
-    const runId = active.runId
-    try {
-      const settings = input.settings as unknown as Record<string, string>
-      await this.codex.checkExecutionContract()
-      let resumed = false
-      let threadId = input.threadId ?? ''
-      if (threadId) {
-        try {
-          await this.codex.resumeThread(threadId, input.workspace, settings, input.memory)
-          resumed = true
-        } catch (error) {
-          this.logger.warn('codex', 'A thread persistida não pôde ser retomada; uma nova sessão será criada com o histórico local.', {
-            conversationId: input.conversationId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-          threadId = ''
-        }
-      }
-      if (!threadId) {
-        threadId = await this.codex.createThread(input.workspace, settings, input.memory)
-        this.persistCodexThread(input.conversationId, threadId)
-      }
-      if (this.active?.runId !== runId) {
-        throw new Error('A execução foi cancelada antes de iniciar.')
-      }
-      this.active.threadId = threadId
-      let interruptSent = false
-      this.active.cancel = async () => {
-        active.cancelRequested = true
-        if (interruptSent) return
-        try {
-          await this.codex.interrupt(threadId)
-          interruptSent = true
-        } catch (error) {
-          // Cancellation can race with turn/start. The post-start check below
-          // retries the interrupt once Codex has registered the turn.
-          if (!(error instanceof Error) || !error.message.includes('Nenhuma execução ativa')) throw error
-        }
-      }
-      if (active.cancelRequested) {
-        this.completeCancelledWithoutTurn(active)
-        return
-      }
-      await this.codex.sendTurn(
-        threadId,
-        input.workspace,
-        resumed ? input.prompt : input.initialPrompt,
-        settings,
-        input.attachments,
-        input.memory,
-        input.mode,
-      )
-      if (active.cancelRequested && !interruptSent && this.active?.runId === runId) {
-        await this.codex.interrupt(threadId)
-        interruptSent = true
-      }
-    } catch (error) {
-      if (this.active?.runId === runId) {
-        this.pushExecutionStatus(active, 'failed', error instanceof Error ? error.message : String(error))
-        this.active = null
-      }
-      throw error
-    }
-  }
-
-  async listCodexModels() {
-    if (this.disposed) throw new Error('O coordenador de execução já foi encerrado.')
-    return this.codex.listModels()
-  }
-
-  async checkCodexProtocol() {
-    if (this.disposed) throw new Error('O coordenador de execução já foi encerrado.')
-    return this.codex.checkExecutionContract()
-  }
+  ) {}
 
   async startProvider(
     conversationId: string,
@@ -175,7 +73,7 @@ export class AiExecutionCoordinator {
     bindings: WorkspaceModelBindings,
     { executionId, mode = taskInput.mode, createTools }: ProviderTurnOptions = {},
   ) {
-    const active = this.reserve(conversationId, taskInput.workspace.id, mode, 'provider', executionId)
+    const active = this.reserve(conversationId, taskInput.workspace.id, mode, executionId)
     const runId = active.runId
     try {
       const emit = (method: string, params: Record<string, unknown>) => this.forwardEvent(method, params, conversationId, runId)
@@ -235,14 +133,10 @@ export class AiExecutionCoordinator {
     await active.cancel()
   }
 
-  async resolveApproval(key: string, accepted: boolean, forSession = false) {
+  async resolveApproval(key: string, accepted: boolean) {
     const active = this.active
     if (!active || active.lifecycle?.state !== 'waiting-approval') {
       throw new Error('Não existe uma execução aguardando aprovação.')
-    }
-    if (active.kind === 'codex') {
-      await this.codex.resolveApproval(key, accepted, forSession)
-      return
     }
     const resolve = active.pendingApprovals.get(key)
     if (!resolve) throw new Error('A aprovação solicitada não pertence à execução ativa.')
@@ -283,24 +177,20 @@ export class AiExecutionCoordinator {
   dispose() {
     if (this.disposed) return this.disposal
     this.disposed = true
-    this.codex.off('event', this.onCodexEvent)
-    this.codex.off('status', this.onCodexStatus)
-    this.codex.off('log', this.onCodexLog)
-    this.codex.off('diagnostic', this.onCodexDiagnostic)
     const active = this.active
     this.active = null
-    if (active?.kind === 'provider') {
+    if (active) {
       this.settlePendingApprovals(active, false)
       void active.cancel('Aplicação encerrando; execução interrompida.').catch((error: unknown) => {
         this.logger.warn('ai', 'O cancelamento do Provider durante shutdown falhou.', { error: error instanceof Error ? error.message : String(error) })
       })
     }
     this.approvalDetails.clear()
-    this.disposal = this.codex.dispose()
+    this.disposal = Promise.resolve()
     return this.disposal
   }
 
-  private reserve(conversationId: string, workspace: string, mode: AgentMode, kind: ActiveExecution['kind'], executionId?: string) {
+  private reserve(conversationId: string, workspace: string, mode: AgentMode, executionId?: string) {
     if (this.disposed) throw new Error('O coordenador de execuções já foi descartado.')
     if (this.active) {
       throw new Error('Já existe uma execução em andamento. Cancele-a antes de iniciar outra.')
@@ -311,7 +201,6 @@ export class AiExecutionCoordinator {
       conversationId,
       workspace,
       mode,
-      kind,
       content: '',
       diff: '',
       files: [],
@@ -330,81 +219,6 @@ export class AiExecutionCoordinator {
     this.applyLifecycle(active, { type: 'run.started', workspace, mode, ...(executionId ? { executionId } : {}) })
     this.pushStatusForRun(active, 'planning')
     return active
-  }
-
-  private readonly onCodexEvent = (event: CodexEvent) => {
-    const active = this.active
-    if (!active || active.kind !== 'codex' || active.finishing || (active.lifecycle?.state === 'cancelling' && event.method !== 'turn/completed')) return
-    const conversationId = active.conversationId
-    const eventThreadId = typeof event.params.threadId === 'string' ? event.params.threadId : undefined
-    if (active.threadId && eventThreadId && active.threadId !== eventThreadId) return
-    const command = event.params.command
-    const assessment = typeof command === 'string' || Array.isArray(command)
-      ? assessCommand(command as string | string[])
-      : undefined
-    const approvalKey = typeof event.params.approvalKey === 'string'
-      ? event.params.approvalKey
-      : undefined
-    if (approvalKey) {
-      this.approvalDetails.set(approvalKey, {
-        command: Array.isArray(command)
-          ? command.join(' ')
-          : typeof command === 'string' ? command : undefined,
-        risk: assessment?.risk,
-      })
-      this.applyLifecycle(active, { type: 'run.approvalRequested' })
-    }
-    this.forwardEvent(
-      event.method,
-        assessment
-          ? { ...event.params, commandAssessment: assessment }
-          : event.params,
-      conversationId,
-      active.runId,
-    )
-  }
-
-  private readonly onCodexStatus = (status: { status: unknown; error?: string }) => {
-    if (!isAgentState(status.status)) {
-      this.logger.warn('ai', 'Estado de execução desconhecido recebido do transporte.', { status: status.status })
-      return
-    }
-    const nextStatus = status.status
-    const active = this.active
-    if (!active) {
-      this.pushTransportStatus(nextStatus, status.error)
-      return
-    }
-    // Transport readiness/completion cannot terminate an active task.
-    if (nextStatus !== 'ready' && nextStatus !== 'completed' && nextStatus !== 'failed') this.pushExecutionStatus(active, nextStatus, status.error)
-    if (nextStatus === 'failed' && status.error && active?.kind === 'codex' && active.threadId && !active.finishing) {
-      this.pushEvent('error', { message: status.error }, active)
-      void this.persistAndComplete(active, {
-        threadId: active.threadId,
-        turn: {
-          id: `failed-${Date.now()}`,
-          status: 'failed',
-          error: { message: `${status.error} A sessão foi preservada e será retomada na próxima tentativa.` },
-        },
-      })
-    }
-  }
-
-  private readonly onCodexLog = (entry: unknown) => {
-    const stream = entry && typeof entry === 'object' && (entry as { stream?: unknown }).stream === 'stderr' ? 'stderr' : 'stdout'
-    const line = entry && typeof entry === 'object' && typeof (entry as { line?: unknown }).line === 'string' ? (entry as { line: string }).line : ''
-    this.logger.debug('codex', 'Tráfego do App Server recebido', { stream, bytes: Buffer.byteLength(line, 'utf8') })
-  }
-
-  private readonly onCodexDiagnostic = (entry: unknown) => {
-    const level = entry && typeof entry === 'object'
-      ? (entry as { level?: unknown }).level
-      : undefined
-    if (level === 'warn' || level === 'error') {
-      this.logger.warn('codex', 'Diagnóstico do agente', entry)
-    } else {
-      this.logger.info('codex', 'Diagnóstico do agente', entry)
-    }
   }
 
   private pushEvent(method: string, params: Record<string, unknown>, active: ActiveExecution) {
@@ -499,17 +313,6 @@ export class AiExecutionCoordinator {
     }
   }
 
-  private pushTransportStatus(status: AgentState, error?: string) {
-    if (!this.win.isDestroyed()) {
-      this.win.webContents.send(IPC_CHANNELS.ai.status, {
-        status,
-        sequence: ++this.transportSequence,
-        timestamp: this.now().toISOString(),
-        ...(error ? { error } : {}),
-      })
-    }
-  }
-
   private applyStatusLifecycle(active: ActiveExecution, status: AgentState, error?: string, cancelled = false) {
     if (status === 'planning' || status === 'running' || status === 'waiting-approval' || status === 'cancelling') {
       return this.applyLifecycle(active, { type: 'run.stateChanged', state: status })
@@ -573,25 +376,11 @@ export class AiExecutionCoordinator {
     }
   }
 
-  private completeCancelledWithoutTurn(active: ActiveExecution) {
-    if (this.active !== active || active.finishing) return
-    this.applyLifecycle(active, {
-      type: 'run.cancelled',
-      reason: 'Execução cancelada antes do início do turno.',
-    })
-    this.pushStatusForRun(active, 'ready')
-    this.pushEvent('turn/completed', {
-      turn: { id: `cancelled-${active.runId}`, status: 'cancelled' },
-    }, active)
-    this.active = null
-  }
-
   private nextSequence(active: ActiveExecution) {
     active.sequence += 1
     return active.sequence
   }
 
-  private transportSequence = 0
 }
 
 function eventFiles(method: string, params: Record<string, unknown>) {

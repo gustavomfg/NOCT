@@ -76,7 +76,7 @@ it.runIf(protectedRollbackSupported())('usa BEFORE imutável com HEAD alterado e
   fs.writeFileSync(target, 'before')
   const before = await checkpoints.capture(executionId, workspace, 'before')
   fs.writeFileSync(target, 'after')
-  await new ChangeCaptureService(checkpoints, database.changeSets).capture(executionId, workspace, before.checkpoint.id, 'codex-command')
+  await new ChangeCaptureService(checkpoints, database.changeSets).capture(executionId, workspace, before.checkpoint.id, 'agent-command')
   const git = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' })
   git('init')
   git('config', 'user.name', 'Test')

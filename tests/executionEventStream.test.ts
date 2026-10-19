@@ -18,7 +18,7 @@ describe('ExecutionEventStream', () => {
 
     const started = stream.emit({
       type: 'execution.started',
-      providerId: 'openai',
+      providerId: 'provider-a',
       modelId: 'example-model',
     })
     const delta = stream.emit({
@@ -74,7 +74,7 @@ describe('ExecutionEventStream', () => {
     const native = new ExecutionEventStream(randomUUID())
     expect(() => native.emit({
       type: 'execution.started',
-      providerId: 'openai',
+      providerId: 'provider-a',
       modelId: 'example',
       nativeResponse: {},
     })).toThrow(expect.objectContaining<Partial<ExecutionEventStreamError>>({
@@ -82,7 +82,7 @@ describe('ExecutionEventStream', () => {
     }))
 
     const usage = new ExecutionEventStream(randomUUID())
-    usage.emit({ type: 'execution.started', providerId: 'openai', modelId: 'example' })
+    usage.emit({ type: 'execution.started', providerId: 'provider-a', modelId: 'example' })
     expect(() => usage.emit({
       type: 'usage.updated',
       usage: { inputTokens: -1 },

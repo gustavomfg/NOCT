@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
-import { buildCodexEnvironment } from '../codex/CodexProcess'
+import { buildChildEnvironment } from '../runtime/childEnvironment'
 import { CODE_INTELLIGENCE_LIMITS } from '../../shared/constants'
 import { isProcessGroupAlive, terminateProcess, type ProcessTerminationScope, usesDedicatedProcessGroup } from '../runtime/ProcessTermination'
 
@@ -118,7 +118,7 @@ export class CancellableProcessRunner implements ProcessRunner {
       try {
         child = spawn(command, args, {
           cwd: options.cwd,
-          env: buildCodexEnvironment(),
+          env: buildChildEnvironment(),
           shell: false,
           windowsHide: true,
           detached: usesDedicatedProcessGroup(),

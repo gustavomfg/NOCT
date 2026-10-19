@@ -137,7 +137,10 @@ export class BackupRepository {
       ) SELECT 'created-' || id,id,'created',NULL,status,
         'Memória restaurada de backup legado.',created_at FROM brain_memories`)
       if (scope === 'full') {
-        insert('provider_configs', data.providerConfigs ?? [])
+        insert('provider_configs', (data.providerConfigs ?? []).map((raw) => {
+          const row = raw as Record<string, unknown>
+          return { ...row, provider_type: row.provider_type === 'openai-compatible' ? 'chat-completions' : row.provider_type }
+        }))
         insert('model_catalog', data.modelCatalog ?? [])
         insert('workspace_model_bindings', data.workspaceModelBindings ?? [])
         if (data.settings) this.settings.set(data.settings)
@@ -149,7 +152,7 @@ export class BackupRepository {
 
 const importColumns: Record<string, ReadonlySet<string>> = {
   workspaces: new Set(['path', 'name', 'favorite', 'authorized', 'created_at', 'last_opened_at']),
-  conversations: new Set(['id', 'title', 'workspace', 'codex_thread_id', 'created_at', 'updated_at']),
+  conversations: new Set(['id', 'title', 'workspace', 'created_at', 'updated_at']),
   messages: new Set(['id', 'conversation_id', 'role', 'content', 'metadata', 'created_at']),
   artifacts: new Set(['id', 'conversation_id', 'workspace', 'type', 'title', 'file_path', 'content', 'metadata', 'created_at', 'updated_at']),
   workspace_memory: new Set(['workspace', 'content', 'updated_at']),

@@ -15,8 +15,10 @@ autenticação e compatibilidade e mantém até cinco erros recentes sanitizados
 por Provider durante a sessão. Credenciais, respostas nativas e payloads não
 entram no diagnóstico.
 
-O adapter OpenAI-compatible oferece descoberta de modelos, streaming e
-cancelamento. Tool calling ainda não é normalizado e aparece explicitamente
-como limitação. Falhas HTTP e de protocolo são convertidas em códigos comuns:
+O adapter Chat Completions oferece descoberta de modelos, streaming,
+cancelamento, embeddings e chamadas de ferramentas normalizadas. O main process
+executa um loop limitado: Review e Docs usam ferramentas de leitura; Build
+também pode escrever e pedir aprovação explícita para comandos. Review e Docs
+podem tentar uma vez sem ferramentas quando o modelo recusa function calling. Falhas HTTP e de protocolo são convertidas em códigos comuns:
 autenticação recusada, créditos insuficientes, rate limit, modelo indisponível,
 Provider inacessível, resposta inválida, timeout e cancelamento.

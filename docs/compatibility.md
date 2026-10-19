@@ -34,12 +34,12 @@ requires the platform's C++17 toolchain; it does not change the Electron SQLite 
 
 ## AI compatibility
 
-- Codex CLI minimum: `0.145.0`;
-- recommended: `0.146.0`;
-- verified: `0.145.0` and `0.146.0`;
-- newer versions require the successful live App Server execution contract;
-- remote OpenAI-compatible endpoints require HTTPS;
+- no specific AI vendor is required; the minimum is an endpoint that implements
+  model listing and chat completions with streaming;
+- Build additionally needs a model with function calling;
+- remote endpoints require HTTPS;
 - local Ollama and LM Studio endpoints use loopback.
 
 There are no dedicated native adapters for Anthropic, Gemini or GitHub Copilot
-in the current release contract. The Codex App Server remains experimental.
+in the current release contract; those models are reached through a
+Chat Completions gateway or a provider preset.

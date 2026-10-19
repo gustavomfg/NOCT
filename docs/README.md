@@ -12,7 +12,6 @@ API names, warnings and security claims are kept identical across the pair.
 - [Getting started](getting-started.md)
 - [Providers and models](providers.md)
 - [Configuration](configuration.md)
-- [Codex CLI integration](codex-integration.md)
 - [Review, Build and Docs modes](modes.md)
 - [Second Brain](second-brain.md) and [Awareness](awareness.md)
 - [Code Intelligence — Phase 2](code-intelligence.md)

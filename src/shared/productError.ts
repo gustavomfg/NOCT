@@ -13,7 +13,7 @@ export function explainProductError(message: string, language: 'pt-BR' | 'en' = 
     ? 'The conversation and saved data were preserved. The incomplete operation was not marked as completed.'
     : 'A conversa e os dados já salvos foram preservados. A operação incompleta não foi marcada como concluída.'
   if (/insufficient_quota|quota exceeded|sem cr[eé]ditos|cr[eé]ditos insuficientes|billing/.test(normalized)) {
-    return { title: english ? 'Insufficient API credits' : 'Créditos insuficientes na API', cause: message, preserved, resolution: english ? 'Add credits to the API account or select the ChatGPT account or another configured provider.' : 'Adicione créditos à conta da API ou selecione a conta ChatGPT ou outro Provider configurado.', retryable: false }
+    return { title: english ? 'Insufficient API credits' : 'Créditos insuficientes na API', cause: message, preserved, resolution: english ? 'Add credits to the provider account or select another configured provider.' : 'Adicione créditos à conta do Provider ou selecione outro Provider configurado.', retryable: false }
   }
   if (/unauthorized|not authenticated|n[aã]o autenticad|login|api.?key|chave.*inv[aá]lid|401/.test(normalized)) {
     return { title: english ? 'Authentication required' : 'Autenticação necessária', cause: message, preserved, resolution: english ? 'Open Settings → AI, sign in again, or review the provider credential.' : 'Abra Configurações → IA, autentique novamente ou revise a credencial do Provider.', retryable: false }

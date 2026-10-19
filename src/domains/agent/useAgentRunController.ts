@@ -4,8 +4,8 @@ import { useAppStore } from '../../store'
 import { errorMessage } from '../../shared/format'
 import { useI18n } from '../../shared/i18n'
 import { persistedAssistantMessage, useTurnLifecycle, type ActiveTurnContext } from './useTurnLifecycle'
-import { routeAgentEvent } from './routeCodexEvent'
-import { useBufferedAgentEvents } from './useBufferedCodexEvents'
+import { routeAgentEvent } from './routeAgentEvent'
+import { useBufferedAgentEvents } from './useBufferedAgentEvents'
 
 interface AgentRunControllerOptions {
   hasNewerMessages: boolean

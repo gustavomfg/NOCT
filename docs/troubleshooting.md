@@ -9,12 +9,13 @@ Confirm that the project folder exists and is readable. If it moved, choose
 while the old root is unavailable, but access to files, Git and AI stays blocked
 until explicit reselection.
 
-## Codex is missing or has no models
+## No AI is selected or a model is missing
 
-Install a supported Codex CLI, authenticate it outside Nocturne and run the AI
-diagnostic again. A newer CLI must pass the App Server handshake. An absent or
-incompatible CLI is a recoverable provider error, not a reason to expose
-credentials or continue with an unknown protocol.
+Open **Settings → AI**, connect a provider and choose its model for the
+workspace. Nocturne refuses a run with a clear message while no model is bound,
+rather than falling back to another AI. If the provider lists no models, check
+its key and endpoint, then refresh the model list with the model button on its
+connection.
 
 ## A provider fails
 

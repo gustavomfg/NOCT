@@ -11,7 +11,7 @@ export const AGENT_TOOL_LIMITS = {
   maxSteps: 30,
 } as const
 
-/** JSON Schema object describing a tool's arguments (OpenAI function format). */
+/** JSON Schema object describing a tool's arguments (Chat Completions function format). */
 export interface AgentToolDefinition {
   name: string
   description: string

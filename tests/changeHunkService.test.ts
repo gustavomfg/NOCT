@@ -32,7 +32,7 @@ describe('ChangeHunkService', () => {
     const capture = new ChangeCaptureService(checkpoints, database.changeSets)
     const before = await checkpoints.capture(executionId, workspace, 'before')
     fs.writeFileSync(path.join(workspace, 'file.txt'), 'depois\n')
-    const result = await capture.capture(executionId, workspace, before.checkpoint.id, 'codex-command', ['file.txt'])
+    const result = await capture.capture(executionId, workspace, before.checkpoint.id, 'agent-command', ['file.txt'])
     const service = new ChangeHunkService(checkpoints, new ChangeDiffService(checkpoints, database.changeSets), database.changeSets)
     const [hunk] = await service.list(result.changes[0].id, executionId)
     expect(hunk.status).toBe('pending')

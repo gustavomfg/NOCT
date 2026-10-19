@@ -1,7 +1,6 @@
 import type { ProviderConfigurationInput } from './providerConfiguration'
 
 export type ProviderCatalogId =
-  | 'openai'
   | 'gemini'
   | 'openrouter'
   | 'deepseek'
@@ -11,7 +10,7 @@ export type ProviderCatalogId =
   | 'ollama'
   | 'lm-studio'
 
-export type ProviderConnectionKind = 'api-key' | 'account' | 'local'
+export type ProviderConnectionKind = 'api-key' | 'local'
 export type ProviderIntegrationStatus = 'available' | 'adapter-required'
 
 export interface ProviderConnectionMethod {
@@ -35,36 +34,12 @@ export interface ProviderCatalogEntry {
 
 export const providerCatalog: readonly ProviderCatalogEntry[] = [
   {
-    id: 'openai',
-    displayName: 'OpenAI',
-    description: 'Modelos da OpenAI Platform usando sua própria chave de API.',
-    source: 'remote',
-    integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
-    baseUrl: 'https://api.openai.com/v1',
-    requiresAuthentication: true,
-    connectionMethods: [
-      {
-        kind: 'api-key',
-        label: 'Chave da API',
-        status: 'available',
-        detail: 'A cobrança da OpenAI Platform é separada da assinatura do ChatGPT.',
-      },
-      {
-        kind: 'account',
-        label: 'Conta ChatGPT',
-        status: 'unavailable',
-        detail: 'Planos ChatGPT não concedem acesso geral à API; a integração de conta usa o Codex CLI separadamente.',
-      },
-    ],
-  },
-  {
     id: 'gemini',
     displayName: 'Google Gemini',
-    description: 'Modelos Gemini pelo endpoint OpenAI-compatible do Google AI Studio.',
+    description: 'Modelos Gemini pelo endpoint de chat completions do Google AI Studio.',
     source: 'remote',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     requiresAuthentication: true,
     connectionMethods: [
@@ -82,7 +57,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     description: 'Um catálogo amplo de modelos usando sua chave OpenRouter.',
     source: 'remote',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'https://openrouter.ai/api/v1',
     requiresAuthentication: true,
     connectionMethods: [
@@ -100,7 +75,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     description: 'Modelos DeepSeek usando sua chave da plataforma.',
     source: 'remote',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'https://api.deepseek.com',
     requiresAuthentication: true,
     connectionMethods: [
@@ -118,7 +93,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     description: 'Modelos abertos com inferência de baixa latência usando sua chave Groq.',
     source: 'remote',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'https://api.groq.com/openai/v1',
     requiresAuthentication: true,
     connectionMethods: [
@@ -136,7 +111,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     description: 'Modelos Mistral usando sua chave da plataforma La Plateforme.',
     source: 'remote',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'https://api.mistral.ai/v1',
     requiresAuthentication: true,
     connectionMethods: [
@@ -154,7 +129,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     description: 'Modelos Grok usando sua chave da xAI.',
     source: 'remote',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'https://api.x.ai/v1',
     requiresAuthentication: true,
     connectionMethods: [
@@ -172,7 +147,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
     description: 'Modelos executados localmente pelo runtime Ollama.',
     source: 'local',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'http://127.0.0.1:11434/v1',
     requiresAuthentication: false,
     connectionMethods: [
@@ -187,10 +162,10 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
   {
     id: 'lm-studio',
     displayName: 'LM Studio',
-    description: 'Servidor local OpenAI-compatible do LM Studio.',
+    description: 'Servidor local Chat Completions do LM Studio.',
     source: 'local',
     integrationStatus: 'available',
-    protocol: 'OpenAI-compatible',
+    protocol: 'Chat Completions',
     baseUrl: 'http://127.0.0.1:1234/v1',
     requiresAuthentication: false,
     connectionMethods: [
@@ -218,7 +193,7 @@ export function configurationFromProviderCatalog(
   const entry = providerCatalogEntry(id)
   if (entry.integrationStatus !== 'available' || !entry.baseUrl) return undefined
   return {
-    providerType: 'openai-compatible',
+    providerType: 'chat-completions',
     displayName: entry.displayName,
     source: entry.source,
     baseUrl: entry.baseUrl,

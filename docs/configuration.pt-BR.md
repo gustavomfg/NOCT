@@ -2,9 +2,9 @@
 
 [English](configuration.md)
 
-Abra **Configurações** para definir modelo selecionado, sandbox e política de
-aprovação do Codex, logs detalhados, conexões de Providers e o tema da
-interface. O tema escuro é o padrão; o tema claro também está disponível em
+Abra **Configurações** para definir as conexões de IA e o modelo de cada
+workspace, a política de aprovação das alterações de arquivo, logs detalhados e
+o tema da interface. O tema escuro é o padrão; o tema claro também está disponível em
 Aplicativo.
 
 ## Providers e bindings de modelos

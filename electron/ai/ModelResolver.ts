@@ -84,7 +84,7 @@ export class ModelResolver {
         { availability: model.availability },
       )
     }
-    // Many OpenAI-compatible catalogs do not advertise capabilities. An empty
+    // Many Chat Completions catalogs do not advertise capabilities. An empty
     // list means "not declared", not "unsupported"; the Provider is the final
     // authority and reports incompatibility as a normalized error.
     const missing = model.capabilities.length === 0 ? [] : task.requirements.filter(

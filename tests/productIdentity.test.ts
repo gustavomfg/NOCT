@@ -10,11 +10,8 @@ describe('stable product identity', () => {
     expect(packageMetadata.desktopName).toBe(productIdentity.displayName)
 
     const main = fs.readFileSync(path.join(process.cwd(), 'electron/main.ts'), 'utf8')
-    const codex = fs.readFileSync(path.join(process.cwd(), 'electron/codex/CodexClient.ts'), 'utf8')
     expect(main).toContain("import productIdentity from '../shared/product-identity.json'")
     expect(main).toContain('productIdentity.currentUserDataDirectory')
-    expect(codex).toContain('name: productIdentity.codexClientName')
-    expect(codex).toContain('title: productIdentity.displayName')
   })
 
   it('freezes distribution identifiers required for upgrades', () => {

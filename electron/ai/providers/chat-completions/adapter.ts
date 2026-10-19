@@ -15,20 +15,20 @@ import { modelDescriptorSchema } from '../../../../shared/ai/modelSchemas'
 import { ProviderExecutionError } from '../../ProviderExecutionError'
 import type { ProviderAdapter } from '../../ProviderRegistry'
 import {
-  OPENAI_COMPATIBLE_LIMITS,
+  CHAT_COMPLETIONS_LIMITS,
   isPublicRemoteAddress,
-  parseOpenAICompatibleConfig,
+  parseChatCompletionsConfig,
   providerEndpoint,
-  type OpenAICompatibleConfig,
+  type ChatCompletionsConfig,
 } from './config'
-import { buildOpenAICompatibleRequest } from './request'
+import { buildChatCompletionsRequest } from './request'
 import {
-  consumeOpenAICompatibleStream,
-  OpenAICompatibleProtocolError,
+  consumeChatCompletionsStream,
+  ChatCompletionsProtocolError,
   readBoundedJson,
 } from './stream'
 
-export interface OpenAICompatibleDependencies {
+export interface ChatCompletionsDependencies {
   config: unknown
   models: readonly unknown[]
   resolveCredential: () => string | undefined | Promise<string | undefined>
@@ -50,19 +50,19 @@ type PinnedProviderRequest = (
   resolved: ResolvedProviderAddress,
 ) => Promise<Response>
 
-export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
+export class ChatCompletionsProviderAdapter implements ProviderAdapter {
   readonly definition: ProviderDefinition
-  private readonly config: OpenAICompatibleConfig
+  private readonly config: ChatCompletionsConfig
   private readonly models: ModelDescriptor[]
   private readonly request: typeof fetch
 
-  constructor(private readonly dependencies: OpenAICompatibleDependencies) {
-    this.config = parseOpenAICompatibleConfig(dependencies.config)
+  constructor(private readonly dependencies: ChatCompletionsDependencies) {
+    this.config = parseChatCompletionsConfig(dependencies.config)
     this.definition = {
       id: this.config.id,
       displayName: this.config.displayName,
       source: this.config.source,
-      protocol: 'OpenAI-compatible',
+      protocol: 'Chat Completions',
       version: 'v1',
       capabilities: {
         modelDiscovery: true,
@@ -74,13 +74,13 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
       },
       limitations: {
         requestTimeoutMs: { minimum: 1_000, maximum: 120_000 },
-        notes: ['O agente usa function calling OpenAI-compatible; o Build exige um modelo que suporte ferramentas.'],
+        notes: ['O agente usa function calling Chat Completions; o Build exige um modelo que suporte ferramentas.'],
       },
     }
     this.models = dependencies.models.map((model) => {
       const parsed = modelDescriptorSchema.parse(model) as ModelDescriptor
       if (parsed.providerId !== this.config.id || parsed.source !== this.config.source) {
-        throw new Error('O catálogo OpenAI-compatible não pertence à configuração.')
+        throw new Error('O catálogo Chat Completions não pertence à configuração.')
       }
       return cloneModel(parsed)
     })
@@ -152,7 +152,7 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
         {
           method: 'POST',
           headers: requestHeaders(credential),
-          body: JSON.stringify(buildOpenAICompatibleRequest(
+          body: JSON.stringify(buildChatCompletionsRequest(
             execution.task,
             execution.model.modelId,
             execution.tools,
@@ -163,7 +163,7 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
         },
       )
       if (!response.ok) throw await errorFromResponse(response, Boolean(execution.tools?.length))
-      return await consumeOpenAICompatibleStream(
+      return await consumeChatCompletionsStream(
         response,
         execution.executionId,
         control,
@@ -175,7 +175,7 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
       if (request.didTimeout()) {
         throw providerError('timeout', 'O Provider excedeu o tempo permitido.', true)
       }
-      if (error instanceof OpenAICompatibleProtocolError) {
+      if (error instanceof ChatCompletionsProtocolError) {
         throw providerError(
           'invalid-response',
           'O Provider retornou uma resposta inválida.',
@@ -226,12 +226,12 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
         },
       )
       if (!response.ok) throw await errorFromResponse(response)
-      return normalizeEmbeddingResponse(await readBoundedJson(response, OPENAI_COMPATIBLE_LIMITS.embeddingsResponseBytes), embedding)
+      return normalizeEmbeddingResponse(await readBoundedJson(response, CHAT_COMPLETIONS_LIMITS.embeddingsResponseBytes), embedding)
     } catch (error) {
       if (error instanceof ProviderExecutionError) throw error
       if (control.signal.aborted) throw cancelledError()
       if (request.didTimeout()) throw providerError('timeout', 'O Provider excedeu o tempo permitido.', true)
-      if (error instanceof OpenAICompatibleProtocolError) throw providerError('invalid-response', 'O Provider retornou embeddings inválidos.', false)
+      if (error instanceof ChatCompletionsProtocolError) throw providerError('invalid-response', 'O Provider retornou embeddings inválidos.', false)
       throw providerError('provider-unavailable', 'Não foi possível concluir a chamada de embeddings ao Provider.', true)
     } finally {
       request.dispose()
@@ -277,7 +277,7 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
       if (request.didTimeout()) {
         throw providerError('timeout', 'O Provider excedeu o tempo permitido.', true)
       }
-      if (error instanceof OpenAICompatibleProtocolError) {
+      if (error instanceof ChatCompletionsProtocolError) {
         throw providerError(
           'invalid-response',
           'O catálogo de modelos do Provider é inválido.',
@@ -512,12 +512,12 @@ function cancelledError() {
 
 function normalizeModelCatalog(
   value: unknown,
-  config: OpenAICompatibleConfig,
+  config: ChatCompletionsConfig,
   knownModels: readonly ModelDescriptor[],
 ): ModelDescriptor[] {
   const body = asRecord(value)
-  if (!body || !Array.isArray(body.data) || body.data.length > OPENAI_COMPATIBLE_LIMITS.models) {
-    throw new OpenAICompatibleProtocolError()
+  if (!body || !Array.isArray(body.data) || body.data.length > CHAT_COMPLETIONS_LIMITS.models) {
+    throw new ChatCompletionsProtocolError()
   }
   const known = new Map(knownModels.map((model) => [model.modelId, model]))
   const identifiers = new Set<string>()
@@ -525,7 +525,7 @@ function normalizeModelCatalog(
     const record = asRecord(nativeModel)
     const modelId = typeof record?.id === 'string' ? record.id.trim() : ''
     if (!modelId || modelId.length > 512 || identifiers.has(modelId)) {
-      throw new OpenAICompatibleProtocolError()
+      throw new ChatCompletionsProtocolError()
     }
     identifiers.add(modelId)
     const current = known.get(modelId)
@@ -565,19 +565,19 @@ function validateEmbeddingInputs(request: EmbeddingRequest) {
 
 function normalizeEmbeddingResponse(value: unknown, request: EmbeddingRequest): EmbeddingResult {
   const body = asRecord(value)
-  if (!body || !Array.isArray(body.data) || body.data.length !== request.inputs.length) throw new OpenAICompatibleProtocolError()
+  if (!body || !Array.isArray(body.data) || body.data.length !== request.inputs.length) throw new ChatCompletionsProtocolError()
   const vectors = new Array<readonly number[]>(request.inputs.length)
   for (const item of body.data) {
     const record = asRecord(item)
     const index = record?.index
     const embedding = record?.embedding
-    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= vectors.length || vectors[index] || !Array.isArray(embedding) || embedding.length === 0 || embedding.some((value) => typeof value !== 'number' || !Number.isFinite(value))) throw new OpenAICompatibleProtocolError()
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= vectors.length || vectors[index] || !Array.isArray(embedding) || embedding.length === 0 || embedding.some((value) => typeof value !== 'number' || !Number.isFinite(value))) throw new ChatCompletionsProtocolError()
     vectors[index] = embedding
   }
-  if (vectors.some((vector) => !vector)) throw new OpenAICompatibleProtocolError()
+  if (vectors.some((vector) => !vector)) throw new ChatCompletionsProtocolError()
   const dimensions = vectors[0]?.length ?? 0
-  if (dimensions < 1 || dimensions > EMBEDDING_LIMITS.maxDimensions || vectors.some((vector) => vector.length !== dimensions)) throw new OpenAICompatibleProtocolError()
-  if (request.dimensions !== undefined && request.dimensions !== dimensions) throw new OpenAICompatibleProtocolError()
+  if (dimensions < 1 || dimensions > EMBEDDING_LIMITS.maxDimensions || vectors.some((vector) => vector.length !== dimensions)) throw new ChatCompletionsProtocolError()
+  if (request.dimensions !== undefined && request.dimensions !== dimensions) throw new ChatCompletionsProtocolError()
   const usage = asRecord(body.usage)
   return {
     requestId: request.requestId,

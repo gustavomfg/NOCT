@@ -12,7 +12,6 @@ API, avisos e afirmações de segurança são mantidos iguais nos dois arquivos.
 - [Primeiro uso](getting-started.pt-BR.md)
 - [Providers e modelos](providers.pt-BR.md)
 - [Configuração](configuration.pt-BR.md)
-- [Integração Codex CLI](codex-integration.pt-BR.md)
 - [Modos Review, Build e Docs](modes.pt-BR.md)
 - [Segundo Cérebro](second-brain.pt-BR.md) e [Awareness](awareness.pt-BR.md)
 - [Code Intelligence — Fase 2](code-intelligence.pt-BR.md)

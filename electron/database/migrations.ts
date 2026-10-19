@@ -724,6 +724,24 @@ export const migrations: Migration[] = [
     ALTER TABLE project_index_exports_workspace_scoped RENAME TO project_index_exports;
     CREATE INDEX idx_project_index_exports_source ON project_index_exports(workspace, source_path, start_line);
   `) },
+  { version: 32, up: (db) => {
+    // Retain provider IDs and credential references while removing vendor coupling.
+    db.exec("UPDATE provider_configs SET provider_type='chat-completions' WHERE provider_type='openai-compatible';")
+    if (hasColumn(db, 'conversations', 'codex_thread_id')) {
+      db.exec('ALTER TABLE conversations DROP COLUMN codex_thread_id;')
+    }
+    db.exec(`
+      DELETE FROM settings WHERE key IN ('aiEngine','codexPath','codexModel','codexReasoningEffort');
+      ALTER TABLE changes ADD COLUMN neutral_origin TEXT NOT NULL DEFAULT 'manual'
+        CHECK(neutral_origin IN ('agent-file-change','agent-command','validation','documents','manual'));
+      UPDATE changes SET neutral_origin=CASE origin
+        WHEN 'codex-file-change' THEN 'agent-file-change'
+        WHEN 'codex-command' THEN 'agent-command'
+        ELSE origin END;
+      ALTER TABLE changes DROP COLUMN origin;
+      ALTER TABLE changes RENAME COLUMN neutral_origin TO origin;
+    `)
+  } },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number, availableMigrations: Migration[] = migrations) {

@@ -12,8 +12,8 @@ filesystem diretamente.
 - `electron/preload.ts` expõe métodos nomeados e tipados pelo `contextBridge`.
 - `electron/ipc/` valida origem, payload, limites de taxa e autorização do
   workspace antes de iniciar operações nativas.
-- O processo principal do Electron mantém SQLite, arquivos, Git, Providers e o
-  Codex App Server.
+- O processo principal do Electron mantém SQLite, arquivos, Git, Providers e as
+  ferramentas do agente que atuam no workspace.
 - `shared/` contém contratos e limites compartilhados pelas duas partes.
 
 O BrowserWindow usa `contextIsolation: true`, `sandbox: true` e
@@ -22,14 +22,13 @@ são abertos pelo sistema operacional.
 
 ## Execução de IA
 
-Codex CLI/App Server é usado no caminho de conta e nos modos Build e Docs.
-Review usa políticas somente leitura. Build usa política de escrita limitada ao
-workspace, aprovações explícitas e rede desabilitada no sandbox do agente.
-
-Providers OpenAI-compatible usam um contrato separado para descoberta de
-modelos, streaming, cancelamento, respostas limitadas e diagnóstico. Tool
-calling não é normalizado por esse adapter. Credenciais permanecem no processo
-principal.
+Todos os modos executam pelo Provider escolhido para o workspace. Os Providers
+usam um contrato de adapter compatível com a API de chat completions para
+descoberta de modelos, streaming, cancelamento, respostas limitadas, function
+calling e diagnóstico. O ciclo de ferramentas roda no processo principal: as
+ferramentas de leitura existem em todos os modos; as de escrita e de comando só
+no Build, e comandos exigem aprovação explícita. Credenciais permanecem no
+processo principal.
 
 ## Estado local
 

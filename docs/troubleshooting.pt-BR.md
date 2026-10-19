@@ -9,12 +9,13 @@ pasta** e autorize a nova raiz. O histórico local permanece legível enquanto a
 raiz antiga está indisponível, mas arquivos, Git e IA ficam bloqueados até nova
 seleção explícita.
 
-## Codex não aparece ou não lista modelos
+## Nenhuma IA selecionada ou modelo ausente
 
-Instale um Codex CLI suportado, autentique-o fora do Nocturne e execute o
-diagnóstico de IA novamente. Um CLI novo precisa passar pelo handshake do App
-Server. CLI ausente ou incompatível é erro recuperável de Provider, não motivo
-para expor credenciais ou continuar com protocolo desconhecido.
+Abra **Configurações → IA**, conecte um Provider e escolha o modelo do
+workspace. Enquanto nenhum modelo estiver associado, o Nocturne recusa a
+execução com uma mensagem clara, sem recorrer a outra IA. Se o Provider não
+listar modelos, verifique a chave e o endpoint e atualize a lista pelo botão de
+modelo da conexão.
 
 ## Um Provider falha
 

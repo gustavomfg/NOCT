@@ -34,18 +34,10 @@ O cliente publicado `v1.0.0` continua compatível com o slug histórico
 
 ## Requisitos de IA
 
-Nenhuma IA específica é obrigatória. Review, Build e Docs funcionam com
-qualquer Provider configurado (veja [Providers](providers.pt-BR.md)); o Build
-exige um modelo com function calling. O Codex CLI é opcional e só é usado
-quando uma conta ChatGPT é escolhida como motor. Nesse caso, ele exige uma
-instalação autenticada do Codex CLI/App Server:
-
-- CLI mínimo suportado: `0.145.0`;
-- versão recomendada: `0.146.0`;
-- versões verificadas: `0.145.0` e `0.146.0`.
-
-Versões mais novas são detectadas automaticamente, mas o handshake real do App
-Server precisa funcionar. O contrato do App Server é experimental.
+Nenhum fornecedor de IA nem programa de linha de comando é exigido. Review,
+Build e Docs funcionam com qualquer Provider configurado (veja
+[Providers](providers.pt-BR.md)); o Build exige um modelo com function calling.
+O Nocturne não instala nem depende de outro programa de IA.
 
 ## Ambiente de desenvolvimento
 

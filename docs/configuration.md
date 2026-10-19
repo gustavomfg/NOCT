@@ -2,8 +2,9 @@
 
 [Português do Brasil](configuration.pt-BR.md)
 
-Open **Settings** to configure the selected model, Codex sandbox and approval
-policy, diagnostic logging, provider connections and the interface theme. Dark
+Open **Settings** to configure the AI connections and model for each workspace,
+the approval policy for file changes, diagnostic logging and the interface
+theme. Dark
 is the default; a light theme is also available under Application.
 
 ## Providers and model bindings

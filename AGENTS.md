@@ -3,14 +3,15 @@
 ## Product identity
 
 Nocturne Studio is a local desktop Engineering Workspace for coordinating
-a developer, the Codex CLI, and the state of a real software project.
+a developer, user-selected AI providers, and the state of a real software project.
+It is free software, independent of any AI vendor; no vendor CLI or account is required.
 
 It is not:
 
 - an IDE;
 - a replacement for developer judgment;
 - merely a chat client;
-- an official OpenAI product.
+- tied to a single AI vendor.
 
 The developer retains intent, approval, judgment, and accountability.
 
@@ -33,10 +34,10 @@ Current priorities:
 3. Performance on large histories and workspaces.
 4. Secure and recoverable local persistence.
 5. Safe cross-platform packaging and updates.
-6. Explicit compatibility with supported Codex CLI versions.
+6. Explicit compatibility with supported provider protocols.
 
-The Codex App Server interface remains experimental. Do not assume that a new
-Codex CLI version is compatible without explicit validation.
+Provider APIs evolve independently. Validate adapter compatibility explicitly;
+keep provider credentials in the main process and support local endpoints.
 
 ## Technology stack
 

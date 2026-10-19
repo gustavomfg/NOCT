@@ -5,7 +5,6 @@ import { errorMessage, formatBytes, relativeTime } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
 import { SafeMarkdown } from '../../shared/SafeMarkdown'
 import { useI18n } from '../../shared/i18n'
-import { selectAiEngine } from '../../../shared/ai/engine'
 
 export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss, onComplete }: { workspace: string; onWorkspace(): void; onSettings(): void; onDismiss(): void; onComplete(): void }) {
   const { t } = useI18n()
@@ -18,23 +17,13 @@ export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss
     void Promise.all([
       window.nocturne.providers.list(),
       workspace ? window.nocturne.models.bindings(workspace) : Promise.resolve(null),
-      window.nocturne.settings.get(),
-    ]).then(async ([providers, bindings, settings]) => {
-      const providerReady = Boolean(
+    ]).then(([providers, bindings]) => {
+      if (!active) return
+      setAiReady(Boolean(
         bindings?.defaultBinding
         && providers.some((provider) => (
           provider.id === bindings.defaultBinding?.providerId && provider.enabled
         )),
-      )
-      const engine = selectAiEngine({ preference: settings.aiEngine, providerReady, legacyCodexModel: settings.model })
-      // The optional Codex CLI is probed only when it is the selected engine.
-      const codex = engine === 'codex' ? await window.nocturne.codex.status() : null
-      if (!active) return
-      setAiReady(engine === 'provider' || Boolean(
-        codex?.installed
-        && codex.compatible
-        && codex.authenticated
-        && codex.authenticationMethod === 'chatgpt',
       ))
     }).catch(() => {
       if (active) setAiReady(false)
@@ -44,7 +33,7 @@ export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss
     }
   }, [workspace])
   const items = [
-    { title: t('onboarding.aiAccess'), ok: aiReady, required: true, body: aiReady ? t('onboarding.aiConnected') : t('onboarding.chooseAi'), fix: t('onboarding.openAiSettings') },
+    { title: t('onboarding.aiAccess'), ok: aiReady, required: true, body: aiReady ? t('onboarding.aiConnected') : t('onboarding.chooseAi'), fix: t('onboarding.openProviderSettings') },
     { title: t('onboarding.execution'), ok: aiReady, required: true, body: aiReady ? t('onboarding.backendReady') : t('onboarding.finishConnection'), fix: t('onboarding.finishAiConnection') },
     { title: t('onboarding.firstWorkspace'), ok: hasWorkspace, required: true, body: hasWorkspace ? t('onboarding.workspaceReady') : t('onboarding.chooseWorkspace'), fix: t('onboarding.selectProjectFolder') },
     { title: t('onboarding.approvals'), ok: true, required: true, body: t('onboarding.approvalsBody'), fix: '' },

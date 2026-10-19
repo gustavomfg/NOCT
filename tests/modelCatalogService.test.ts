@@ -68,11 +68,11 @@ describe('ModelCatalogService', () => {
   it('descobre e substitui somente os modelos do provider solicitado', async () => {
     const providers = new ProviderRegistry()
     const models = new ModelRegistry()
-    models.register(model('openai', 'old'))
+    models.register(model('provider-a', 'old'))
     models.register(model('ollama', 'local'))
-    providers.register(adapter('openai', async () => [model('openai', 'new')]))
+    providers.register(adapter('provider-a', async () => [model('provider-a', 'new')]))
     const catalog = new MemoryModelCatalog([
-      model('openai', 'old'),
+      model('provider-a', 'old'),
       model('ollama', 'local'),
     ])
 
@@ -80,33 +80,33 @@ describe('ModelCatalogService', () => {
       providers,
       models,
       catalog,
-    ).refresh('openai')
+    ).refresh('provider-a')
 
     expect(result).toMatchObject({
       status: 'applied',
-      models: [{ providerId: 'openai', modelId: 'new' }],
+      models: [{ providerId: 'provider-a', modelId: 'new' }],
     })
-    expect(models.list({ providerId: 'openai' }).map(({ modelId }) => modelId)).toEqual(['new'])
+    expect(models.list({ providerId: 'provider-a' }).map(({ modelId }) => modelId)).toEqual(['new'])
     expect(models.list({ providerId: 'ollama' }).map(({ modelId }) => modelId)).toEqual(['local'])
-    expect(catalog.list('openai').map(({ modelId }) => modelId)).toEqual(['new'])
+    expect(catalog.list('provider-a').map(({ modelId }) => modelId)).toEqual(['new'])
     expect(catalog.list('ollama').map(({ modelId }) => modelId)).toEqual(['local'])
   })
 
   it('preserva o catálogo anterior quando qualquer descriptor é inválido', async () => {
     const providers = new ProviderRegistry()
     const models = new ModelRegistry()
-    models.register(model('openai', 'stable'))
-    providers.register(adapter('openai', async () => [
-      model('openai', 'valid'),
-      { ...model('openai', 'native'), nativePayload: { id: 'unsafe' } },
+    models.register(model('provider-a', 'stable'))
+    providers.register(adapter('provider-a', async () => [
+      model('provider-a', 'valid'),
+      { ...model('provider-a', 'native'), nativePayload: { id: 'unsafe' } },
     ]))
 
-    const catalog = new MemoryModelCatalog([model('openai', 'stable')])
-    await expect(new ModelCatalogService(providers, models, catalog).refresh('openai')).rejects.toMatchObject({
+    const catalog = new MemoryModelCatalog([model('provider-a', 'stable')])
+    await expect(new ModelCatalogService(providers, models, catalog).refresh('provider-a')).rejects.toMatchObject({
       code: 'invalid-model',
     })
-    expect(models.list({ providerId: 'openai' }).map(({ modelId }) => modelId)).toEqual(['stable'])
-    expect(catalog.list('openai').map(({ modelId }) => modelId)).toEqual(['stable'])
+    expect(models.list({ providerId: 'provider-a' }).map(({ modelId }) => modelId)).toEqual(['stable'])
+    expect(catalog.list('provider-a').map(({ modelId }) => modelId)).toEqual(['stable'])
   })
 
   it('impede que uma resposta antiga sobrescreva uma descoberta mais recente', async () => {
@@ -118,69 +118,69 @@ describe('ModelCatalogService', () => {
     const providers = new ProviderRegistry()
     const models = new ModelRegistry()
     const catalog = new MemoryModelCatalog()
-    providers.register(adapter('openai', listModels))
+    providers.register(adapter('provider-a', listModels))
     const service = new ModelCatalogService(providers, models, catalog)
 
-    const olderRefresh = service.refresh('openai')
-    const newerRefresh = service.refresh('openai')
-    newer.resolve([model('openai', 'newer')])
+    const olderRefresh = service.refresh('provider-a')
+    const newerRefresh = service.refresh('provider-a')
+    newer.resolve([model('provider-a', 'newer')])
     await expect(newerRefresh).resolves.toMatchObject({ status: 'applied' })
-    older.resolve([model('openai', 'older')])
+    older.resolve([model('provider-a', 'older')])
     await expect(olderRefresh).resolves.toMatchObject({ status: 'superseded' })
 
-    expect(models.list({ providerId: 'openai' }).map(({ modelId }) => modelId)).toEqual(['newer'])
-    expect(catalog.list('openai').map(({ modelId }) => modelId)).toEqual(['newer'])
+    expect(models.list({ providerId: 'provider-a' }).map(({ modelId }) => modelId)).toEqual(['newer'])
+    expect(catalog.list('provider-a').map(({ modelId }) => modelId)).toEqual(['newer'])
   })
 
   it('não aplica o catálogo se o adapter for removido durante a descoberta', async () => {
     const pending = deferred<readonly unknown[]>()
     const providers = new ProviderRegistry()
     const models = new ModelRegistry()
-    const catalog = new MemoryModelCatalog([model('openai', 'stable')])
-    models.register(model('openai', 'stable'))
-    providers.register(adapter('openai', () => pending.promise))
-    const refresh = new ModelCatalogService(providers, models, catalog).refresh('openai')
+    const catalog = new MemoryModelCatalog([model('provider-a', 'stable')])
+    models.register(model('provider-a', 'stable'))
+    providers.register(adapter('provider-a', () => pending.promise))
+    const refresh = new ModelCatalogService(providers, models, catalog).refresh('provider-a')
 
-    await providers.unregister('openai')
-    pending.resolve([model('openai', 'late')])
+    await providers.unregister('provider-a')
+    pending.resolve([model('provider-a', 'late')])
 
     await expect(refresh).rejects.toEqual(
       expect.objectContaining<Partial<ProviderRegistryError>>({
         code: 'provider-not-found',
       }),
     )
-    expect(models.list({ providerId: 'openai' }).map(({ modelId }) => modelId)).toEqual(['stable'])
-    expect(catalog.list('openai').map(({ modelId }) => modelId)).toEqual(['stable'])
+    expect(models.list({ providerId: 'provider-a' }).map(({ modelId }) => modelId)).toEqual(['stable'])
+    expect(catalog.list('provider-a').map(({ modelId }) => modelId)).toEqual(['stable'])
   })
 
   it('hidrata o Registry com o último snapshot persistido', () => {
     const providers = new ProviderRegistry()
     const models = new ModelRegistry()
     const catalog = new MemoryModelCatalog([
-      model('openai', 'gpt'),
+      model('provider-a', 'generic-model'),
       model('ollama', 'llama'),
     ])
 
     expect(new ModelCatalogService(providers, models, catalog).initialize())
       .toEqual({ loaded: 2, providers: 2 })
     expect(models.list().map(({ providerId, modelId }) => `${providerId}/${modelId}`))
-      .toEqual(['openai/gpt', 'ollama/llama'])
+      .toEqual(['provider-a/generic-model', 'ollama/llama'])
   })
 
   it('restaura o Registry anterior quando a persistência falha', async () => {
     const providers = new ProviderRegistry()
     const models = new ModelRegistry()
-    const catalog = new MemoryModelCatalog([model('openai', 'stable')])
+    const catalog = new MemoryModelCatalog([model('provider-a', 'stable')])
     catalog.failReplace = true
-    models.register(model('openai', 'stable'))
-    providers.register(adapter('openai', () => [model('openai', 'new')]))
+    models.register(model('provider-a', 'stable'))
+    providers.register(adapter('provider-a', () => [model('provider-a', 'new')]))
 
     await expect(new ModelCatalogService(
       providers,
       models,
       catalog,
-    ).refresh('openai')).rejects.toThrow('persistence failed')
-    expect(models.list({ providerId: 'openai' }).map(({ modelId }) => modelId))
+    ).refresh('provider-a')).rejects.toThrow('persistence failed')
+    expect(models.list({ providerId: 'provider-a' }).map(({ modelId }) => modelId))
       .toEqual(['stable'])
   })
 })

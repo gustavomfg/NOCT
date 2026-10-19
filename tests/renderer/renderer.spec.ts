@@ -409,7 +409,7 @@ test.describe('renderer do produto', () => {
       })
       window.nocturne.changeControl.changes = async (_conversationId, changeSetId) => [{
         id: `change-${changeSetId}`, executionId: changeSetId, changeSetId, checkpointId: null, relativePath: `${changeSetId}.ts`, originalPath: null,
-        operation: 'modify', origin: 'codex-file-change', beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64), beforeSize: 1, afterSize: 2,
+        operation: 'modify', origin: 'agent-file-change', beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64), beforeSize: 1, afterSize: 2,
         status: 'pending', validationStatus: 'unknown', policy: 'allowed', policyReason: null, createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
       }]
       Object.defineProperty(window, '__changeControlSession', {
@@ -491,7 +491,7 @@ test.describe('renderer do produto', () => {
     expect(await composer.evaluate((element) => element.getBoundingClientRect().height)).toBe(initialHeight)
   })
 
-  test('mantém um símbolo textual do estado Codex em 520px', async ({ page }) => {
+  test('mantém um símbolo textual do estado do agente em 520px', async ({ page }) => {
     await page.setViewportSize({ width: 520, height: 760 })
     await ready(page)
     const connection = page.locator('.connection')
@@ -692,20 +692,20 @@ test.describe('renderer do produto', () => {
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     const navigation = dialog.getByRole('navigation', { name: 'Seções das configurações' })
-    const codex = navigation.getByRole('button', { name: /^IA/ })
+    const aiNav = navigation.getByRole('button', { name: /^IA/ })
     const workspaces = navigation.getByRole('button', { name: /Workspaces/ })
-    await codex.click()
-    const before = await Promise.all([codex.boundingBox(), workspaces.boundingBox()])
+    await aiNav.click()
+    const before = await Promise.all([aiNav.boundingBox(), workspaces.boundingBox()])
     await workspaces.hover()
     await page.waitForTimeout(180)
-    const after = await Promise.all([codex.boundingBox(), workspaces.boundingBox()])
+    const after = await Promise.all([aiNav.boundingBox(), workspaces.boundingBox()])
     expect(before.every(Boolean) && after.every(Boolean)).toBe(true)
     expect(after.map((box) => ({ width: box?.width, height: box?.height }))).toEqual(
       before.map((box) => ({ width: box?.width, height: box?.height })),
     )
     expect((after[1]?.y ?? 0) - (after[0]?.y ?? 0)).toBe((before[1]?.y ?? 0) - (before[0]?.y ?? 0))
     await expect(workspaces).toHaveCSS('transform', 'none')
-    await codex.hover(); await workspaces.hover(); await codex.hover(); await workspaces.hover()
+    await aiNav.hover(); await workspaces.hover(); await aiNav.hover(); await workspaces.hover()
     await expect(workspaces).toHaveCSS('transform', 'none')
     await page.waitForTimeout(240)
     await expect(dialog.locator('p').filter({ hasText: 'Conectar inteligência' })).toBeVisible()
@@ -819,27 +819,9 @@ test.describe('renderer do produto', () => {
     await expect(dialog.locator('.ai-list-connections').getByText('OpenRouter', { exact: true })).toBeVisible()
     await dialog.getByRole('button', { name: 'Diagnosticar OpenRouter' }).click()
     const diagnostic = dialog.locator('.provider-diagnostic')
-    await expect(diagnostic.getByText('OpenAI-compatible v1')).toBeVisible()
+    await expect(diagnostic.getByText('Chat Completions v1')).toBeVisible()
     await expect(diagnostic.getByText('42 ms')).toBeVisible()
     await expect(diagnostic.getByText('Compatível', { exact: true })).toBeVisible()
-  })
-
-  test('lista e seleciona modelos disponíveis pela conta ChatGPT', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await ready(page)
-    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
-    const dialog = page.getByRole('dialog', { name: 'Configurações' })
-
-    await dialog.getByRole('button', { name: 'Escolher modelo da conta ChatGPT' }).click()
-    await expect(dialog.getByText('Modelo da conta ChatGPT')).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /GPT-5.6 Sol/ })).toBeVisible()
-    await dialog.getByRole('button', { name: /GPT-5.6 Luna/ }).click()
-    await expect(dialog.getByRole('button', { name: /GPT-5.6 Luna/ })).toHaveAttribute('aria-pressed', 'true')
-    await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
-
-    await expect(page.locator('.product-toast')).toContainText('Usando GPT-5.6 Luna pela conta ChatGPT.')
-    await expect(dialog.locator('.ai-active')).toContainText(/gpt-5\.6-luna/)
-    await expect(dialog.locator('.ai-active-badge')).toHaveText('ativa')
   })
 
   test('gerencia conexões por API com credencial transitória e estados explícitos', async ({ page }) => {
@@ -1273,7 +1255,7 @@ test('mantém o erro inicial separado das ações e permite dispensá-lo', async
 
 test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-07-13T20:05:00.000Z'))
-  await installNocturneMock(page, { firstRun: true, aiEngine: 'codex' })
+  await installNocturneMock(page, { firstRun: true, aiBound: true })
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
   const onboarding = page.getByRole('dialog', { name: 'Prontidão do Nocturne' })
@@ -1290,9 +1272,9 @@ test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page })
   await expect.poll(() => page.evaluate(() => localStorage.getItem('nocturne.onboarding.completed'))).toBe('true')
 })
 
-test('oferece login por conta e chave de API como caminhos separados', async ({ page }) => {
+test('oferece APIs, runtimes locais e endpoint próprio sem login de assinatura', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-07-13T20:05:00.000Z'))
-  await installNocturneMock(page, { signedOut: true })
+  await installNocturneMock(page)
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
   await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
@@ -1301,12 +1283,13 @@ test('oferece login por conta e chave de API como caminhos separados', async ({ 
   await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
   await expect(dialog.getByText('O Nocturne não depende de nenhuma IA específica.', { exact: false })).toBeVisible()
   await dialog.getByRole('button', { name: 'Conectar uma IA' }).click()
-  await expect(dialog.getByRole('button', { name: 'Conta ChatGPT', exact: true })).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'OpenAI', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Google Gemini', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Outro', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: /ChatGPT|Codex/ })).toHaveCount(0)
   await expect(dialog.getByRole('button', { name: 'Ollama', exact: true })).toHaveAccessibleDescription(/código não sai da máquina/)
 })
 
-test('pede a escolha de uma IA no primeiro uso sem tratar o Codex como obrigatório', async ({ page }) => {
+test('pede a escolha de uma IA no primeiro uso', async ({ page }) => {
   await installNocturneMock(page, { firstRun: true })
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)

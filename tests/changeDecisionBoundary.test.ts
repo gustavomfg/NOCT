@@ -36,7 +36,7 @@ async function fixture() {
   fs.writeFileSync(target, 'before')
   const before = await checkpoints.capture(executionId, workspace, 'before')
   fs.writeFileSync(target, 'after')
-  const captured = await new ChangeCaptureService(checkpoints, database.changeSets).capture(executionId, workspace, before.checkpoint.id, 'codex-command')
+  const captured = await new ChangeCaptureService(checkpoints, database.changeSets).capture(executionId, workspace, before.checkpoint.id, 'agent-command')
   const rollback = new SnapshotRollbackService(checkpoints)
   const diffs = new ChangeDiffService(checkpoints, database.changeSets)
   const handlers = new Map<string, Parameters<SafeIpcMain['handle']>[1]>()

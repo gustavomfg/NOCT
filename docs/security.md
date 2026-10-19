@@ -16,8 +16,8 @@
 Paths are normalized and contained within the explicitly selected workspace.
 Bounded reads reject traversal, absolute external paths and symlink escapes at
 the relevant file boundary. Restored workspaces are unauthorized until the user
-selects the folder again. Review is read-only. Build uses a workspace-scoped
-Codex sandbox, disabled network access and explicit approvals.
+selects the folder again. Review is read-only. Build writes are scoped to the
+workspace, and every command needs an explicit approval and runs without a shell.
 
 Validation is an explicit request to run a stack-selected command in an
 authorized workspace. The renderer cannot supply an executable or arguments:
@@ -28,7 +28,7 @@ shell and with a restricted inherited environment, but it deliberately executes
 project-controlled code with the developer's OS privileges. It is not an OS
 sandbox.
 
-On POSIX, supervised validation, Git, document-export and Codex processes use a
+On POSIX, supervised validation, Git, document-export and agent command processes use a
 dedicated process group and cancellation asks the group to terminate before an
 escalation. Validation checks the group independently of the parent exit,
 escalates after three seconds, and stops waiting after four seconds; if the
@@ -39,15 +39,14 @@ the Node primitive can target only the direct child, so cancellation cannot
 certify the entire tree. A detached terminal
 launched for the user is deliberately outside Nocturne's lifecycle ownership.
 
-Remote OpenAI-compatible providers require HTTPS, reject redirects and validate
+Remote Chat Completions providers require HTTPS, reject redirects and validate
 all resolved addresses before a connection is pinned. HTTP without TLS is
 allowed only for local loopback services.
 
 ## Credentials and local data
 
 Provider keys are encrypted with Electron `safeStorage`, referenced by opaque
-identifiers and excluded from backups and diagnostics. The Codex account session
-remains under the Codex CLI's own credential store. SQLite, WAL/SHM, snapshots,
+identifiers and excluded from backups and diagnostics. SQLite, WAL/SHM, snapshots,
 workspace context and credential files use restrictive permissions where the
 platform supports them. Logs are sanitized and verbose diagnostics are opt-in.
 
@@ -56,6 +55,5 @@ platform supports them. Logs are sanitized and verbose diagnostics are opt-in.
 Packaged builds use ASAR, embedded integrity validation and Electron production
 fuses. Stable releases require checksum verification and platform signing only
 where the release policy claims it: currently Linux has a protected GPG-signed
-checksum manifest, while Windows and macOS are unsigned and not notarized. A
-Codex contract smoke also runs on the exact tag commit. These controls reduce
+checksum manifest, while Windows and macOS are unsigned and not notarized. These controls reduce
 risk but do not constitute a security certification.

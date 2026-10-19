@@ -47,7 +47,7 @@ function task(selection: TaskModelSelection, requirements: NormalizedTaskInput['
 function bindings(overrides: Partial<WorkspaceModelBindings> = {}): WorkspaceModelBindings {
   return {
     workspaceId: 'workspace-1',
-    defaultBinding: { providerId: 'openai', modelId: 'default' },
+    defaultBinding: { providerId: 'provider-a', modelId: 'default' },
     ...overrides,
   }
 }
@@ -55,8 +55,8 @@ function bindings(overrides: Partial<WorkspaceModelBindings> = {}): WorkspaceMod
 function setup() {
   const models = new ModelRegistry()
   const providers = new ProviderRegistry()
-  for (const id of ['openai', 'openrouter']) providers.register(adapter(id))
-  models.register(model({ providerId: 'openai', modelId: 'default' }))
+  for (const id of ['provider-a', 'openrouter']) providers.register(adapter(id))
+  models.register(model({ providerId: 'provider-a', modelId: 'default' }))
   models.register(model({ providerId: 'openrouter', modelId: 'explicit-model' }))
   return { models, providers, resolver: new ModelResolver(models, providers) }
 }
@@ -81,7 +81,7 @@ describe('ModelResolver', () => {
     }), bindings())
 
     expect(resolved).toMatchObject({
-      model: { providerId: 'openai', modelId: 'default' },
+      model: { providerId: 'provider-a', modelId: 'default' },
     })
   })
 
@@ -97,8 +97,8 @@ describe('ModelResolver', () => {
 
   it('trata capacidades não anunciadas pelo catálogo como desconhecidas', async () => {
     const { models, resolver } = setup()
-    models.replaceProviderModels('openai', [
-      model({ providerId: 'openai', modelId: 'default' }, { capabilities: [] }),
+    models.replaceProviderModels('provider-a', [
+      model({ providerId: 'provider-a', modelId: 'default' }, { capabilities: [] }),
     ])
     await expect(resolver.resolve(
       task({ type: 'workspace-default' }, ['chat', 'streaming']),
@@ -108,16 +108,16 @@ describe('ModelResolver', () => {
 
   it('valida capacidades, disponibilidade do Provider e isolamento do Workspace', async () => {
     const { models, providers, resolver } = setup()
-    models.replaceProviderModels('openai', [
-      model({ providerId: 'openai', modelId: 'default' }, { capabilities: ['chat'] }),
+    models.replaceProviderModels('provider-a', [
+      model({ providerId: 'provider-a', modelId: 'default' }, { capabilities: ['chat'] }),
     ])
     await expect(resolver.resolve(
       task({ type: 'workspace-default' }, ['chat', 'streaming']),
       bindings(),
     )).rejects.toMatchObject({ code: 'capability-mismatch' })
 
-    await providers.unregister('openai')
-    providers.register(adapter('openai', 'offline'))
+    await providers.unregister('provider-a')
+    providers.register(adapter('provider-a', 'offline'))
     await expect(resolver.resolve(
       task({ type: 'workspace-default' }),
       bindings(),

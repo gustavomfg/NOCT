@@ -21,13 +21,20 @@ const temporaryFiles: string[] = []
 afterEach(() => { for (const file of temporaryFiles.splice(0)) fs.rmSync(file, { force: true }) })
 
 describe('schema de backup', () => {
+  it('normaliza backups legados sem restaurar dependências do CLI', () => {
+    const provider = { id: randomUUID(), provider_type: 'openai-compatible', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
+    const parsed = backupSchema.parse({ ...valid(), conversations: [{ ...conversation, codex_thread_id: 'legacy-thread' }], providerConfigs: [provider], settings: { aiEngine: 'codex', codexPath: '/old/cli', theme: 'dark' } })
+    expect(parsed.providerConfigs[0].provider_type).toBe('chat-completions')
+    expect(parsed.conversations[0]).not.toHaveProperty('codex_thread_id')
+    expect(parsed.settings).toEqual({ theme: 'dark' })
+  })
+
   it('aceita um backup válido e aplica defaults seguros', () => {
     expect(backupSchema.parse(valid())).toMatchObject({ schemaVersion: 5, conversations: [{ id: conversation.id }] })
   })
 
-  it('preserva a IA selecionada e recusa motores desconhecidos', () => {
-    expect(backupSchema.parse({ ...valid(), settings: { aiEngine: 'provider' } }).settings).toEqual({ aiEngine: 'provider' })
-    expect(() => backupSchema.parse({ ...valid(), settings: { aiEngine: 'unknown' } })).toThrow()
+  it('aceita backups de versões anteriores com model e sandbox como configurações legadas', () => {
+    expect(backupSchema.parse({ ...valid(), settings: { model: 'gpt-5', sandbox: 'read-only' } }).settings).toEqual({ model: 'gpt-5', sandbox: 'read-only' })
   })
 
   it('rejeita campos desconhecidos e conteúdo excessivo', () => {
@@ -48,14 +55,14 @@ describe('schema de backup', () => {
   it('rejeita identificadores duplicados antes da restauração', () => {
     const data = valid()
     expect(() => backupSchema.parse({ ...data, conversations: [conversation, conversation] })).toThrow(/duplicados/)
-    const provider = { id: randomUUID(), provider_type: 'openai-compatible', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
+    const provider = { id: randomUUID(), provider_type: 'chat-completions', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
     expect(() => backupSchema.parse({ ...data, providerConfigs: [provider, provider] })).toThrow(/duplicados/)
     expect(() => backupSchema.parse({ ...data, modelCatalog: [modelCatalogItem, modelCatalogItem] })).toThrow(/duplicados/)
     expect(() => backupSchema.parse({ ...data, workspaceModelBindings: [workspaceModelBinding, workspaceModelBinding] })).toThrow(/duplicados/)
   })
 
   it('preserva configuração de Provider sem aceitar referência de credencial', () => {
-    const provider = { id: randomUUID(), provider_type: 'openai-compatible', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
+    const provider = { id: randomUUID(), provider_type: 'chat-completions', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
     expect(backupSchema.parse({ ...valid(), providerConfigs: [provider] }))
       .toMatchObject({ providerConfigs: [{ display_name: 'Provider' }] })
     expect(() => backupSchema.parse({

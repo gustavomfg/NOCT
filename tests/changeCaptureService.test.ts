@@ -34,13 +34,13 @@ describe('ChangeCaptureService', () => {
     fs.unlinkSync(path.join(workspace, 'deleted.txt'))
     fs.writeFileSync(path.join(workspace, 'created.txt'), 'novo\n')
 
-    const result = await service.capture(executionId, workspace, before.checkpoint.id, 'codex-command', ['modified.txt', 'deleted.txt', 'created.txt'])
+    const result = await service.capture(executionId, workspace, before.checkpoint.id, 'agent-command', ['modified.txt', 'deleted.txt', 'created.txt'])
 
     expect(result.changeSet.status).toBe('pending')
     expect(result.changes.map((change) => [change.relativePath, change.operation, change.origin])).toEqual([
-      ['created.txt', 'create', 'codex-command'],
-      ['deleted.txt', 'delete', 'codex-command'],
-      ['modified.txt', 'modify', 'codex-command'],
+      ['created.txt', 'create', 'agent-command'],
+      ['deleted.txt', 'delete', 'agent-command'],
+      ['modified.txt', 'modify', 'agent-command'],
     ])
     expect(database.changeSets.listChanges(result.changeSet.id)).toHaveLength(3)
   })

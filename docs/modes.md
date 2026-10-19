@@ -16,9 +16,8 @@ Build can modify files only inside the authorized workspace and under the active
 approval policy. With a provider model, the agent uses Nocturne's workspace
 tools: file writes stay inside the authorized root (generated directories,
 `.git`, `.nocturne` and likely secret files are refused) and every command
-requires explicit approval and runs without a shell. With the optional Codex
-engine, the App Server receives a workspace-write policy with network access
-disabled. Progress, requested approvals, changed files and diffs remain visible.
+requires explicit approval and runs without a shell. Progress, requested
+approvals, changed files and diffs remain visible.
 
 Guarded rollback is available only when the workspace was clean before the run,
 there is a `HEAD` commit and the agent reported paths that remain within the

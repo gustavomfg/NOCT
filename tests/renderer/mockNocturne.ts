@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test'
 import type { ValidationKind } from '../../shared/codeIntelligence'
 import type { UpdateState } from '../../shared/updates'
 
-export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; signedOut?: boolean; messageCount?: number; firstRun?: boolean; aiEngine?: 'codex' | 'provider' } = {}) {
-  await page.addInitScript(({ empty, unauthorized, moved, signedOut, messageCount, firstRun, aiEngine }) => {
+export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; messageCount?: number; firstRun?: boolean; aiBound?: boolean } = {}) {
+  await page.addInitScript(({ empty, unauthorized, moved, messageCount, firstRun, aiBound }) => {
     if (firstRun) localStorage.removeItem('nocturne.onboarding.completed')
     else localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
@@ -25,11 +25,11 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let updateState: UpdateState = { status: 'up-to-date', currentVersion: '1.0.1', platform: 'linux', lastCheckedAt: now }
     const rendererPerformanceReports: unknown[] = []
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
-    type MockProviderConfiguration = { id: string; providerType: 'openai-compatible'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
+    type MockProviderConfiguration = { id: string; providerType: 'chat-completions'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
     type MockModelReference = { providerId: string; modelId: string }
     type MockModelBindings = { workspaceId: string; defaultBinding?: MockModelReference }
     let brainMemories: MockBrainMemory[] = []
-    let providerConfigurations: MockProviderConfiguration[] = []
+    let providerConfigurations: MockProviderConfiguration[] = aiBound ? [{ id: 'openrouter', providerType: 'chat-completions', displayName: 'OpenRouter', source: 'remote', baseUrl: 'https://openrouter.ai/api/v1', enabled: true, requiresAuthentication: true, credentialConfigured: true, timeoutMs: 30000, createdAt: now, updatedAt: now }] : []
     const messages = empty ? [] : messageCount ? Array.from({ length: messageCount }, (_, index) => ({
       id: `message-${index + 1}`,
       conversationId: conversation.id,
@@ -46,8 +46,8 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       { providerId: 'ollama', modelId: 'qwen3:14b', displayName: 'Qwen3 14B', family: 'Qwen', source: 'local' as const, capabilities: ['chat', 'tool-calling'] as const, contextWindow: 32_768, availability: 'available' as const },
       { providerId: 'legacy-provider', modelId: 'offline-model', displayName: 'Modelo anterior', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'offline' as const },
     ]
-    let modelBindings: MockModelBindings | null = null
-    let appSettings = { ...(aiEngine ? { aiEngine } : {}), model: '', sandbox: 'workspace-write' as const, approvalPolicy: 'on-request' as const, theme: 'dark' as 'dark' | 'light', defaultAgentMode: 'review' as const, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }
+    let modelBindings: MockModelBindings | null = aiBound ? { workspaceId: workspace, defaultBinding: { providerId: 'openrouter', modelId: 'anthropic/claude-sonnet' } } : null
+    let appSettings = { approvalPolicy: 'on-request' as const, theme: 'dark' as 'dark' | 'light', defaultAgentMode: 'review' as const }
     const noop = async () => undefined
     const api = {
       recovery: { list: async () => [] },
@@ -138,15 +138,6 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         rollback: async () => null,
         onEvent: (listener: (payload: unknown) => void) => { eventListeners.push(listener); return () => { const index = eventListeners.indexOf(listener); if (index >= 0) eventListeners.splice(index, 1) } },
         onStatus: (listener: (payload: unknown) => void) => { statusListeners.push(listener); return () => { const index = statusListeners.indexOf(listener); if (index >= 0) statusListeners.splice(index, 1) } },
-      },
-      codex: {
-        status: async () => ({ installed: true, authenticated: !signedOut, compatible: true, version: '0.145.0', authenticationMethod: 'chatgpt' as const }),
-        login: async () => ({ installed: true, authenticated: true, compatible: true, version: '0.145.0', authenticationMethod: 'chatgpt' as const }),
-        logout: async () => ({ installed: true, authenticated: false, compatible: true, version: '0.145.0' }),
-        models: async () => [
-          { model: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol', defaultReasoningEffort: 'medium', isDefault: true },
-          { model: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', defaultReasoningEffort: 'low', isDefault: false },
-        ],
       },
       files: { attach: async () => [], open: noop, preview: async (_id: string, filePath: string) => ({ kind: 'text', name: filePath.split('/').pop(), filePath, mime: 'text/plain', content: 'conteúdo', size: 8 }) },
       memory: { get: async () => { memoryReads += 1; return { content: '', rules: '', updatedAt: '' } }, set: async (_id: string, content: string, rules: string) => ({ content, rules, updatedAt: now }) },
@@ -254,7 +245,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
               id,
               displayName: provider.displayName,
               source: provider.source,
-              protocol: 'OpenAI-compatible',
+              protocol: 'Chat Completions',
               version: 'v1',
               capabilities: { modelDiscovery: true, embeddings: false, streaming: true, toolCalling: false, cancellation: true, authentication: provider.requiresAuthentication ? 'required' as const : 'none' as const },
               limitations: { requestTimeoutMs: { minimum: 1_000, maximum: 120_000 }, notes: ['Tool calling ainda não é normalizado por este adapter.'] },
@@ -299,5 +290,5 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       calls: () => ({ selectedExpected, memoryReads }),
       performanceReports: () => structuredClone(rendererPerformanceReports),
     } })
-  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0, firstRun: Boolean(options.firstRun), aiEngine: options.aiEngine })
+  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), messageCount: options.messageCount ?? 0, firstRun: Boolean(options.firstRun), aiBound: Boolean(options.aiBound) })
 }

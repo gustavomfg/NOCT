@@ -106,7 +106,7 @@ class SimulatedProviderConfigurations {
     const credential = change?.credential
     const created: ProviderConfigurationSummary = {
       id, enabled: input.enabled ?? true, displayName: input.displayName, source: input.source,
-      providerType: 'openai-compatible', baseUrl: input.baseUrl,
+      providerType: 'chat-completions', baseUrl: input.baseUrl,
       requiresAuthentication: credential ? true : input.requiresAuthentication ?? false,
       credentialConfigured: Boolean(credential), timeoutMs: input.timeoutMs ?? 60000,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -146,7 +146,7 @@ class SimulatedProviderConfigurations {
         id,
         displayName: provider.displayName,
         source: provider.source,
-        protocol: 'OpenAI-compatible',
+        protocol: 'Chat Completions',
         version: 'v1',
         capabilities: { modelDiscovery: true, embeddings: false, streaming: true, toolCalling: false, cancellation: true, authentication: 'required' as const },
         limitations: { requestTimeoutMs: { minimum: 1_000, maximum: 120_000 }, notes: [] },
@@ -274,7 +274,7 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
   }
 
   it('expõe somente a API nomeada e cruza preload, IPC e SQLite', async () => {
-    expect(Object.keys(api).sort()).toEqual(['ai', 'artifacts', 'brain', 'changeControl', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'engineeringIntelligence', 'evidence', 'files', 'git', 'memory', 'models', 'projectIndex', 'providers', 'recovery', 'semanticIndex', 'settings', 'suggestions', 'updates', 'validation', 'workspace'])
+    expect(Object.keys(api).sort()).toEqual(['ai', 'artifacts', 'brain', 'changeControl', 'clipboard', 'conversations', 'data', 'diagnostics', 'documents', 'engineeringIntelligence', 'evidence', 'files', 'git', 'memory', 'models', 'projectIndex', 'providers', 'recovery', 'semanticIndex', 'settings', 'suggestions', 'updates', 'validation', 'workspace'])
     await expect(api.recovery.list()).resolves.toEqual([])
     await api.clipboard.writeText('commit sugerido')
     await expect(api.clipboard.readText()).resolves.toBe('commit sugerido')
@@ -627,23 +627,23 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
 
   it('gerencia o ciclo de vida completo de providers via IPC', async () => {
     const created = await api.providers.create({
-      providerType: 'openai-compatible', displayName: 'Test OpenAI',
-      baseUrl: 'https://api.openai.com/v1', source: 'remote', requiresAuthentication: true,
+      providerType: 'chat-completions', displayName: 'Test Provider',
+      baseUrl: 'https://provider.example/v1', source: 'remote', requiresAuthentication: true,
       enabled: true, timeoutMs: 60000,
     }, 'sk-test-123')
     expect(created.id).toBeTruthy()
-    expect(created.displayName).toBe('Test OpenAI')
-    expect(created.baseUrl).toBe('https://api.openai.com/v1')
+    expect(created.displayName).toBe('Test Provider')
+    expect(created.baseUrl).toBe('https://provider.example/v1')
     expect(created.enabled).toBe(true)
 
     const list = await api.providers.list()
     expect(list).toHaveLength(1)
-    expect(list[0].displayName).toBe('Test OpenAI')
+    expect(list[0].displayName).toBe('Test Provider')
 
     const availability = await api.providers.testConnection(created.id)
     expect(availability.status).toBe('available')
     await expect(api.providers.diagnose(created.id)).resolves.toMatchObject({
-      definition: { protocol: 'OpenAI-compatible', version: 'v1' },
+      definition: { protocol: 'Chat Completions', version: 'v1' },
       connectivity: 'connected',
       authentication: 'configured',
       compatibility: 'compatible',
@@ -651,11 +651,11 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     })
 
     const updated = await api.providers.update(created.id, {
-      providerType: 'openai-compatible', displayName: 'Updated OpenAI',
-      baseUrl: 'https://updated.openai.com/v1', source: 'remote', requiresAuthentication: true,
+      providerType: 'chat-completions', displayName: 'Updated Provider',
+      baseUrl: 'https://updated.provider.example/v1', source: 'remote', requiresAuthentication: true,
       enabled: true, timeoutMs: 60000,
     })
-    expect(updated.displayName).toBe('Updated OpenAI')
+    expect(updated.displayName).toBe('Updated Provider')
 
     await api.providers.remove(created.id)
     expect(await api.providers.list()).toHaveLength(0)
@@ -667,13 +667,13 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     expect(english.language).toBe('en')
     const light = await api.settings.set({ theme: 'light' })
     expect(light.theme).toBe('light')
-    const saved = await api.settings.set({ model: 'gpt-5' })
-    expect(saved.model).toBe('gpt-5')
+    const saved = await api.settings.set({ approvalPolicy: 'untrusted' })
+    expect(saved.approvalPolicy).toBe('untrusted')
     expect(saved.diagnosticMode).toBe(true)
     expect(saved.language).toBe('en')
     expect(saved.theme).toBe('light')
     const current = await api.settings.get()
-    expect(current.model).toBe('gpt-5')
+    expect(current.approvalPolicy).toBe('untrusted')
     expect(current.diagnosticMode).toBe(true)
     expect(current.language).toBe('en')
     expect(current.theme).toBe('light')
@@ -737,7 +737,7 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
 
     await expect(api.data.import()).resolves.toBe(true)
 
-    expect((await api.settings.get()).model).toBe('gpt-5')
+    expect((await api.settings.get()).approvalPolicy).toBe('untrusted')
     expect((await api.workspace.list())[0]).toMatchObject({ path: root, authorized: false })
     expect(fs.readdirSync(path.join(root, 'backups')).some((name) => name.startsWith('nocturne-before-restore-'))).toBe(true)
   })
@@ -890,10 +890,11 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const conversation = await api.conversations.create(workspace)
     await expect(api.ai.send(conversation.id, 'Revisar', ['../fora.txt'], 'review')).rejects.toThrow(/dentro do workspace/)
     expect(database!.listExecutions(workspace, conversation.id)).toEqual([])
-    // No AI is implicit: without a selection the run is refused before any execution is reserved.
+    // No AI is implicit: without a bound model the run is refused before any execution is reserved.
     await expect(api.ai.send(conversation.id, 'Revisar', [], 'review')).rejects.toThrow(/Nenhuma IA selecionada/)
     expect(database!.listExecutions(workspace, conversation.id)).toEqual([])
-    await api.settings.set({ aiEngine: 'codex' })
+    const provider = await api.providers.create({ providerType: 'chat-completions', displayName: 'Local', baseUrl: 'http://127.0.0.1:11434/v1', source: 'local', requiresAuthentication: false, enabled: true, timeoutMs: 30000 })
+    await api.models.setBindings({ workspaceId: workspace, defaultBinding: { providerId: provider.id, modelId: 'local-model' } })
 
     const missing = path.join(workspace, `missing-${randomUUID()}.txt`)
     await expect(api.ai.send(conversation.id, 'Revisar', [missing], 'review')).rejects.toThrow(/anexo não foi encontrado/)
@@ -902,4 +903,5 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const execution = database!.getExecution(executions[0]!.id)
     expect(execution).toMatchObject({ status: 'failed', error: 'Falha ao preparar a execução de IA.', finishedAt: expect.any(String) })
   })
+
 })

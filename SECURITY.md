@@ -29,7 +29,7 @@ workspace contents and personal information.
 The policy covers the desktop application, Electron main/preload/renderer
 boundaries, IPC validation, workspace authorization and containment, persistence
 and recovery, provider integrations, credential storage and packaged updates.
-Third-party providers and the Codex CLI have their own security policies.
+Third-party providers have their own security policies.
 
 The current stable release line is `1.0.2`. Historical release notes are not a
 promise of support for old versions.
@@ -42,12 +42,12 @@ promise of support for old versions.
 - IPC validates origin, payload, rate and workspace authorization before native
   work begins.
 - Review Mode is read-only. Build writes are scoped to the authorized workspace,
-  use Codex approvals and disable network access for the agent sandbox.
+  require explicit approval for every command, which runs without a shell.
 - Workspace paths are contained and bounded reads reject traversal and symlink
   escapes where the platform permits them.
 - Provider credentials are encrypted with the operating-system secure storage,
   never returned to the renderer and excluded from backups and diagnostics.
-- Remote OpenAI-compatible connections require HTTPS, reject redirects and
+- Remote provider connections require HTTPS, reject redirects and
   validate resolved addresses to reduce SSRF and DNS-rebinding risk.
 - Packaged builds use ASAR, embedded integrity validation and Electron fuses.
 

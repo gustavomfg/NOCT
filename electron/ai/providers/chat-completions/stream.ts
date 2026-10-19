@@ -3,7 +3,7 @@ import type {
   ProviderExecutionControl,
   ProviderExecutionResult,
 } from '../../../../shared/ai/providerExecution'
-import { OPENAI_COMPATIBLE_LIMITS } from './config'
+import { CHAT_COMPLETIONS_LIMITS } from './config'
 
 interface StreamOptions {
   /** Tool calls are accepted only when the request offered tools. */
@@ -16,23 +16,23 @@ interface PartialToolCall {
   arguments: string
 }
 
-export class OpenAICompatibleProtocolError extends Error {
-  constructor(message = 'Resposta OpenAI-compatible inválida.') {
+export class ChatCompletionsProtocolError extends Error {
+  constructor(message = 'Resposta Chat Completions inválida.') {
     super(message)
-    this.name = 'OpenAICompatibleProtocolError'
+    this.name = 'ChatCompletionsProtocolError'
   }
 }
 
-export async function consumeOpenAICompatibleStream(
+export async function consumeChatCompletionsStream(
   response: Response,
   executionId: string,
   control: ProviderExecutionControl,
   options: StreamOptions = {},
 ): Promise<ProviderExecutionResult> {
-  if (!response.body) throw new OpenAICompatibleProtocolError()
+  if (!response.body) throw new ChatCompletionsProtocolError()
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
   if (!contentType.includes('text/event-stream')) {
-    throw new OpenAICompatibleProtocolError()
+    throw new ChatCompletionsProtocolError()
   }
 
   const reader = response.body.getReader()
@@ -46,8 +46,8 @@ export async function consumeOpenAICompatibleStream(
 
   const consumeEvent = (event: string) => {
     if (receivedDone) return
-    if (Buffer.byteLength(event, 'utf8') > OPENAI_COMPATIBLE_LIMITS.streamEventBytes) {
-      throw new OpenAICompatibleProtocolError()
+    if (Buffer.byteLength(event, 'utf8') > CHAT_COMPLETIONS_LIMITS.streamEventBytes) {
+      throw new ChatCompletionsProtocolError()
     }
     const data = event
       .split(/\r?\n/)
@@ -65,15 +65,15 @@ export async function consumeOpenAICompatibleStream(
     try {
       parsed = JSON.parse(data)
     } catch {
-      throw new OpenAICompatibleProtocolError()
+      throw new ChatCompletionsProtocolError()
     }
     const payload = asRecord(parsed)
-    if (!payload) throw new OpenAICompatibleProtocolError()
+    if (!payload) throw new ChatCompletionsProtocolError()
 
     const choices = Array.isArray(payload.choices) ? payload.choices : []
     for (const choiceValue of choices) {
       const choice = asRecord(choiceValue)
-      if (!choice) throw new OpenAICompatibleProtocolError()
+      if (!choice) throw new ChatCompletionsProtocolError()
       const delta = asRecord(choice.delta)
       if (typeof delta?.content === 'string' && delta.content.length > 0) {
         control.emit({
@@ -83,13 +83,13 @@ export async function consumeOpenAICompatibleStream(
         })
       }
       if (Array.isArray(delta?.tool_calls)) {
-        if (!options.toolsOffered) throw new OpenAICompatibleProtocolError()
+        if (!options.toolsOffered) throw new ChatCompletionsProtocolError()
         for (const fragment of delta.tool_calls) accumulateToolCall(toolCalls, fragment)
       }
       const nativeFinish = choice.finish_reason
       if (nativeFinish === null || nativeFinish === undefined) continue
       if (nativeFinish === 'tool_calls' || nativeFinish === 'function_call') {
-        if (!options.toolsOffered) throw new OpenAICompatibleProtocolError()
+        if (!options.toolsOffered) throw new ChatCompletionsProtocolError()
         finishReason = 'tool-calls'
       } else {
         finishReason = nativeFinish === 'stop'
@@ -109,8 +109,8 @@ export async function consumeOpenAICompatibleStream(
       const { done, value } = await reader.read()
       if (done) break
       responseBytes += value.byteLength
-      if (responseBytes > OPENAI_COMPATIBLE_LIMITS.streamResponseBytes) {
-        throw new OpenAICompatibleProtocolError()
+      if (responseBytes > CHAT_COMPLETIONS_LIMITS.streamResponseBytes) {
+        throw new ChatCompletionsProtocolError()
       }
       buffer += decoder.decode(value, { stream: true })
       let boundary = eventBoundary(buffer)
@@ -120,8 +120,8 @@ export async function consumeOpenAICompatibleStream(
         consumeEvent(event)
         boundary = eventBoundary(buffer)
       }
-      if (Buffer.byteLength(buffer, 'utf8') > OPENAI_COMPATIBLE_LIMITS.streamEventBytes) {
-        throw new OpenAICompatibleProtocolError()
+      if (Buffer.byteLength(buffer, 'utf8') > CHAT_COMPLETIONS_LIMITS.streamEventBytes) {
+        throw new ChatCompletionsProtocolError()
       }
     }
     buffer += decoder.decode()
@@ -133,21 +133,21 @@ export async function consumeOpenAICompatibleStream(
     reader.releaseLock()
   }
 
-  if (!receivedTerminal) throw new OpenAICompatibleProtocolError()
+  if (!receivedTerminal) throw new ChatCompletionsProtocolError()
   const completedToolCalls = finalizeToolCalls(toolCalls)
   // Some local runtimes report `stop` even when the turn ended in tool calls.
   if (completedToolCalls.length > 0) return { finishReason: 'tool-calls', toolCalls: completedToolCalls }
-  if (finishReason === 'tool-calls') throw new OpenAICompatibleProtocolError()
+  if (finishReason === 'tool-calls') throw new ChatCompletionsProtocolError()
   return { finishReason: finishReason ?? 'unknown' }
 }
 
 function accumulateToolCall(calls: Map<number, PartialToolCall>, value: unknown) {
   const fragment = asRecord(value)
-  if (!fragment) throw new OpenAICompatibleProtocolError()
+  if (!fragment) throw new ChatCompletionsProtocolError()
   const index = typeof fragment.index === 'number' && Number.isInteger(fragment.index) && fragment.index >= 0
     ? fragment.index
     : calls.size
-  if (index >= AGENT_TOOL_LIMITS.toolCallsPerStep) throw new OpenAICompatibleProtocolError()
+  if (index >= AGENT_TOOL_LIMITS.toolCallsPerStep) throw new ChatCompletionsProtocolError()
   const current = calls.get(index) ?? { id: '', name: '', arguments: '' }
   const nativeFunction = asRecord(fragment.function)
   if (typeof fragment.id === 'string' && fragment.id) current.id = fragment.id
@@ -157,7 +157,7 @@ function accumulateToolCall(calls: Map<number, PartialToolCall>, value: unknown)
     current.id.length > AGENT_TOOL_LIMITS.toolCallIdCharacters
     || current.name.length > AGENT_TOOL_LIMITS.toolNameCharacters
     || current.arguments.length > AGENT_TOOL_LIMITS.toolArgumentCharacters
-  ) throw new OpenAICompatibleProtocolError()
+  ) throw new ChatCompletionsProtocolError()
   calls.set(index, current)
 }
 
@@ -165,16 +165,16 @@ function finalizeToolCalls(calls: Map<number, PartialToolCall>): AgentToolCall[]
   return [...calls.entries()]
     .sort(([left], [right]) => left - right)
     .map(([index, call]) => {
-      if (!call.name) throw new OpenAICompatibleProtocolError()
+      if (!call.name) throw new ChatCompletionsProtocolError()
       return { id: call.id || `call_${index}`, name: call.name, arguments: call.arguments || '{}' }
     })
 }
 
-export async function readBoundedJson(response: Response, maxBytes = OPENAI_COMPATIBLE_LIMITS.modelsResponseBytes): Promise<unknown> {
-  if (!response.body) throw new OpenAICompatibleProtocolError()
+export async function readBoundedJson(response: Response, maxBytes = CHAT_COMPLETIONS_LIMITS.modelsResponseBytes): Promise<unknown> {
+  if (!response.body) throw new ChatCompletionsProtocolError()
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
   if (!contentType.includes('json') && !contentType.includes('text/plain')) {
-    throw new OpenAICompatibleProtocolError('Tipo de conteúdo inesperado.')
+    throw new ChatCompletionsProtocolError('Tipo de conteúdo inesperado.')
   }
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
@@ -186,7 +186,7 @@ export async function readBoundedJson(response: Response, maxBytes = OPENAI_COMP
       if (done) break
       bytes += value.byteLength
       if (bytes > maxBytes) {
-        throw new OpenAICompatibleProtocolError()
+        throw new ChatCompletionsProtocolError()
       }
       content += decoder.decode(value, { stream: true })
     }
@@ -194,8 +194,8 @@ export async function readBoundedJson(response: Response, maxBytes = OPENAI_COMP
     return JSON.parse(content)
   } catch (error) {
     void reader.cancel().catch(() => undefined)
-    if (error instanceof OpenAICompatibleProtocolError) throw error
-    throw new OpenAICompatibleProtocolError()
+    if (error instanceof ChatCompletionsProtocolError) throw error
+    throw new ChatCompletionsProtocolError()
   } finally {
     reader.releaseLock()
   }

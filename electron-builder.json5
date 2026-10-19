@@ -66,6 +66,6 @@
     "syncDesktopName": true,
     "category": "Development",
     "synopsis": "Workspace desktop local para engenharia assistida por IA",
-    "description": "Workspace independente para desenvolvimento assistido por IA, com suporte ao Codex CLI e Providers configuráveis."
+    "description": "Workspace independente para desenvolvimento assistido por IA, com qualquer Provider configurável pelo usuário."
   }
 }

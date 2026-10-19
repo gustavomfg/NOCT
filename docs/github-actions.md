@@ -1,8 +1,8 @@
 # GitHub Actions and releases
 
 Nocturne Studio has one maintainer. Normal CI and releases run only on GitHub-hosted
-Linux, Windows and macOS runners. No authenticated personal Codex session, local
-Actions runner or independent reviewer is required for a stable release.
+Linux, Windows and macOS runners. No personal AI account, local Actions runner or
+independent reviewer is required for a stable release.
 
 ## Normal release
 
@@ -52,10 +52,6 @@ force-move it or touch a published version.
 - **Security · dependencies** and CodeQL remain automated security signals.
 - Native rollback, recovery and updater rehearsals remain separate automated
   validation workflows where applicable.
-- `npm run smoke:codex` is an optional local diagnostic for a maintainer with an
-  authenticated Codex CLI. It exercises the real App Server and writes a
-  sanitized report. It is not a release prerequisite. Deterministic Codex
-  contract tests remain in `npm test` and run on GitHub-hosted CI.
 
 The historical v1.0.1 cross-platform backfill was a one-time recovery. The
 stable workflow now publishes the full platform inventory in one run and does

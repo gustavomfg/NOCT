@@ -9,7 +9,7 @@ import { startUpdateService, type UpdateService } from './updates/UpdateService'
 import { ModelRegistry } from './ai/ModelRegistry'
 import { ProviderRegistry } from './ai/ProviderRegistry'
 import { ProviderConfigurationService } from './ai/ProviderConfigurationService'
-import { OpenAICompatibleAdapterFactory } from './ai/providers/openai-compatible/factory'
+import { ChatCompletionsAdapterFactory } from './ai/providers/chat-completions/factory'
 import { ProviderCredentialVault } from './security/ProviderCredentialVault'
 import { ElectronCredentialEncryption } from './security/ElectronCredentialEncryption'
 import { ModelCatalogService } from './ai/ModelCatalogService'
@@ -354,7 +354,7 @@ async function initializeServices() {
       new ElectronCredentialEncryption(),
     ),
     providerRegistry,
-    new OpenAICompatibleAdapterFactory(modelRegistry),
+    new ChatCompletionsAdapterFactory(modelRegistry),
     (id) => {
       database!.modelCatalog.deleteProviderModels(id)
       modelRegistry!.deleteProviderModels(id)

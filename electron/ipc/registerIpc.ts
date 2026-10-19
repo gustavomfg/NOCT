@@ -19,10 +19,8 @@ import { ModelRegistry } from '../ai/ModelRegistry'
 import { ProviderRegistry } from '../ai/ProviderRegistry'
 import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
 import { persistCompletedTurn } from '../ai/TurnPersistence'
-import { CodexAccountService } from '../codex/CodexAccountService'
 import { BuildRollbackService } from '../ai/BuildRollbackService'
 import { DocumentUpdateService } from '../documents/DocumentUpdateService'
-import { registerCodexIpc } from './registerCodexIpc'
 import { registerFilesIpc } from './registerFilesIpc'
 import { registerDiagnosticsIpc } from './registerDiagnosticsIpc'
 import { registerAiIpc } from './registerAiIpc'
@@ -291,7 +289,6 @@ export function registerIpc(
   const changeDecisions = new ChangeDecisionService(database.changeSets, snapshotRollback)
   const changeHunks = new ChangeHunkService(checkpoints, changeDiffs, database.changeSets)
   const documentUpdates = new DocumentUpdateService()
-  const codexAccount = new CodexAccountService()
   const aiExecutions = new AiExecutionCoordinator(
     win,
     modelRegistry,
@@ -303,7 +300,7 @@ export function registerIpc(
       if (snapshot.mode === 'build') {
         if (snapshot.executionId) {
           try {
-            const captured = await changeControl.complete(snapshot.executionId, snapshot.workspace, 'codex-command')
+            const captured = await changeControl.complete(snapshot.executionId, snapshot.workspace, 'agent-command')
             if (captured) persistExecutionDecision(database, snapshot.executionId, captured.changeSet.status)
           } catch (error) {
             database.executionEvidence.createError({
@@ -316,13 +313,11 @@ export function registerIpc(
       }
       return persisted
     },
-    (conversationId, threadId) => database.setConversationCodexThread(conversationId, threadId),
     undefined,
     undefined,
     (executionId, lifecycle) => persistExecutionLifecycle(database, executionId, lifecycle),
   )
 
-  const disposeCodex = registerCodexIpc(win, codexAccount, aiExecutions, ipcMain)
   const disposeFiles = registerFilesIpc(win, database, ipcMain)
   const disposeDiagnostics = registerDiagnosticsIpc(win, logger, providerConfigurations, modelRegistry, ipcMain, () => ({ index: projectIndex.getMetrics(), semanticIndex: semanticIndex.getMetrics(), validation: validation.getMetrics(), changeControl: changeControl.getMetrics(), engineering: engineeringSignals?.getMetrics() ?? null }))
   const disposeAi = registerAiIpc(
@@ -370,7 +365,6 @@ export function registerIpc(
       disposeProviders(),
       disposeModels(),
       disposeClipboard(),
-      disposeCodex(),
       disposeFiles(),
       disposeDiagnostics(),
       disposeAi(),
@@ -421,7 +415,7 @@ function createSemanticEmbeddingOperations(
             providerId: model.providerId,
             modelId: model.modelId,
             modelVersion: model.version ?? null,
-            // Some OpenAI-compatible endpoints do not advertise dimensions.
+            // Some Chat Completions endpoints do not advertise dimensions.
             // The first valid response establishes the dimension for the local index.
             dimensions: 0,
           },

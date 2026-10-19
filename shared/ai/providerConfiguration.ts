@@ -1,4 +1,4 @@
-export const providerConfigurationTypes = ['openai-compatible'] as const
+export const providerConfigurationTypes = ['chat-completions'] as const
 
 export const PROVIDER_CONFIGURATION_LIMITS = {
   identifierCharacters: 512,

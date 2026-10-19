@@ -8,7 +8,7 @@ contain date, session, level, category, event and bounded operational data.
 Before writing, the logger removes credential, prompt, content, diff and raw
 output fields; masks known token and authorization-header patterns; bounds
 strings, lists, objects and nesting; and uses local rotation with restrictive
-permissions. Raw Codex App Server traffic is not stored.
+permissions. Raw Provider request and response bodies are not stored.
 
 In **Settings > Diagnostics**, users can copy or export a sanitized report with
 application/runtime versions, platform, architecture, session identifier,

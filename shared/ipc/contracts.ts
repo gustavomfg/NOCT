@@ -1,4 +1,4 @@
-import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, BuildRollbackStatus, CodexAccountStatus, CollectionPage, Conversation, DocumentUpdatePreview, FilePreview, GitInfo, Message, MessagePage, RendererPerformanceStats, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
+import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, BuildRollbackStatus, CollectionPage, Conversation, DocumentUpdatePreview, FilePreview, GitInfo, Message, MessagePage, RendererPerformanceStats, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
 import type { DiscoveryExclusion, ProjectExport, ProjectImport, ProjectIndexFile, ProjectIndexStatus, ProjectIndexSummary, ProjectSymbol, StackEvidence, ValidationKind, ValidationRun } from '../codeIntelligence'
 import type { ChangeHunkRecord, ChangeRecord, ChangeSetRecord, FileDiff } from '../changeControl'
 import type { ReviewComparison } from '../suggestions'
@@ -11,7 +11,6 @@ import type {
 } from '../ai/providerConfiguration'
 import type { ModelDescriptor } from '../ai/model'
 import type { WorkspaceModelBindings } from '../ai/bindings'
-import type { CodexModel } from '../codexModels'
 import type { JsonValue } from '../json'
 import type { AgentStatusEvent } from '../agentLifecycle'
 import type { UpdateState } from '../updates'
@@ -87,8 +86,7 @@ export interface NocturneApi {
     onChanged(listener: (value: { executionId: string; changeSetId: string }) => void): () => void
   }
   conversations: { list(): Promise<Conversation[]>; page(offset?: number, limit?: number): Promise<CollectionPage<Conversation>>; create(workspace: string): Promise<Conversation>; messages(id: string): Promise<Message[]>; messagePage(id: string, offset?: number, limit?: number): Promise<MessagePage>; delete(id: string): Promise<void> }
-  ai: { send(conversationId: string, prompt: string, attachments?: string[], mode?: AgentMode): Promise<void>; cancel(conversationId: string): Promise<void>; saveAssistant(conversationId: string, content: string, metadata?: JsonValue): Promise<Message>; approve(key: string, accepted: boolean, forSession?: boolean): Promise<void>; rollbackStatus(conversationId: string): Promise<BuildRollbackStatus>; rollback(conversationId: string): Promise<{ restored: string[] } | null>; onEvent(listener: (event: AgentEvent) => void): () => void; onStatus(listener: (status: AgentStatusEvent) => void): () => void }
-  codex: { status(): Promise<CodexAccountStatus>; login(): Promise<CodexAccountStatus>; logout(): Promise<CodexAccountStatus>; models(): Promise<CodexModel[]> }
+  ai: { send(conversationId: string, prompt: string, attachments?: string[], mode?: AgentMode): Promise<void>; cancel(conversationId: string): Promise<void>; saveAssistant(conversationId: string, content: string, metadata?: JsonValue): Promise<Message>; approve(key: string, accepted: boolean): Promise<void>; rollbackStatus(conversationId: string): Promise<BuildRollbackStatus>; rollback(conversationId: string): Promise<{ restored: string[] } | null>; onEvent(listener: (event: AgentEvent) => void): () => void; onStatus(listener: (status: AgentStatusEvent) => void): () => void }
   files: { attach(conversationId: string): Promise<Attachment[]>; open(conversationId: string, filePath: string, action: 'file' | 'folder' | 'editor'): Promise<void>; preview(conversationId: string, filePath: string): Promise<FilePreview> }
   memory: { get(conversationId: string): Promise<WorkspaceMemory>; set(conversationId: string, content: string, rules: string): Promise<WorkspaceMemory> }
   brain: {

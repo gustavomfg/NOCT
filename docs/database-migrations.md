@@ -54,8 +54,9 @@ a restauração falhar, eles voltam aos caminhos originais.
 | 29 | Registro explícito de operações interrompidas para reconciliação no startup |
 | 30 | Registro de manifests de evidência do estado observado do workspace |
 | 31 | Chaves compostas por workspace nas relações import/export, com cópia das relações existentes para as tabelas derivadas migradas |
+| 32 | Protocolo `chat-completions`, origens genéricas do agente e remoção dos campos obsoletos do CLI; IDs, credenciais, conversas e decisões preservados |
 
-O schema atual é **31**. A reserva de uma decisão e sua persistência terminal
+O schema atual é **32**. A reserva de uma decisão e sua persistência terminal
 não tornam filesystem e SQLite uma transação única. Journals e bytes privados
 de rollback são evidência operacional, não estão no backup JSON de conteúdo e
 não autorizam replay automático após restart. Consulte
@@ -65,3 +66,7 @@ não autorizam replay automático após restart. Consulte
 As migrações são progressivas. Reversão para uma versão antiga do aplicativo
 deve usar um backup criado por essa versão; não se remove schema novo
 silenciosamente.
+
+Backups antigos continuam aceitos: o tipo legado do Provider é convertido para
+`chat-completions`; identificadores de thread e configurações do CLI são
+validados e descartados na importação. Migrações históricas permanecem intactas.

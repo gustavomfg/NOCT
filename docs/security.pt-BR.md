@@ -16,8 +16,9 @@
 Caminhos são normalizados e contidos no workspace explicitamente selecionado.
 Leituras limitadas rejeitam traversal, caminhos absolutos externos e escapes por
 symlink na fronteira de arquivo relevante. Workspaces restaurados ficam sem
-autorização até nova seleção. Review é somente leitura. Build usa sandbox Codex
-limitado ao workspace, rede desabilitada e aprovações explícitas.
+autorização até nova seleção. Review é somente leitura. As escritas do Build
+ficam limitadas ao workspace, e todo comando exige aprovação explícita e roda
+sem shell.
 
 Validação é uma solicitação explícita para rodar um comando escolhido pelas
 evidências do stack em um workspace autorizado. O renderer não pode fornecer
@@ -29,22 +30,21 @@ projeto com os privilégios do sistema operacional do desenvolvedor. Ela não é
 um sandbox do sistema operacional.
 
 No POSIX, processos supervisionados de validação, Git, exportação de documentos
-e Codex usam grupo de processo dedicado; o cancelamento pede o encerramento do
+e comandos do agente usam grupo de processo dedicado; o cancelamento pede o encerramento do
 grupo antes de escalar. No Windows, a primitiva Node só alcança o filho direto;
 um timeout de validação cujo encerramento final não puder ser confirmado é
 registrado como falha incerta, não como cancelamento bem-sucedido. Um terminal
 destacado aberto para o usuário fica intencionalmente fora da propriedade de
 ciclo de vida do Nocturne.
 
-Providers OpenAI-compatible remotos exigem HTTPS, recusam redirects e validam
+Providers Chat Completions remotos exigem HTTPS, recusam redirects e validam
 todos os endereços resolvidos antes de fixar a conexão. HTTP sem TLS só é aceito
 para serviços locais em loopback.
 
 ## Credenciais e dados locais
 
 Chaves de Provider são cifradas com `safeStorage` do Electron, referenciadas por
-identificadores opacos e excluídas de backups e diagnósticos. A sessão ChatGPT
-continua no cofre do próprio Codex CLI. SQLite, WAL/SHM, snapshots, contexto do
+identificadores opacos e excluídas de backups e diagnósticos. SQLite, WAL/SHM, snapshots, contexto do
 workspace e arquivos de credencial usam permissões restritivas quando a
 plataforma oferece essa capacidade. Logs são sanitizados e o diagnóstico
 detalhado é opt-in.
@@ -56,5 +56,4 @@ produção do Electron. Releases estáveis exigem verificação de checksum e
 assinatura de plataforma somente onde a política de release afirma isso:
 atualmente o Linux tem manifesto de checksum assinado por GPG no ambiente
 protegido, enquanto Windows e macOS não têm assinatura nem notarização. Também
-é executado o smoke do contrato Codex no commit exato da tag. Isso reduz riscos,
-mas não constitui certificação de segurança.
+Isso reduz riscos, mas não constitui certificação de segurança.

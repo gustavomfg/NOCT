@@ -3,22 +3,22 @@ import { ProviderExecutionError } from '../electron/ai/ProviderExecutionError'
 import {
   createPinnedLookup,
   createRemoteProviderTransport,
-  OpenAICompatibleProviderAdapter,
-} from '../electron/ai/providers/openai-compatible/adapter'
-import { OpenAICompatibleAdapterFactory } from '../electron/ai/providers/openai-compatible/factory'
+  ChatCompletionsProviderAdapter,
+} from '../electron/ai/providers/chat-completions/adapter'
+import { ChatCompletionsAdapterFactory } from '../electron/ai/providers/chat-completions/factory'
 import { ModelRegistry } from '../electron/ai/ModelRegistry'
 import {
   isPublicRemoteAddress,
-  parseOpenAICompatibleConfig,
+  parseChatCompletionsConfig,
   providerEndpoint,
-} from '../electron/ai/providers/openai-compatible/config'
+} from '../electron/ai/providers/chat-completions/config'
 import type { ModelDescriptor } from '../shared/ai/model'
 import type { ProviderExecutionRequest } from '../shared/ai/providerExecution'
 import type { NormalizedTask } from '../shared/ai/task'
 import type { EmbeddingRequest } from '../shared/ai/embedding'
 
 const model: ModelDescriptor = {
-  providerId: 'custom-openai',
+  providerId: 'custom-provider',
   modelId: 'model-1',
   displayName: 'Model 1',
   source: 'remote',
@@ -34,8 +34,8 @@ const embeddingModel: ModelDescriptor = {
 }
 
 const config = {
-  id: 'custom-openai',
-  displayName: 'Custom OpenAI',
+  id: 'custom-provider',
+  displayName: 'Custom Provider',
   source: 'remote' as const,
   baseUrl: 'https://provider.example/v1',
   timeoutMs: 10_000,
@@ -86,7 +86,7 @@ function adapter(
     models?: readonly unknown[]
   } = {},
 ) {
-  return new OpenAICompatibleProviderAdapter({
+  return new ChatCompletionsProviderAdapter({
     config: overrides.config ?? config,
     models: overrides.models ?? [model],
     resolveCredential: overrides.credential ?? (() => 'secret-key'),
@@ -107,9 +107,9 @@ function sse(events: string[], splitAt?: number) {
   }), { headers: { 'content-type': 'text/event-stream; charset=utf-8' } })
 }
 
-describe('OpenAI-compatible configuration', () => {
+describe('Chat Completions configuration', () => {
   it('normaliza endpoints HTTPS e preserva um path de API explícito', () => {
-    const parsed = parseOpenAICompatibleConfig(config)
+    const parsed = parseChatCompletionsConfig(config)
     expect(parsed.baseUrl).toBe('https://provider.example/v1')
     expect(providerEndpoint(parsed, 'models').href).toBe(
       'https://provider.example/v1/models',
@@ -123,17 +123,17 @@ describe('OpenAI-compatible configuration', () => {
   })
 
   it('permite HTTP somente para Provider local em loopback', () => {
-    expect(() => parseOpenAICompatibleConfig({
+    expect(() => parseChatCompletionsConfig({
       ...config,
       source: 'local',
       baseUrl: 'http://127.0.0.1:1234/v1/',
       requiresAuthentication: false,
     })).not.toThrow()
-    expect(() => parseOpenAICompatibleConfig({
+    expect(() => parseChatCompletionsConfig({
       ...config,
       baseUrl: 'http://provider.example/v1',
     })).toThrow(/somente.*locais.*loopback/i)
-    expect(() => parseOpenAICompatibleConfig({
+    expect(() => parseChatCompletionsConfig({
       ...config,
       baseUrl: 'https://169.254.169.254/latest',
     })).toThrow(/locais ou reservados/i)
@@ -145,7 +145,7 @@ describe('OpenAI-compatible configuration', () => {
     'https://provider.example/v1?token=secret',
     'https://provider.example/v1#fragment',
   ])('recusa endpoint inseguro %s', (baseUrl) => {
-    expect(() => parseOpenAICompatibleConfig({ ...config, baseUrl })).toThrow()
+    expect(() => parseChatCompletionsConfig({ ...config, baseUrl })).toThrow()
   })
 
   it.each([
@@ -177,11 +177,11 @@ describe('OpenAI-compatible configuration', () => {
   })
 })
 
-describe('OpenAICompatibleAdapterFactory', () => {
+describe('ChatCompletionsAdapterFactory', () => {
   it('normaliza configuração persistente sem vazar campos de lifecycle ao adapter', () => {
-    const factory = new OpenAICompatibleAdapterFactory(new ModelRegistry())
+    const factory = new ChatCompletionsAdapterFactory(new ModelRegistry())
     const normalized = factory.normalize({
-      providerType: 'openai-compatible',
+      providerType: 'chat-completions',
       displayName: 'Custom',
       source: 'remote',
       baseUrl: 'https://provider.example/v1/',
@@ -196,7 +196,7 @@ describe('OpenAICompatibleAdapterFactory', () => {
       async () => undefined,
     )
     expect(adapter.definition).toMatchObject({
-      protocol: 'OpenAI-compatible',
+      protocol: 'Chat Completions',
       version: 'v1',
       capabilities: {
         modelDiscovery: true,
@@ -213,7 +213,7 @@ describe('OpenAICompatibleAdapterFactory', () => {
   })
 })
 
-describe('OpenAI-compatible remote transport', () => {
+describe('Chat Completions remote transport', () => {
   it('recusa respostas DNS privadas ou mistas antes de abrir a conexão', async () => {
     const requestAddress = vi.fn().mockResolvedValue(Response.json({}))
     const privateTransport = createRemoteProviderTransport(
@@ -267,7 +267,7 @@ describe('OpenAI-compatible remote transport', () => {
   })
 })
 
-describe('OpenAI-compatible embeddings', () => {
+describe('Chat Completions embeddings', () => {
   it('envia somente entradas normalizadas e ordena vetores pelo índice', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
       data: [
@@ -316,7 +316,7 @@ describe('OpenAI-compatible embeddings', () => {
   })
 })
 
-describe('OpenAICompatibleProviderAdapter', () => {
+describe('ChatCompletionsProviderAdapter', () => {
   it('valida autenticação e catálogo com resposta limitada', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({ object: 'list', data: [{ id: 'model-1' }] }),
@@ -363,7 +363,7 @@ describe('OpenAICompatibleProviderAdapter', () => {
     expect(discovered).toEqual([
       model,
       {
-        providerId: 'custom-openai',
+        providerId: 'custom-provider',
         modelId: 'new-model',
         displayName: 'Novo modelo',
         source: 'remote',

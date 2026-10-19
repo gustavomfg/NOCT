@@ -4,10 +4,10 @@ import type {
 import { providerConfigurationInputSchema } from '../../../../shared/ai/providerConfigurationSchemas'
 import type { ConfiguredProviderAdapterFactory } from '../../ProviderConfigurationService'
 import { ModelRegistry } from '../../ModelRegistry'
-import { OpenAICompatibleProviderAdapter } from './adapter'
-import { parseOpenAICompatibleConfig } from './config'
+import { ChatCompletionsProviderAdapter } from './adapter'
+import { parseChatCompletionsConfig } from './config'
 
-export class OpenAICompatibleAdapterFactory implements ConfiguredProviderAdapterFactory {
+export class ChatCompletionsAdapterFactory implements ConfiguredProviderAdapterFactory {
   constructor(
     private readonly models: ModelRegistry,
     private readonly request?: typeof fetch,
@@ -15,7 +15,7 @@ export class OpenAICompatibleAdapterFactory implements ConfiguredProviderAdapter
 
   normalize(input: unknown): ProviderConfigurationInput {
     const parsed = providerConfigurationInputSchema.parse(input)
-    const normalized = parseOpenAICompatibleConfig({
+    const normalized = parseChatCompletionsConfig({
       id: 'provider-validation',
       ...toAdapterConfig(parsed),
     })
@@ -30,7 +30,7 @@ export class OpenAICompatibleAdapterFactory implements ConfiguredProviderAdapter
     input: ProviderConfigurationInput,
     resolveCredential: () => Promise<string | undefined>,
   ) {
-    return new OpenAICompatibleProviderAdapter({
+    return new ChatCompletionsProviderAdapter({
       config: { id, ...toAdapterConfig(input) },
       models: this.models.list({ providerId: id }),
       resolveCredential,

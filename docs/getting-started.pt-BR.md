@@ -6,10 +6,9 @@
 2. Selecione uma pasta de projeto. A seleção explícita autoriza somente essa
    raiz.
 3. Abra **Configurações > IA**.
-4. Clique em **Conectar uma IA** e escolha qualquer serviço: chave de API
-   (OpenAI, Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI), runtime local
-   (Ollama, LM Studio), qualquer URL compatível com OpenAI ou, opcionalmente,
-   uma conta ChatGPT por um Codex CLI instalado.
+4. Clique em **Conectar uma IA** e escolha um serviço: chave de API (Gemini,
+   OpenRouter, DeepSeek, Groq, Mistral, xAI), runtime local (Ollama, LM Studio)
+   ou qualquer endpoint que implemente chat completions.
 5. Escolha um modelo para o workspace. O indicador de IA abaixo da caixa de
    mensagem mostra o serviço e o modelo ativos.
 6. Crie uma conversa e comece em Review Mode para uma análise somente leitura.

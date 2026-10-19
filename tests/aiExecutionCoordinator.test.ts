@@ -8,7 +8,6 @@ import type { NormalizedTaskInput } from '../shared/ai/task'
 import type { ProviderExecutionControl, ProviderExecutionRequest } from '../shared/ai/providerExecution'
 import { FakeProviderAdapter } from './helpers/FakeProviderAdapter'
 import { providerDefinition } from './helpers/providerDefinition'
-import { CodexClient } from '../electron/codex/CodexClient'
 
 const descriptor: ModelDescriptor = { providerId: 'fake', modelId: 'model', displayName: 'Fake', source: 'local', capabilities: ['chat', 'streaming'], availability: 'available' }
 const bindings: WorkspaceModelBindings = { workspaceId: '/workspace', defaultBinding: { providerId: 'fake', modelId: 'model' } }
@@ -53,20 +52,6 @@ function testLogger() {
 }
 
 describe('AiExecutionCoordinator', () => {
-  it.each(['models', 'protocol'] as const)('recusa uma solicitação %s atrasada após dispose sem reabrir o transporte', async (kind) => {
-    const codex = new CodexClient()
-    vi.spyOn(codex, 'stop').mockResolvedValue(undefined)
-    const models = vi.spyOn(codex, 'listModels').mockImplementation(async () => { throw new Error('probe admitted after disposal') })
-    const protocol = vi.spyOn(codex, 'checkExecutionContract').mockImplementation(async () => { throw new Error('probe admitted after disposal') })
-    const { win } = testWindow()
-    const coordinator = new AiExecutionCoordinator(win as never, new ModelRegistry(), new ProviderRegistry(), testLogger() as never, new Map(), vi.fn(), undefined, undefined, undefined, undefined, codex)
-    await coordinator.dispose()
-    const request = Promise.resolve().then(async () => kind === 'models' ? await coordinator.listCodexModels() : await coordinator.checkCodexProtocol())
-    await expect(request).rejects.toThrow(/encerrado/i)
-    expect(models).not.toHaveBeenCalled()
-    expect(protocol).not.toHaveBeenCalled()
-  })
-
   it('revoga o signal de Provider no dispose sem persistir conclusão tardia', async () => {
     const models = new ModelRegistry(); models.register(descriptor)
     const providers = new ProviderRegistry()
@@ -81,22 +66,6 @@ describe('AiExecutionCoordinator', () => {
     expect(provider.controls[0].signal.aborted).toBe(true)
     await Promise.resolve()
     expect(finalize).not.toHaveBeenCalled()
-  })
-
-  it('entrega ao shutdown a conclusão do cleanup Codex sem inventar término síncrono', async () => {
-    const codex = new CodexClient()
-    let release!: () => void
-    const cleanup = new Promise<void>((resolve) => { release = resolve })
-    vi.spyOn(codex, 'dispose').mockReturnValue(cleanup)
-    const { win } = testWindow()
-    const coordinator = new AiExecutionCoordinator(win as never, new ModelRegistry(), new ProviderRegistry(), testLogger() as never, new Map(), vi.fn(), undefined, undefined, undefined, undefined, codex)
-    const disposed = coordinator.dispose()
-    expect(disposed).toBe(cleanup)
-    expect(coordinator.dispose()).toBe(cleanup)
-    expect(codex.listenerCount('event')).toBe(0)
-    release()
-    await disposed
-    expect(codex.dispose).toHaveBeenCalledOnce()
   })
 
   it('persiste a resposta antes de publicar a conclusão ao renderer', async () => {
@@ -118,7 +87,7 @@ describe('AiExecutionCoordinator', () => {
     const { sent, win } = testWindow()
     const models = new ModelRegistry(); models.register(descriptor)
     const providers = new ProviderRegistry(); providers.register(new FakeProviderAdapter([descriptor], { events: [{ type: 'message.delta', messageId: 'assistant', delta: 'Resposta.' }] }))
-    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), vi.fn(() => ({ message: { id: 'message-2', conversationId: 'conversation-1', role: 'assistant' as const, content: 'Resposta.', metadata: null, createdAt: '2026-07-29T10:00:00.000Z' } })), undefined, () => 'run-1', () => new Date('2026-07-29T10:00:00.000Z'))
+    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), vi.fn(() => ({ message: { id: 'message-2', conversationId: 'conversation-1', role: 'assistant' as const, content: 'Resposta.', metadata: null, createdAt: '2026-07-29T10:00:00.000Z' } })), () => 'run-1', () => new Date('2026-07-29T10:00:00.000Z'))
 
     await coordinator.startProvider('conversation-1', task, bindings)
     await vi.waitFor(() => expect(sent.some(({ channel, payload }) => channel === 'ai:event' && payload.method === 'turn/completed')).toBe(true))
@@ -138,7 +107,7 @@ describe('AiExecutionCoordinator', () => {
     const models = new ModelRegistry(); models.register(descriptor)
     const providers = new ProviderRegistry(); providers.register(new FakeProviderAdapter([descriptor], { error: { code: 'rate-limited', message: 'Limite temporário.', retryable: true } }))
     const finalize = vi.fn((snapshot: { conversationId: string }) => ({ message: { id: `failed-${finalize.mock.calls.length + 1}`, conversationId: snapshot.conversationId, role: 'assistant' as const, content: '', metadata: null, createdAt: '2026-07-29T10:00:00.000Z' } }))
-    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, undefined, () => `run-error-${finalize.mock.calls.length + 1}`, () => new Date('2026-07-29T10:00:00.000Z'))
+    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, () => `run-error-${finalize.mock.calls.length + 1}`, () => new Date('2026-07-29T10:00:00.000Z'))
 
     await coordinator.startProvider('conversation-1', task, bindings)
     await vi.waitFor(() => expect(finalize).toHaveBeenCalledOnce())
@@ -157,7 +126,7 @@ describe('AiExecutionCoordinator', () => {
     const models = new ModelRegistry(); models.register(descriptor)
     const providers = new ProviderRegistry(); providers.register(adapter)
     const finalize = vi.fn(() => ({ message: { id: 'cancelled-message', conversationId: 'conversation-1', role: 'assistant' as const, content: '', metadata: null, createdAt: '2026-07-29T10:00:00.000Z' } }))
-    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, undefined, () => 'run-cancel', () => new Date('2026-07-29T10:00:00.000Z'))
+    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, () => 'run-cancel', () => new Date('2026-07-29T10:00:00.000Z'))
 
     await coordinator.startProvider('conversation-1', task, bindings)
     await coordinator.cancel('conversation-1')
@@ -175,7 +144,7 @@ describe('AiExecutionCoordinator', () => {
     const models = new ModelRegistry(); models.register(descriptor)
     const providers = new ProviderRegistry(); providers.register(adapter)
     const finalize = vi.fn(() => ({ message: { id: 'preparation-cancelled', conversationId: 'conversation-1', role: 'assistant' as const, content: '', metadata: null, createdAt: '2026-07-29T10:00:00.000Z' } }))
-    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, undefined, () => 'run-preparation-cancel', () => new Date('2026-07-29T10:00:00.000Z'))
+    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, () => 'run-preparation-cancel', () => new Date('2026-07-29T10:00:00.000Z'))
 
     const starting = coordinator.startProvider('conversation-1', task, bindings)
     await coordinator.cancel('conversation-1')
@@ -194,7 +163,7 @@ describe('AiExecutionCoordinator', () => {
     const providers = new ProviderRegistry(); providers.register(adapter)
     const finalize = vi.fn((snapshot: { conversationId: string }) => ({ message: { id: `message-${finalize.mock.calls.length + 1}`, conversationId: snapshot.conversationId, role: 'assistant' as const, content: '', metadata: null, createdAt: '2026-07-29T10:00:00.000Z' } }))
     let runNumber = 0
-    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, undefined, () => `run-${++runNumber}`, () => new Date('2026-07-29T10:00:00.000Z'))
+    const coordinator = new AiExecutionCoordinator(win as never, models, providers, testLogger() as never, new Map(), finalize, () => `run-${++runNumber}`, () => new Date('2026-07-29T10:00:00.000Z'))
 
     await coordinator.startProvider('conversation-1', task, bindings)
     adapter.release(0)

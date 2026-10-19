@@ -30,8 +30,8 @@ conteúdo do workspace e informações pessoais.
 A política cobre o aplicativo desktop, as fronteiras Electron entre main,
 preload e renderer, validação IPC, autorização e contenção de workspaces,
 persistência e recuperação, integrações de Providers, armazenamento de
-credenciais e atualizações empacotadas. Providers externos e o Codex CLI têm
-suas próprias políticas.
+credenciais e atualizações empacotadas. Providers externos têm suas próprias
+políticas.
 
 A linha estável atual é `1.0.2`. Notas históricas de releases não prometem
 suporte a versões antigas.
@@ -44,12 +44,12 @@ suporte a versões antigas.
 - IPC valida origem, payload, taxa e autorização do workspace antes de iniciar
   operações nativas.
 - Review Mode é somente leitura. Build limita escritas ao workspace autorizado,
-  usa aprovações do Codex e desabilita rede no sandbox do agente.
+  exige aprovação explícita para cada comando, executado sem shell.
 - Caminhos do workspace são contidos e leituras limitadas rejeitam traversal e
   escapes por symlink quando a plataforma permite essa proteção.
 - Credenciais de Providers são cifradas pelo armazenamento seguro do sistema
   operacional, nunca retornam ao renderer e ficam fora de backups e diagnósticos.
-- Conexões remotas OpenAI-compatible exigem HTTPS, recusam redirects e validam
+- Conexões remotas com Providers exigem HTTPS, recusam redirects e validam
   endereços resolvidos para reduzir riscos de SSRF e DNS rebinding.
 - Builds empacotadas usam ASAR, validação de integridade embutida e fuses do
   Electron.

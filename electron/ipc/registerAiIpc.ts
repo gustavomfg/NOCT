@@ -8,7 +8,7 @@ import { IPC_CHANNELS } from '../../shared/ipc/channels'
 import { aiCancelSchema, aiSendSchema, approvalSchema, idSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
 import { WORKSPACE_READ_LIMITS } from '../../shared/constants'
 import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
-import { ContextAssemblyService, serializeContextSources } from '../ai/ContextAssemblyService'
+import { ContextAssemblyService } from '../ai/ContextAssemblyService'
 import { retainSerializedAwarenessSelections } from '../ai/ContextAwareness'
 import { isWorkspaceFileTooLarge, readWorkspaceFile } from '../security/ExecutionPolicy'
 import type { LocalDatabase } from '../database/Database'
@@ -18,7 +18,6 @@ import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
 import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
 import { createWorkspaceToolbox } from '../ai/agent/WorkspaceToolbox'
 import { CancellableProcessRunner } from '../validation/CancellableProcessRunner'
-import { selectAiEngine } from '../../shared/ai/engine'
 import { getAuthorizedConversation } from './conversationAccess'
 import { artifactType, assertInsideWorkspace } from './fileAccess'
 import { safeIpcMain, type SafeIpcMain } from './safeIpc'
@@ -64,9 +63,7 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
     const bindings = database.workspaceModelBindings.get(conversation.workspace)
     const defaultProviderId = bindings?.defaultBinding?.providerId
     const providerReady = Boolean(defaultProviderId && providerConfigurations.list().some((provider) => provider.enabled && provider.id === defaultProviderId))
-    const engine = selectAiEngine({ preference: settings.aiEngine, providerReady, legacyCodexModel: settings.model })
-    if (!engine) throw new Error('Nenhuma IA selecionada para este workspace. Abra Configurações → IA, conecte uma API ou um modelo local e escolha o modelo.')
-    const useCodex = engine === 'codex'
+    if (!bindings?.defaultBinding || !providerReady) throw new Error('Nenhuma IA selecionada para este workspace. Abra Configurações → IA, conecte uma API ou um modelo local e escolha o modelo.')
 
     const history = database.listRecentMessages(conversationId, AI_TASK_LIMITS.messages)
     const workspaceMemory = await loadWorkspaceMemoryForAi(database, conversation.workspace, readWorkspaceContext)
@@ -207,42 +204,9 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
       tools: [],
     }
 
-    if (useCodex) {
-      if (mode === 'build') {
-        await changeControl.begin(executionId, conversation.workspace)
-      }
-      try {
-        await aiExecutions.startCodex({
-          conversationId,
-          executionId,
-          workspace: conversation.workspace,
-          prompt,
-          initialPrompt: buildCodexPrompt(history, prompt),
-          attachments,
-          memory: serializeContextSources(assembledContext.sources),
-          mode,
-          threadId: conversation.codexThreadId,
-          settings: {
-            model: settings.model || '',
-            sandbox: mode === 'review' ? 'read-only' : 'workspace-write',
-            approvalPolicy: settings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request',
-            diagnosticMode: settings.diagnosticMode === 'true',
-            theme: settings.theme === 'light' ? 'light' : 'dark',
-          },
-        })
-      } catch (error) {
-        if (mode === 'build') {
-          changeControl.abort(executionId)
-        }
-        throw error
-      }
-      database.markBrainMemoriesUsed(brainMemory.memoryIds)
-      return
-    }
-
     if (mode === 'build') await changeControl.begin(executionId, conversation.workspace)
     try {
-      await aiExecutions.startProvider(conversationId, taskInput, bindings!, {
+      await aiExecutions.startProvider(conversationId, taskInput, bindings, {
         executionId,
         mode,
         createTools: (bridge) => createWorkspaceToolbox({
@@ -327,7 +291,7 @@ export function registerAiIpc(win: BrowserWindow, dependencies: AiIpcDependencie
 
   ipcMain.handle(IPC_CHANNELS.ai.approve, async (_event, value: unknown) => {
     const data = approvalSchema.parse(value)
-    await aiExecutions.resolveApproval(data.key, data.accepted, data.forSession)
+    await aiExecutions.resolveApproval(data.key, data.accepted)
     const detail = approvalDetails.get(data.key)
     database.recordApproval(data.key, data.accepted, detail?.command, detail?.risk)
     approvalDetails.delete(data.key)
@@ -341,11 +305,4 @@ async function loadWorkspaceMemoryForAi(database: LocalDatabase, workspace: stri
   const [files, persisted] = await Promise.all([readWorkspaceContext(workspace), Promise.resolve(database.getWorkspaceMemory(workspace))])
   if (persisted.content && Date.parse(persisted.updatedAt) > Date.parse(files.updatedAt)) return persisted
   return { content: `${files.content}\n\n# Regras do projeto\n${files.rules}`.trim(), updatedAt: files.updatedAt }
-}
-
-function buildCodexPrompt(history: ReturnType<LocalDatabase['listMessages']>, prompt: string) {
-  const recent = history.slice(-40)
-  if (!recent.length) return prompt
-  const transcript = recent.map((message) => `${message.role === 'assistant' ? 'Assistente' : 'Usuário'}: ${message.content}`).join('\n\n')
-  return `Histórico recente desta conversa:\n\n${transcript}\n\nSolicitação atual do usuário:\n\n${prompt}`
 }

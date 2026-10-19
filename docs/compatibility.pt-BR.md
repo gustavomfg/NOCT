@@ -35,12 +35,12 @@ substitui o smoke do pacote.
 
 ## Compatibilidade de IA
 
-- Codex CLI mínimo: `0.145.0`;
-- recomendado: `0.146.0`;
-- verificado: `0.145.0` e `0.146.0`;
-- versões novas exigem contrato de execução real bem-sucedido do App Server;
-- endpoints OpenAI-compatible remotos exigem HTTPS;
+- nenhum fornecedor de IA específico é exigido; o mínimo é um endpoint que liste
+  modelos e implemente chat completions com streaming;
+- o Build exige, além disso, um modelo com function calling;
+- endpoints remotos exigem HTTPS;
 - Ollama e LM Studio locais usam loopback.
 
 Não há adapters nativos dedicados para Anthropic, Gemini ou GitHub Copilot no
-contrato atual. O Codex App Server continua experimental.
+contrato atual; esses modelos são acessados por um gateway compatível ou por um
+preset de Provider.

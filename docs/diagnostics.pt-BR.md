@@ -9,7 +9,7 @@ operacionais limitados.
 Antes de gravar, o logger remove campos de credencial, prompt, conteúdo, diff e
 saída bruta; mascara padrões conhecidos de tokens e headers de autorização;
 limita strings, listas, objetos e profundidade; e usa rotação local com
-permissões restritivas. O tráfego bruto do Codex App Server não é armazenado.
+permissões restritivas. O corpo bruto das requisições e respostas do Provider não é armazenado.
 
 Em **Configurações > Diagnóstico**, é possível copiar ou exportar um relatório
 sanitizado com versões do aplicativo/runtimes, plataforma, arquitetura,

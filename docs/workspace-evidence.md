@@ -49,7 +49,7 @@ record. Refreshing records is not a new full filesystem verification.
 ## Deliberate limits
 
 There is no global workspace lock, consistent multi-file snapshot, tracing of
-Codex/tool reads, or proof against arbitrary writes after the last observation.
+tool reads, or proof against arbitrary writes after the last observation.
 Mutations while the app is closed may remain unknown until a relevant check or
 notification. Staleness does not rewrite historical task outcomes or health
 scores. This ledger makes their provenance limitations visible; it does not

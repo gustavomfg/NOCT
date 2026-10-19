@@ -16,9 +16,8 @@ Build pode modificar arquivos somente dentro do workspace autorizado e sob a
 política de aprovação ativa. Com um modelo de Provider, o agente usa as
 ferramentas de workspace do Nocturne: escritas ficam dentro da raiz autorizada
 (diretórios gerados, `.git`, `.nocturne` e prováveis segredos são recusados) e
-todo comando exige aprovação explícita e roda sem shell. Com o motor opcional
-Codex, o App Server recebe política de escrita no workspace com rede
-desabilitada. Progresso, aprovações, arquivos alterados e diffs permanecem
+todo comando exige aprovação explícita e roda sem shell. Progresso, aprovações,
+arquivos alterados e diffs permanecem
 visíveis.
 
 Rollback protegido só é oferecido quando o workspace estava limpo antes da

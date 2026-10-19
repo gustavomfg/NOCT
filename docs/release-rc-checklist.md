@@ -29,8 +29,6 @@ replace the protected stable-release or cross-platform backfill workflows.
 
 - [ ] Configure one supported provider and verify a successful request plus a
       controlled invalid-credential or unavailable-provider error.
-- [ ] On an authorized machine, run the Codex authenticated smoke flow with
-      CLI `0.145.0` or the verified `0.146.0` recommendation.
 - [ ] Restart the app and confirm conversations, settings, memory and workspace
       history remain available.
 - [ ] Create a backup, restore it in an isolated test, and verify semantic data

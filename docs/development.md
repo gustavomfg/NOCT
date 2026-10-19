@@ -6,7 +6,6 @@
 
 - Node.js `>=24.18 <25`;
 - npm `>=11 <12`;
-- Codex CLI minimum `0.145.0`; recommended `0.146.0`;
 - WebStorm is recommended and the `webstorm` launcher should be available in
   `PATH`;
 - native tooling compatible with the Electron ABI and `better-sqlite3`.
@@ -49,9 +48,7 @@ npm run rehearse:packaged-recovery
 ```
 
 The rehearsal commands use isolated temporary data and are release-engineering
-checks, not a replacement for signed release validation. `npm run smoke:codex`
-requires an authenticated Codex installation and should be run only in the
-authorized compatibility workflow.
+checks, not a replacement for signed release validation.
 
 Run `git diff --check` before submitting a change. Keep tests, contracts,
 preload APIs and documentation aligned when changing a native capability.

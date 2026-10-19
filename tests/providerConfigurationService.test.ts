@@ -24,7 +24,7 @@ const ids = [
 ]
 
 const remoteConfiguration: ProviderConfigurationInput = {
-  providerType: 'openai-compatible',
+  providerType: 'chat-completions',
   displayName: 'Remote Provider',
   source: 'remote',
   baseUrl: 'https://provider.example/v1',

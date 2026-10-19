@@ -84,7 +84,7 @@ function App() {
     return isBusy(state.status) || state.finalizing
   }, [])
   const settingsController = useSettingsController({ onClose: () => setSettingsOpen(false), onNotify: notify })
-  const { settings, initializeSettings, saveSettings, saveAiSelection } = settingsController
+  const { settings, initializeSettings, saveSettings } = settingsController
   const memoryController = useWorkspaceMemory({ onClose: () => setMemoryOpen(false), onNotify: notify })
   const { memory, setMemory, refreshMemory, loadMemory, clearMemory, saveMemory } = memoryController
   const collections = usePagedCollections(store.setError)
@@ -119,10 +119,10 @@ function App() {
     onRefreshMemory: refreshMemory,
     onNotify: notify,
   })
-  // Re-read when the settings dialog closes: bindings are saved from inside it.
-  const activeAi = useActiveAi(workspace, settings, settingsOpen)
-  // API providers have no persistent transport; only the optional Codex engine reports one.
-  const topbarStatus = store.status === 'disconnected' && activeAi.engine === 'provider' ? 'ready' : store.status
+  // Re-read when the settings dialog closes: the binding is saved from inside it.
+  const activeAi = useActiveAi(workspace, settingsOpen)
+  // Without a bound AI the topbar reports "Disconnected"; with one it is ready until a run starts.
+  const topbarStatus = activeAi && store.status === 'disconnected' ? 'ready' : store.status
   const projectIndex = useProjectIndexSession({ workspace, authorized: workspaceAuthorized, onError: store.setError })
   const engineeringConversationId = store.activeId
   const refreshSuggestions = collections.refreshSuggestions
@@ -290,13 +290,13 @@ function App() {
       {workspaceView === 'project-index' ? <div id="project-index-view" className="project-index-view"><ProjectIndexPanel {...projectIndexPanel} showTitle={false}/></div> : <>
         <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyHasNewer={historyHasNewer} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onLoadLatest={() => void loadLatestMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onRetryError={retryAvailableForActiveConversation ? retryLastAttempt : undefined} onJumpLatest={jumpToLatest}/>
 
-        <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} active={Boolean(store.activeId)} pendingApprovals={pendingApprovalCount} composerRef={composerRef} aiLabel={activeAi.label} onOpenAiSettings={() => setSettingsOpen(true)} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={removeAttachment} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
+        <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} active={Boolean(store.activeId)} pendingApprovals={pendingApprovalCount} composerRef={composerRef} aiLabel={activeAi} onOpenProviderSettings={() => setSettingsOpen(true)} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={removeAttachment} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
       </>}
     </main>
     {compactLayout && rightOpen && <button tabIndex={-1} className="panel-backdrop inspector-backdrop" aria-label={t('topbar.closeAgent')} onClick={() => setInspectorVisibility(false)}/>}
 
     <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} gitInfo={gitInfo} artifactsHaveMore={collections.artifactHasMore} suggestionsHaveMore={collections.suggestionHasMore} loadingCollection={collections.loading} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onLoadMoreArtifacts={() => void collections.loadMoreArtifacts()} onLoadMoreSuggestions={() => void collections.loadMoreSuggestions()} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, useAppStore.getState().planExplanation)} onPlanExecute={(plan) => preparePrompt(`${t('quick.executePlan')}\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
-    {confirmation.dialog}<AppOverlays settingsOpen={settingsOpen} settings={settings} workspaces={workspaces} memoryOpen={memoryOpen} memory={memory} preview={preview} onboardingOpen={onboardingOpen} helpOpen={helpOpen} activeId={store.activeId} workspace={workspace} onSettingsClose={() => setSettingsOpen(false)} onSaveSettings={saveSettings} onAiSelectionChange={saveAiSelection} onNotify={notify} onOpenOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }} onMemoryClose={() => setMemoryOpen(false)} onOpenBrain={() => { setMemoryOpen(false); setBrainOpen(true) }} onSaveMemory={saveMemory} onPreviewClose={resetPreview} onError={store.setError} onWorkspace={async () => { await selectWorkspace() }} onOpenSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onDismissOnboarding={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onCompleteOnboarding={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify(t('common.reloaded')); composerRef.current?.focus() }} onHelpClose={() => setHelpOpen(false)}/><Suspense fallback={null}>{brainOpen && store.activeId && <BrainMemoryDialog conversationId={store.activeId} onClose={() => setBrainOpen(false)} onNotify={notify}/>}</Suspense><UpdateSurface/>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label={t('common.close')} onClick={dismissNotice}><X size={14}/></button></div>}
+    {confirmation.dialog}<AppOverlays settingsOpen={settingsOpen} settings={settings} workspaces={workspaces} memoryOpen={memoryOpen} memory={memory} preview={preview} onboardingOpen={onboardingOpen} helpOpen={helpOpen} activeId={store.activeId} workspace={workspace} onSettingsClose={() => setSettingsOpen(false)} onSaveSettings={saveSettings} onNotify={notify} onOpenOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }} onMemoryClose={() => setMemoryOpen(false)} onOpenBrain={() => { setMemoryOpen(false); setBrainOpen(true) }} onSaveMemory={saveMemory} onPreviewClose={resetPreview} onError={store.setError} onWorkspace={async () => { await selectWorkspace() }} onOpenSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onDismissOnboarding={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onCompleteOnboarding={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify(t('common.reloaded')); composerRef.current?.focus() }} onHelpClose={() => setHelpOpen(false)}/><Suspense fallback={null}>{brainOpen && store.activeId && <BrainMemoryDialog conversationId={store.activeId} onClose={() => setBrainOpen(false)} onNotify={notify}/>}</Suspense><UpdateSurface/>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label={t('common.close')} onClick={dismissNotice}><X size={14}/></button></div>}
   </div>
 }
 

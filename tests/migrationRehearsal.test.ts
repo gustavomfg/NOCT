@@ -140,7 +140,7 @@ describe('ensaio histórico de migração 0.9.5-beta', () => {
       expect.objectContaining({ path: fixture.workspace, name: 'Fixture project', favorite: true, authorized: true }),
     ]))
     expect(migrated.listConversations()).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: fixture.ids.conversation, title: 'Conversa histórica', codexThreadId: 'thread-0-9-5' }),
+      expect.objectContaining({ id: fixture.ids.conversation, title: 'Conversa histórica' }),
     ]))
     expect(migrated.listMessages(fixture.ids.conversation)).toEqual([
       expect.objectContaining({ id: fixture.ids.message, content: 'Resposta preservada' }),

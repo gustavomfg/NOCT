@@ -105,17 +105,6 @@ describe('persistência SQLite', () => {
     expect(db.listArtifacts(conversation.id)).toEqual(artifactsBeforeRejection)
     db.close()
   })
-  it('persiste a thread Codex associada à conversa e a inclui no backup', () => {
-    const db = create()
-    const conversation = db.createConversation('/tmp/codex-session')
-    db.setConversationCodexThread(conversation.id, 'thread-persisted')
-    expect(db.getConversation(conversation.id)?.codexThreadId).toBe('thread-persisted')
-    expect(db.exportData().conversations).toContainEqual(expect.objectContaining({
-      id: conversation.id,
-      codex_thread_id: 'thread-persisted',
-    }))
-    db.close()
-  })
   it('relocaliza atomicamente todos os dados vinculados ao workspace', () => {
     const db = create()
     const source = '/tmp/project-before-move'
@@ -181,7 +170,7 @@ describe('persistência SQLite', () => {
     const db = create()
     const credentialReference = '9ba7e635-8746-48bd-a8e9-4609ff1690cb'
     const created = db.providerConfigurations.create({
-      providerType: 'openai-compatible',
+      providerType: 'chat-completions',
       displayName: 'OpenRouter',
       source: 'remote',
       baseUrl: 'https://openrouter.example/v1',
@@ -201,7 +190,7 @@ describe('persistência SQLite', () => {
     expect(db.providerConfigurations.setCredentialReference(created.id, credentialReference))
       .toMatchObject({ credentialConfigured: true })
     expect(() => db.providerConfigurations.create({
-      providerType: 'openai-compatible',
+      providerType: 'chat-completions',
       displayName: 'Duplicate credential owner',
       source: 'remote',
       baseUrl: 'https://other.example/v1',
@@ -212,7 +201,7 @@ describe('persistência SQLite', () => {
 
     const rotatedReference = 'f79c1a83-df07-4ff0-91d0-cf639fd0845e'
     const updated = db.providerConfigurations.update(created.id, {
-      providerType: 'openai-compatible',
+      providerType: 'chat-completions',
       displayName: 'OpenRouter local policy',
       source: 'remote',
       baseUrl: 'https://openrouter.example/v1',
@@ -340,7 +329,7 @@ describe('persistência SQLite', () => {
     recovered.close(); db.close()
   })
   it('exporta e importa um fluxo completo restaurável', () => {
-    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); const memory = source.createBrainMemory('/tmp/project', { kind: 'learning', scope: 'workspace', content: 'Backup preserva o Segundo Cérebro', status: 'active' }); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const provider = source.providerConfigurations.create({ providerType: 'openai-compatible', displayName: 'Backup Provider', source: 'remote', baseUrl: 'https://provider.example/v1', enabled: true, requiresAuthentication: true, timeoutMs: 30_000 }, '9ba7e635-8746-48bd-a8e9-4609ff1690cb'); source.modelCatalog.replaceProviderModels(model.providerId, [model]); source.workspaceModelBindings.set({ workspaceId: '/tmp/project', defaultBinding: { providerId: model.providerId, modelId: model.modelId } }); const data = source.exportData(); source.close()
+    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); const memory = source.createBrainMemory('/tmp/project', { kind: 'learning', scope: 'workspace', content: 'Backup preserva o Segundo Cérebro', status: 'active' }); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const provider = source.providerConfigurations.create({ providerType: 'chat-completions', displayName: 'Backup Provider', source: 'remote', baseUrl: 'https://provider.example/v1', enabled: true, requiresAuthentication: true, timeoutMs: 30_000 }, '9ba7e635-8746-48bd-a8e9-4609ff1690cb'); source.modelCatalog.replaceProviderModels(model.providerId, [model]); source.workspaceModelBindings.set({ workspaceId: '/tmp/project', defaultBinding: { providerId: model.providerId, modelId: model.modelId } }); const data = source.exportData(); source.close()
     expect(data.providerConfigs[0]).not.toHaveProperty('credential_ref')
     expect(JSON.stringify(data)).not.toContain('9ba7e635-8746-48bd-a8e9-4609ff1690cb')
     const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getBrainMemory(memory.id, '/tmp/project')?.content).toContain('Segundo Cérebro'); expect(target.listBrainMemoryHistory(memory.id, '/tmp/project')[0].action).toBe('created'); expect(target.retrieveBrainMemories('/tmp/project', conversation.id, 'backup')[0].id).toBe(memory.id); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); expect(target.providerConfigurations.get(provider.id)).toMatchObject({ displayName: 'Backup Provider', credentialConfigured: false }); expect(target.providerConfigurations.getCredentialReference(provider.id)).toBeNull(); expect(target.modelCatalog.list()).toEqual([model]); expect(target.workspaceModelBindings.get('/tmp/project')?.defaultBinding).toEqual({ providerId: model.providerId, modelId: model.modelId }); target.close()
@@ -357,7 +346,7 @@ describe('persistência SQLite', () => {
     target.createConversation('/tmp/local-project')
     target.setSettings({ model: 'modelo-local', diagnosticMode: 'true' })
     const provider = target.providerConfigurations.create({
-      providerType: 'openai-compatible',
+      providerType: 'chat-completions',
       displayName: 'Provider local',
       source: 'remote',
       baseUrl: 'https://provider.example/v1',

@@ -11,7 +11,7 @@ body:
     validations: { required: true }
   - type: input
     id: platform
-    attributes: { label: Sistema e versão do Codex CLI }
+    attributes: { label: Sistema, versão do Nocturne e Provider de IA usado (sem chaves) }
     validations: { required: true }
   - type: textarea
     id: steps

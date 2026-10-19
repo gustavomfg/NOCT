@@ -122,17 +122,11 @@ export const nocturneApi: NocturneApi = {
     send: (conversationId: string, prompt: string, attachments: string[] = [], mode = 'build') => ipcRenderer.invoke(channels.ai.send, { conversationId, prompt, attachments, mode }),
     cancel: (conversationId: string) => ipcRenderer.invoke(channels.ai.cancel, { conversationId }),
     saveAssistant: (conversationId: string, content: string, metadata?: JsonValue) => ipcRenderer.invoke(channels.ai.saveAssistant, { conversationId, content, metadata }),
-    approve: (key: string, accepted: boolean, forSession = false) => ipcRenderer.invoke(channels.ai.approve, { key, accepted, forSession }),
+    approve: (key: string, accepted: boolean) => ipcRenderer.invoke(channels.ai.approve, { key, accepted }),
     rollbackStatus: (conversationId: string) => ipcRenderer.invoke(channels.ai.rollbackStatus, conversationId),
     rollback: (conversationId: string) => ipcRenderer.invoke(channels.ai.rollback, conversationId),
     onEvent: (listener: (payload: AgentEvent) => void) => on(channels.ai.event, listener),
     onStatus: (listener: (payload: AgentStatusEvent) => void) => on(channels.ai.status, listener),
-  },
-  codex: {
-    status: () => ipcRenderer.invoke(channels.codex.status),
-    login: () => ipcRenderer.invoke(channels.codex.login),
-    logout: () => ipcRenderer.invoke(channels.codex.logout),
-    models: () => ipcRenderer.invoke(channels.codex.models),
   },
   files: {
     attach: (conversationId: string) => ipcRenderer.invoke(channels.files.attach, conversationId),

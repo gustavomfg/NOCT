@@ -12,7 +12,6 @@ import type { ProviderExecutionControl, ProviderExecutionRequest, ProviderExecut
 import type { NormalizedTaskInput } from '../shared/ai/task'
 import { IPC_CHANNELS } from '../shared/ipc/channels'
 import { providerDefinition } from './helpers/providerDefinition'
-import { CodexClient } from '../electron/codex/CodexClient'
 
 const descriptor: ModelDescriptor = { providerId: 'fake', modelId: 'model', displayName: 'Fake', source: 'local', capabilities: ['chat', 'streaming'], availability: 'available' }
 const bindings: WorkspaceModelBindings = { workspaceId: '/workspace', defaultBinding: { providerId: 'fake', modelId: 'model' } }
@@ -121,11 +120,9 @@ describe('AiExecutionCoordinator tool approvals', () => {
     const { models, providers } = setup(adapter)
     const sent: Array<{ channel: string; payload: Record<string, unknown> }> = []
     const win = { isDestroyed: () => false, webContents: { send: (channel: string, payload: Record<string, unknown>) => sent.push({ channel, payload }) } }
-    const codex = new CodexClient()
-    vi.spyOn(codex, 'dispose').mockResolvedValue(undefined)
     const approvalDetails = new Map<string, { command?: string; risk?: string }>()
     const finalize = vi.fn(async () => ({ message: null }))
-    const coordinator = new AiExecutionCoordinator(win as never, models, providers, { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never, approvalDetails, finalize, undefined, undefined, undefined, undefined, codex)
+    const coordinator = new AiExecutionCoordinator(win as never, models, providers, { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never, approvalDetails, finalize)
     return { coordinator, sent, approvalDetails, finalize }
   }
 

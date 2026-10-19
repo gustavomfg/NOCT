@@ -24,23 +24,6 @@
   margin-left: auto;
 }
 
-.codex-info {
-  background: var(--color-canvas);
-  border: 1px solid var(--color-surface-raised);
-  border-radius: 8px;
-  align-items: center;
-  display: flex;
-}
-
-.codex-info div {
-  flex-direction: column;
-  display: flex;
-}
-
-.codex-info small {
-  word-break: break-all;
-}
-
 .settings-dialog label {
   flex-direction: column;
   display: flex;

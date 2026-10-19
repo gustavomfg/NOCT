@@ -4,6 +4,5 @@
   "applicationId": "com.nocturne.codex",
   "currentUserDataDirectory": "Nocturne Studio",
   "legacyUserDataDirectory": "Nocturne Codex",
-  "repository": "nocturne-studio",
-  "codexClientName": "nocturne-studio"
+  "repository": "nocturne-studio"
 }

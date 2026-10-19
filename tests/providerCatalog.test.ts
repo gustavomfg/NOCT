@@ -8,7 +8,7 @@ import { providerConfigurationInputSchema } from '../shared/ai/providerConfigura
 describe('providerCatalog', () => {
   it('mantém empresas e métodos de conexão com identidades únicas', () => {
     expect(new Set(providerCatalog.map(({ id }) => id)).size).toBe(providerCatalog.length)
-    expect(providerCatalog.map(({ id }) => id)).not.toContain('codex-cli')
+    expect(providerCatalog.map(({ id }) => id)).not.toContain('openai')
     for (const provider of providerCatalog) {
       expect(provider.connectionMethods.length).toBeGreaterThan(0)
       expect(new Set(provider.connectionMethods.map(({ kind }) => kind)).size)
@@ -27,11 +27,10 @@ describe('providerCatalog', () => {
     }
   })
 
-  it('não trata assinatura de produto como autenticação de API disponível', () => {
-    const accountMethods = providerCatalog.flatMap(({ connectionMethods }) =>
-      connectionMethods.filter(({ kind }) => kind === 'account'))
-    expect(accountMethods.length).toBeGreaterThan(0)
-    expect(accountMethods.every(({ status }) => status === 'unavailable')).toBe(true)
+  it('não oferece login por assinatura: somente chaves de API e runtimes locais', () => {
+    for (const provider of providerCatalog) {
+      expect(provider.connectionMethods.map(({ kind }) => kind).every((kind) => kind === 'api-key' || kind === 'local')).toBe(true)
+    }
   })
 
   it('restringe HTTP sem TLS aos presets locais em loopback', () => {

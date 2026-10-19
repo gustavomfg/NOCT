@@ -32,8 +32,6 @@ os workflows protegidos de release estável e backfill multiplataforma.
 
 - [ ] Configure um Provider suportado e verifique uma requisição bem-sucedida e
       um erro controlado de credencial inválida ou Provider indisponível.
-- [ ] Em uma máquina autorizada, execute o smoke autenticado do Codex com o CLI
-      `0.145.0` ou a recomendação verificada `0.146.0`.
 - [ ] Reinicie o aplicativo e confirme que conversas, configurações, memória e
       histórico do workspace continuam disponíveis.
 - [ ] Crie um backup, restaure-o em um teste isolado e verifique a preservação

@@ -12,8 +12,8 @@ direct filesystem access.
 - `electron/preload.ts` exposes named, typed methods through `contextBridge`.
 - `electron/ipc/` validates origin, payload, rate limits and workspace
   authorization before native work begins.
-- The Electron main process owns SQLite, files, Git, Providers and the Codex App
-  Server.
+- The Electron main process owns SQLite, files, Git, Providers and the agent
+  tools that run on the workspace.
 - `shared/` contains contracts and limits shared by the two sides.
 
 The BrowserWindow uses `contextIsolation: true`, `sandbox: true` and
@@ -22,13 +22,12 @@ are opened by the operating system.
 
 ## AI execution
 
-Codex CLI/App Server is used for the account-based path and for Build and Docs.
-Review uses read-only policies. Build uses a workspace-scoped write policy,
-explicit approvals and disabled network access for the agent sandbox.
-
-OpenAI-compatible providers use a separate adapter contract for model discovery,
-streaming, cancellation, bounded responses and diagnostics. Tool calling is not
-normalized by that adapter. Provider credentials remain in the main process.
+Every mode runs through the Provider selected for the workspace. Providers use
+an Chat Completions adapter contract for model discovery, streaming,
+cancellation, bounded responses, function calling and diagnostics. The main
+process runs the tool loop: read tools in every mode, and write and command
+tools only in Build, where commands require explicit approval. Provider
+credentials remain in the main process.
 
 ## Local state
 

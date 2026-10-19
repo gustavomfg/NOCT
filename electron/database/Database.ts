@@ -320,10 +320,6 @@ export class LocalDatabase {
     this.conversations.renameFromPrompt(id, prompt)
   }
 
-  setConversationCodexThread(id: string, threadId: string | null) {
-    this.conversations.setCodexThread(id, threadId)
-  }
-
   deleteConversation(id: string) {
     this.conversations.delete(id)
   }

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { ProviderSource } from '../../../../shared/ai/provider'
 import { PROVIDER_CONFIGURATION_LIMITS } from '../../../../shared/ai/providerConfiguration'
 
-export const OPENAI_COMPATIBLE_LIMITS = {
+export const CHAT_COMPLETIONS_LIMITS = {
   models: 25_000,
   modelsResponseBytes: 2 * 1024 * 1024,
   streamResponseBytes: 10 * 1024 * 1024,
@@ -23,7 +23,7 @@ const configSchema = z.object({
   requiresAuthentication: z.boolean(),
 }).strict()
 
-export interface OpenAICompatibleConfig {
+export interface ChatCompletionsConfig {
   id: string
   displayName: string
   source: ProviderSource
@@ -33,13 +33,13 @@ export interface OpenAICompatibleConfig {
   requiresAuthentication: boolean
 }
 
-export function parseOpenAICompatibleConfig(input: unknown): OpenAICompatibleConfig {
+export function parseChatCompletionsConfig(input: unknown): ChatCompletionsConfig {
   const config = configSchema.parse(input)
   const baseUrl = validateBaseUrl(config.baseUrl, config.source)
   return { ...config, baseUrl: baseUrl.href.replace(/\/$/, '') }
 }
 
-export function providerEndpoint(config: OpenAICompatibleConfig, resource: 'models' | 'chat/completions' | 'embeddings') {
+export function providerEndpoint(config: ChatCompletionsConfig, resource: 'models' | 'chat/completions' | 'embeddings') {
   const base = new URL(`${config.baseUrl}/`)
   const path = `${base.pathname.replace(/\/$/, '')}/${resource}`.replace(/\/{2,}/g, '/')
   base.pathname = path
@@ -51,7 +51,7 @@ function validateBaseUrl(value: string, source: ProviderSource) {
   try {
     url = new URL(value)
   } catch {
-    throw new Error('O endpoint OpenAI-compatible é inválido.')
+    throw new Error('O endpoint Chat Completions é inválido.')
   }
   if (url.username || url.password) {
     throw new Error('O endpoint não pode conter credenciais.')

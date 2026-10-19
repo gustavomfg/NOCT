@@ -37,8 +37,8 @@ export const hunkStatuses = ['pending', 'accepted', 'rejected', 'edited', 'confl
 export type HunkStatus = typeof hunkStatuses[number]
 
 export type ChangeOrigin =
-  | 'codex-file-change'
-  | 'codex-command'
+  | 'agent-file-change'
+  | 'agent-command'
   | 'validation'
   | 'documents'
   | 'manual'

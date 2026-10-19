@@ -8,7 +8,6 @@ export interface ConversationRow {
   id: string
   title: string
   workspace: string
-  codexThreadId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -30,23 +29,23 @@ export class ConversationRepository {
 
   list(): ConversationRow[] {
     return this.database.prepare(`SELECT id, title, workspace,
-      codex_thread_id codexThreadId, created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC`).all() as ConversationRow[]
+      created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC`).all() as ConversationRow[]
   }
 
   page(offset = 0, limit = 100) {
     const rows = this.database.prepare(`SELECT id, title, workspace,
-      codex_thread_id codexThreadId, created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(limit + 1, offset) as ConversationRow[]
+      created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(limit + 1, offset) as ConversationRow[]
     return { items: rows.slice(0, limit), hasMore: rows.length > limit }
   }
 
   get(id: string): ConversationRow | null {
     return this.database.prepare(`SELECT id, title, workspace,
-      codex_thread_id codexThreadId, created_at createdAt, updated_at updatedAt FROM conversations WHERE id=?`).get(id) as ConversationRow | undefined ?? null
+      created_at createdAt, updated_at updatedAt FROM conversations WHERE id=?`).get(id) as ConversationRow | undefined ?? null
   }
 
   create(workspace: string): ConversationRow {
     const now = new Date().toISOString()
-    const row = { id: randomUUID(), title: 'Nova conversa', workspace, codexThreadId: null, createdAt: now, updatedAt: now }
+    const row = { id: randomUUID(), title: 'Nova conversa', workspace, createdAt: now, updatedAt: now }
     this.database.prepare(`INSERT INTO conversations (id,title,workspace,created_at,updated_at) VALUES (@id,@title,@workspace,@createdAt,@updatedAt)`).run(row)
     return row
   }
@@ -54,13 +53,6 @@ export class ConversationRepository {
   renameFromPrompt(id: string, prompt: string) {
     const title = prompt.replace(/\s+/g, ' ').trim().slice(0, 52) || 'Nova conversa'
     this.database.prepare('UPDATE conversations SET title=?, updated_at=? WHERE id=?').run(title, new Date().toISOString(), id)
-  }
-
-  setCodexThread(id: string, threadId: string | null) {
-    const normalized = threadId?.trim() || null
-    if (normalized && normalized.length > 512) throw new Error('Identificador de thread Codex inválido.')
-    const changed = this.database.prepare('UPDATE conversations SET codex_thread_id=? WHERE id=?').run(normalized, id)
-    if (!changed.changes) throw new Error('Conversa não encontrada.')
   }
 
   delete(id: string) {

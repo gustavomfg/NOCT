@@ -18,7 +18,7 @@ describe('Logger estruturado', () => {
     const circular: Record<string, unknown> = { safe: 'ok' }
     circular.self = circular
     logger.info('app', 'Evento operacional', { prompt: 'pedido privado', content: 'arquivo completo', token: 'segredo', circular })
-    logger.debug('codex', 'Tráfego recebido', { stream: 'stdout', bytes: 42 })
+    logger.debug('ai', 'Tráfego recebido', { stream: 'stdout', bytes: 42 })
     logger.error('app', 'Falha correlacionada', 'detalhe privado da falha')
     await logger.flush()
 

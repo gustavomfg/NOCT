@@ -4,7 +4,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWorkspaceToolbox, type WorkspaceToolboxOptions } from '../electron/ai/agent/WorkspaceToolbox'
 import type { ProcessRunner } from '../electron/validation/CancellableProcessRunner'
-import { selectAiEngine } from '../shared/ai/engine'
 
 let workspace: string
 
@@ -100,16 +99,5 @@ describe('WorkspaceToolbox', () => {
     const { tools } = toolbox()
     await expect(tools.execute({ id: 'c', name: 'read_file', arguments: '{' }, new AbortController().signal)).resolves.toContain('JSON válido')
     await expect(tools.execute({ id: 'c', name: 'read_file', arguments: '{"file":"a"}' }, new AbortController().signal)).resolves.toContain('Argumentos inválidos')
-  })
-})
-
-describe('selectAiEngine', () => {
-  it('prefere a escolha explícita e não exige o Codex', () => {
-    expect(selectAiEngine({ preference: 'codex', providerReady: true })).toBe('codex')
-    expect(selectAiEngine({ preference: 'provider', providerReady: true })).toBe('provider')
-    expect(selectAiEngine({ providerReady: true, legacyCodexModel: 'gpt-5' })).toBe('provider')
-    expect(selectAiEngine({ providerReady: false, legacyCodexModel: 'gpt-5' })).toBe('codex')
-    expect(selectAiEngine({ preference: 'provider', providerReady: false, legacyCodexModel: 'gpt-5' })).toBeNull()
-    expect(selectAiEngine({ providerReady: false })).toBeNull()
   })
 })

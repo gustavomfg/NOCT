@@ -32,20 +32,19 @@ Closing a window detaches its IPC resource owner synchronously. Reopening can
 install a new owner while the old cleanup drains, without the old completion
 clearing the new owner. Application shutdown waits for both generations before
 closing SQLite, including when one disposer reports a failure.
-Late model/protocol probes cannot reopen a disposed coordinator's Codex transport.
 Client disposal permanently revokes suspended reconnects and future RPC admission;
 restartable transport stop is not used as permanent window-resource disposal.
 The disposal promise also drains startup already admitted before revocation.
 
-Validation and Codex transport cleanup have bounded deadlines. Codex retains
+Validation and agent command cleanup have bounded deadlines. The agent retains
 cleanup ownership after its direct child exits, closes its streams, sends TERM
 and escalates the owned POSIX process group to KILL after three seconds, even if
 the parent already exited. Cleanup settles by four seconds and application
-shutdown awaits it. Restart waits for transport cleanup rather than treating
+shutdown awaits it. Restart waits for the process cleanup rather than treating
 parent exit as completion of cleanup.
 
 This is not certification of every descendant: a descendant can escape a POSIX
-group, and Windows Node supervision targets only the parent. Codex termination
+group, and Windows Node supervision targets only the parent. Command termination
 diagnostics therefore explicitly retain `terminationUncertain: true`. Closing
 transport streams or reaching the cleanup deadline never completes an AI turn
 successfully. Startup reconciliation still records unfinished executions as
