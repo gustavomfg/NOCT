@@ -2,11 +2,17 @@
 
 ### Changed
 
-- Nocturne no longer depends on the Codex CLI. The AI selected in Settings → AI
-  (OpenAI, Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI, Ollama, LM Studio
-  or any OpenAI-compatible endpoint) runs Review, Build and Docs. Codex remains
-  an optional engine; 1.0.x installations that chose a Codex model keep it until
-  a provider model is selected. Without a selection, runs are refused explicitly.
+- Nocturne Studio no longer depends on the Codex CLI, a ChatGPT account or any
+  AI vendor. The model bound to the workspace in Settings → AI runs Review,
+  Build and Docs. Connect an API key (Gemini, OpenRouter, DeepSeek, Groq,
+  Mistral, xAI), a local runtime (Ollama, LM Studio) or any endpoint that
+  implements chat completions. Without a bound model, runs are refused explicitly.
+- Removed the Codex App Server integration (`electron/codex`), its IPC channels,
+  preload API, shared contracts, the `smoke:codex` script and the compatibility
+  manifest. Child-process environment handling moved to
+  `electron/runtime/childEnvironment.ts`.
+- Removed the ChatGPT account connection and the OpenAI preset. GPT models are
+  reachable through OpenRouter or any chat-completions endpoint.
 - Provider runs use a bounded tool loop (`list_directory`, `read_file`,
   `search_text`; `write_file`, `edit_file` and approved `run_command` in Build)
   with workspace containment, secret-file refusal, BEFORE/AFTER change capture
@@ -15,16 +21,41 @@
   filters long catalogs and derives presets from the shared provider catalog.
   The composer shows the active AI. An option asks for approval before every
   file change.
+- The legacy `model` and `sandbox` settings are no longer read by the app but
+  backups that contain them still restore.
+- Provider protocol names are now vendor-neutral (`chat-completions`). Schema
+  32 migrates provider types and change origins, removes obsolete CLI settings
+  and thread identifiers, and preserves conversation history, credential
+  references and review decisions. Older backups remain importable.
+- English and Portuguese READMEs now show the current interface and provider
+  setup with fresh screenshots of a demonstration workspace.
 
 ### Fixed
 
+- Remote provider connections now try the validated IPv4 and IPv6 addresses
+  instead of failing when the first DNS result is unreachable, including
+  OpenRouter on networks without IPv6 connectivity.
+- OpenRouter HTTP 402 and streaming errors are normalized correctly; an error
+  inside a successful HTTP stream no longer marks the run as completed.
+- Linux startup detects installed keyrings on desktops such as Hyprland, while
+  preserving explicit backend choices and refusing plaintext fallback. Missing
+  secure storage now produces an actionable credential-saving error.
+- Context ranking fields stay outside the normalized task contract, fixing
+  sends that failed with `TaskBuilderError` when workspace context was present.
 - Models discovered without advertised capabilities no longer fail every run
   with "does not meet the required capabilities".
-- Provider Reviews now receive the Review instructions, so structured
-  suggestions are produced instead of an "absent snapshot" warning.
+- Provider Reviews receive the Review instructions, so structured suggestions
+  are produced instead of an "absent snapshot" warning.
 - Docs runs through a provider are persisted as Docs instead of Build.
 - LM Studio and loopback custom endpoints are configured as local providers.
 - Connection action buttons in AI settings are laid out in a row.
+
+### Kept for compatibility
+
+- Historical installation identifiers and old user-data directory names remain
+  available for upgrades and recovery. Backup import validates and discards
+  removed CLI fields and maps legacy provider types. Published `v1.0.1` release
+  assets and tags are unchanged.
 
 ## 1.0.2 — Release candidate (unreleased)
 

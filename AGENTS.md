@@ -182,7 +182,7 @@ When changing renderer behavior:
 When changing main-process behavior:
 
 - avoid blocking IPC handlers;
-- avoid duplicated App Server operations;
+- avoid duplicated provider operations;
 - preserve deterministic cleanup;
 - handle process failure and cancellation explicitly;
 - consider large workspaces, histories, backups, and diffs.

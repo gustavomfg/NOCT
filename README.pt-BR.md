@@ -4,17 +4,20 @@
 
 [English](README.md)
 
-O Nocturne Studio mantém juntos o workspace de um projeto, suas conversas,
-achados de engenharia e conhecimento durável. Ele é um workspace desktop de
-engenharia, não uma IDE, uma substituição autônoma do desenvolvedor nem um
-produto oficial de qualquer fornecedor de IA. Ele não depende de uma IA
-específica: você conecta um provedor, escolhe o modelo e começa a trabalhar.
+Nocturne Studio é software livre sob a licença MIT. Ele mantém juntos o workspace
+de um projeto, suas conversas, achados de engenharia e conhecimento durável.
+É um workspace desktop de engenharia, não uma IDE, uma substituição autônoma do
+desenvolvedor nem um produto oficial de qualquer fornecedor de IA. Ele não depende
+de uma IA, empresa ou CLI específico: baixe o app, conecte uma API ou modelo local,
+escolha o modelo do workspace e comece a trabalhar.
 
-Ele enfrenta a fragmentação de contexto dos tools baseados apenas em prompts:
-estado do projeto, evidências de revisão, decisões e conhecimento aprovado
+Ele enfrenta a fragmentação de contexto das ferramentas baseadas apenas em
+prompts: estado do projeto, evidências de revisão, decisões e conhecimento aprovado
 continuam conectados em vez de serem reconstruídos a cada conversa.
 
-![Workspace do Nocturne Studio](docs/images/Captura_de_tela_20260803_145710.png)
+![Workspace do Nocturne Studio com IA ativa, conversa e painel do agente](docs/images/workspace-overview.png)
+
+As capturas mostram a interface atual em português com dados de demonstração.
 
 ## O que ele faz
 
@@ -33,9 +36,9 @@ continuam conectados em vez de serem reconstruídos a cada conversa.
   escopo, atualidade e explicação do contexto selecionado para cada execução.
 - **Conversas e Git:** conversas persistentes, históricos paginados, estado Git
   do workspace e preparação de commits.
-- **Camada de Providers:** OpenAI, Google Gemini, OpenRouter, DeepSeek, Groq,
-  Mistral, xAI, Ollama, LM Studio ou qualquer endpoint compatível com OpenAI;
-  a conta ChatGPT pelo Codex CLI continua disponível como motor opcional.
+- **Camada de Providers:** Google Gemini, OpenRouter, DeepSeek, Groq, Mistral,
+  xAI, Ollama, LM Studio ou qualquer endpoint com chat completions. O Nocturne
+  não depende de fornecedor de IA, CLI nem assinatura.
 
 O desenvolvedor continua responsável pela intenção, aprovação, revisão e
 alteração final no projeto.
@@ -60,32 +63,52 @@ publicam checksums sem assinatura de plataforma nem notarização; consulte
 
 1. Abra **Configurações → IA** (ou clique no indicador de IA abaixo da caixa de
    mensagem).
-2. Clique em **Conectar uma IA** e escolha um serviço: chave de API (OpenAI,
-   Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI), runtime local (Ollama,
-   LM Studio) ou qualquer URL compatível com OpenAI (vLLM, llama.cpp, LiteLLM…).
+2. Clique em **Conectar uma IA** e escolha um serviço: chave de API (Gemini,
+   OpenRouter, DeepSeek, Groq, Mistral, xAI), runtime local (Ollama, LM Studio)
+   ou **Outro** para qualquer endpoint com chat completions (vLLM, llama.cpp,
+   LiteLLM, servidor próprio).
 3. Escolha o modelo do workspace atual. O indicador no compositor mostra qual
    serviço e modelo a próxima execução usará.
 
-Review, Build e Docs passam todos pelo Provider selecionado. O Nocturne oferece
+![Providers de API disponíveis em Configurações → IA](docs/images/ai-providers.png)
+
+<details>
+<summary>Modelos locais, endpoints próprios e modelo ativo</summary>
+
+Ollama, LM Studio e endpoints próprios usam o mesmo fluxo de conexão.
+
+![Opções de runtimes locais e endpoint próprio](docs/images/local-models.png)
+
+A conexão ativa mostra o Provider e o modelo vinculados ao workspace.
+
+![OpenRouter e seu modelo selecionado nas configurações de IA](docs/images/ai-connections.png)
+
+</details>
+
+Review, Build e Docs passam todos pelo modelo selecionado. O Nocturne oferece
 ao modelo um pequeno conjunto de ferramentas executadas no processo principal:
 `list_directory`, `read_file` e `search_text` em todos os modos, além de
 `write_file`, `edit_file` e `run_command` apenas no Build. Todo caminho fica
 limitado à raiz autorizada, diretórios gerados e prováveis segredos (`.env`,
 chaves, credenciais) são recusados, todo comando aguarda sua aprovação e roda
 sem shell, e toda alteração do Build é capturada em BEFORE/AFTER para revisão e
-rollback. Opcionalmente, Configurações → IA também pode pedir aprovação antes de
-cada alteração de arquivo. Build exige um modelo com function calling; Review e
-Docs usam apenas o contexto selecionado pelo Nocturne quando um modelo só de
-chat recusa ferramentas.
+rollback. Configurações → IA também pode pedir aprovação antes de cada alteração
+de arquivo. O Build exige um modelo com function calling; Review e Docs usam
+apenas o contexto selecionado pelo Nocturne quando um modelo só de chat recusa
+ferramentas.
 
-O Codex CLI é opcional. Se estiver instalado e autenticado, uma conta ChatGPT
-pode ser escolhida como motor no lugar de um Provider de API. A assinatura
-ChatGPT é separada da cobrança de API. Modelos Claude podem ser usados pelo
-OpenRouter ou por um gateway compatível com OpenAI.
+Não há login por assinatura: os planos de consumo não oferecem login suportado
+para aplicativos de terceiros. Use uma chave de API, um agregador como o
+OpenRouter (uma chave para modelos de vários fornecedores) ou um modelo local.
+Veja [providers](docs/providers.pt-BR.md).
 
 As credenciais de API dos Providers são cifradas pelo armazenamento seguro do
 sistema operacional, ficam no processo principal e não entram em backups ou
-diagnósticos. Consulte [Providers](docs/providers.pt-BR.md) e [integração Codex](docs/codex-integration.pt-BR.md).
+diagnósticos.
+
+No Linux, é necessário ter Secret Service ou KWallet disponível e desbloqueado
+para salvar chaves de API. O Nocturne detecta os cofres instalados no Hyprland e
+em desktops semelhantes. Veja [falhas de conexão](docs/providers.pt-BR.md#falhas-de-conexão).
 
 ## Dados locais e recuperação
 
@@ -128,21 +151,18 @@ A lista completa está em [desenvolvimento](docs/development.pt-BR.md).
 
 ## Estado atual
 
-O repositório contém a preparação local do candidato não publicado `v1.0.2`.
-A linha estável publicada `v1.0.1` continua presa ao SHA aprovado; validação do
-SHA final, gates multiplataforma e aprovação da release estável protegida ainda
-são necessários.
-O contrato opcional do Codex App
-Server é experimental; o CLI mínimo suportado é `0.145.0` e o recomendado é
-`0.146.0`. Versões mais novas precisam passar pelo handshake de compatibilidade
-em tempo de execução.
+O `v1.0.2` usa `gustavomfg/nocturne-studio` como repositório de publicação e de
+atualização. Uma tag de versão inicia o workflow de release no GitHub, que valida
+o código-fonte, o inventário de todas as plataformas e os assets publicados.
+Checksums do Linux são assinados por GPG; Windows e macOS continuam sem
+assinatura, e o macOS sem notarização, conforme a política atual.
 
-Limitações conhecidas: agentes de Provider dependem da qualidade de function
-calling do modelo, comandos rodam no host sem sandbox do sistema operacional (a
-aprovação é a fronteira) e uma execução para após um número limitado de etapas
-de ferramenta. Adapters nativos (não OpenAI-compatible) para Anthropic e GitHub
-Copilot, marketplace, colaboração em nuvem e orquestração multiagente não fazem
-parte deste contrato.
+Limitações conhecidas: agentes dependem da qualidade de function calling do
+modelo, comandos rodam no host sem sandbox do sistema operacional (a aprovação é
+a fronteira) e uma execução para após um número limitado de etapas de
+ferramenta. Adapters nativos (fora do protocolo Chat Completions) para Anthropic e
+GitHub Copilot, marketplace, colaboração em nuvem e orquestração multiagente não
+fazem parte deste contrato de release.
 
 ## Documentação
 
@@ -151,7 +171,6 @@ parte deste contrato.
 - [Primeiro uso](docs/getting-started.pt-BR.md) · [English](docs/getting-started.md)
 - [Providers](docs/providers.pt-BR.md) · [English](docs/providers.md)
 - [Configuração](docs/configuration.pt-BR.md) · [English](docs/configuration.md)
-- [Integração Codex](docs/codex-integration.pt-BR.md) · [English](docs/codex-integration.md)
 - [Review, Build e Docs](docs/modes.pt-BR.md) · [English](docs/modes.md)
 - [Segundo Cérebro e Awareness](docs/second-brain.pt-BR.md) · [English](docs/second-brain.md)
 - [Backup e recuperação](docs/backup-and-recovery.pt-BR.md) · [English](docs/backup-and-recovery.md)

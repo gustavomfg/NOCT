@@ -23,7 +23,7 @@ are opened by the operating system.
 ## AI execution
 
 Every mode runs through the Provider selected for the workspace. Providers use
-an Chat Completions adapter contract for model discovery, streaming,
+a Chat Completions adapter contract for model discovery, streaming,
 cancellation, bounded responses, function calling and diagnostics. The main
 process runs the tool loop: read tools in every mode, and write and command
 tools only in Build, where commands require explicit approval. Provider

@@ -4,17 +4,20 @@
 
 > A local-first desktop workspace for understanding, reviewing and evolving real software projects with the AI you choose.
 
-Nocturne Studio keeps a project workspace, its conversations, engineering
-findings and durable knowledge together. It is a desktop engineering workspace,
-not an IDE, an autonomous replacement for a developer, or an official product of
-any AI vendor. It does not depend on a specific AI: you connect a provider,
-pick a model and start working.
+Nocturne Studio is free software under the MIT license. It keeps a project's
+workspace, conversations, engineering findings and durable knowledge together.
+It is a desktop engineering workspace, not an IDE, an autonomous replacement
+for a developer, or an official product of any AI vendor. It does not depend on
+a specific AI, company or CLI: download it, connect an API or local model,
+choose the model for your workspace and start working.
 
 It addresses the context fragmentation of prompt-only tools: project state,
 review evidence, decisions and approved knowledge remain connected instead of
 being reconstructed in every conversation.
 
-![Nocturne Studio workspace](docs/images/Captura_de_tela_20260803_145710.png)
+![Nocturne Studio workspace with the active AI, conversation and agent panel](docs/images/workspace-overview.png)
+
+Screenshots show the current interface in Portuguese with demonstration data.
 
 ## What it does
 
@@ -31,9 +34,9 @@ being reconstructed in every conversation.
   scope, freshness and an explanation of the context selected for each run.
 - **Conversations and Git:** persistent conversations, paginated histories,
   workspace Git status and commit preparation.
-- **Provider layer:** OpenAI, Google Gemini, OpenRouter, DeepSeek, Groq,
-  Mistral, xAI, Ollama, LM Studio or any OpenAI-compatible endpoint; a ChatGPT
-  account through the Codex CLI remains available as an optional engine.
+- **Provider layer:** Google Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI,
+  Ollama, LM Studio or any endpoint that implements chat completions. Nocturne
+  depends on no AI vendor, CLI or subscription.
 
 The developer remains responsible for intent, approval, review and the final
 change to a project.
@@ -57,32 +60,51 @@ checksums without platform signing/notarization. See
 ## Choose your AI
 
 1. Open **Settings → AI** (or click the AI chip below the message box).
-2. Click **Connect an AI** and pick a service: an API key (OpenAI, Gemini,
-   OpenRouter, DeepSeek, Groq, Mistral, xAI), a local runtime (Ollama,
-   LM Studio) or any OpenAI-compatible URL (vLLM, llama.cpp, LiteLLM…).
+2. Click **Connect an AI** and pick a service: an API key (Gemini, OpenRouter,
+   DeepSeek, Groq, Mistral, xAI), a local runtime (Ollama, LM Studio) or
+   **Other** for any endpoint that implements chat completions (vLLM,
+   llama.cpp, LiteLLM, your own server).
 3. Choose the model for the current workspace. The chip in the composer shows
    which service and model the next run will use.
 
-Review, Build and Docs all run through the selected provider. Nocturne gives the
+![API providers available in Settings → AI](docs/images/ai-providers.png)
+
+<details>
+<summary>Local runtimes, custom endpoints and the active model</summary>
+
+Ollama, LM Studio and custom endpoints use the same connection flow.
+
+![Local runtimes and custom endpoint options](docs/images/local-models.png)
+
+The active connection shows the provider and model bound to the workspace.
+
+![OpenRouter and its selected model in AI settings](docs/images/ai-connections.png)
+
+</details>
+
+Review, Build and Docs all run through the selected model. Nocturne gives the
 model a small set of workspace tools executed in the main process:
 `list_directory`, `read_file` and `search_text` in every mode, plus
 `write_file`, `edit_file` and `run_command` in Build only. Every path is
 constrained to the authorized root, generated directories and likely secret
 files (`.env`, keys, credentials) are refused, every command waits for your
 approval and runs without a shell, and every Build change is captured
-BEFORE/AFTER for review and rollback. Optionally, Settings → AI can also ask for
-approval before each file change. Build needs a model that supports function
-calling; Review and Docs fall back to the context Nocturne selected when a
-chat-only model rejects tools.
+BEFORE/AFTER for review and rollback. Settings → AI can also ask for approval
+before each file change. Build needs a model that supports function calling;
+Review and Docs fall back to the context Nocturne selected when a chat-only
+model rejects tools.
 
-The Codex CLI is optional. If it is installed and signed in, a ChatGPT account
-can be selected as the engine instead of an API provider. A ChatGPT
-subscription is separate from API billing. Claude models are reachable through
-OpenRouter or an OpenAI-compatible gateway.
+Subscription login is not offered: consumer plans do not expose a supported
+login for third-party apps. Use an API key, an aggregator such as OpenRouter (one
+key for models from many vendors) or a local model. See
+[providers](docs/providers.md).
 
 Provider API credentials are encrypted by the operating-system secure storage,
-kept in the main process and excluded from backups and diagnostics. See
-[providers](docs/providers.md) and [Codex integration](docs/codex-integration.md).
+kept in the main process and excluded from backups and diagnostics.
+
+On Linux, a working, unlocked Secret Service or KWallet is required to save API
+keys. Nocturne detects installed keyrings on Hyprland and similar desktops.
+See [connection troubleshooting](docs/providers.md#connection-troubleshooting).
 
 ## Local data and recovery
 
@@ -129,16 +151,11 @@ updater repository. A version tag starts the GitHub-hosted release workflow,
 which validates the source, all platform inventories and published assets.
 Linux checksums are GPG-signed; Windows and macOS remain unsigned, and macOS
 remains unnotarized under the current policy.
-The optional Codex App Server contract is experimental; the minimum supported
-CLI is `0.145.0` and the recommended version is `0.146.0`. Newer versions must
-pass the runtime compatibility handshake.
 
-Known limitations: provider agents depend on the model's function-calling
-quality, commands run on the host without an OS sandbox (approval is the
-boundary), and a run stops after a bounded number of tool steps. Native
-(non-OpenAI-compatible) Anthropic and GitHub Copilot adapters, marketplace,
-cloud collaboration and multi-agent orchestration are not part of this release
-contract.
+Known limitations: agents depend on the model's function-calling quality,
+commands run on the host without an OS sandbox (approval is the boundary), and a
+run stops after a bounded number of tool steps. Dedicated native adapters for other protocols, marketplace, cloud collaboration and
+multi-agent orchestration are not part of this release contract.
 
 ## Documentation
 
@@ -147,7 +164,6 @@ contract.
 - [Getting started](docs/getting-started.md) · [Português](docs/getting-started.pt-BR.md)
 - [Providers](docs/providers.md) · [Português](docs/providers.pt-BR.md)
 - [Configuration](docs/configuration.md) · [Português](docs/configuration.pt-BR.md)
-- [Codex integration](docs/codex-integration.md) · [Português](docs/codex-integration.pt-BR.md)
 - [Review, Build and Docs modes](docs/modes.md) · [Português](docs/modes.pt-BR.md)
 - [Second Brain and Awareness](docs/second-brain.md) · [Português](docs/second-brain.pt-BR.md)
 - [Backup and recovery](docs/backup-and-recovery.md) · [Português](docs/backup-and-recovery.pt-BR.md)

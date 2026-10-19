@@ -11,7 +11,6 @@ permanecer estáveis durante a linha 1.x.
 | Diretório atual de dados | `Nocturne Studio` |
 | Diretório legado de dados | `Nocturne Codex` |
 | Repositório canônico de publicação e atualização | `gustavomfg/nocturne-studio` |
-| Label do runner autenticado | `nocturne-studio` |
 
 `shared/product-identity.json` é a fonte canônica desses valores.
 
