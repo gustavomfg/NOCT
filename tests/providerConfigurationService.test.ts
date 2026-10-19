@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { ProviderCredentialVaultError } from '../electron/security/ProviderCredentialVault'
 import {
   ProviderConfigurationService,
   ProviderConfigurationServiceError,
@@ -236,6 +237,18 @@ describe('ProviderConfigurationService', () => {
       'provider-secret',
       'provider-secret',
     ])
+  })
+
+
+  it('explica indisponibilidade do cofre sem salvar chave ou configuração parcial', async () => {
+    const { configurations, credentials, service } = setup()
+    vi.spyOn(credentials, 'create').mockRejectedValue(new ProviderCredentialVaultError('secure-storage-unavailable', 'native-secret'))
+    await expect(service.create(remoteConfiguration, { credential: 'submitted-secret' })).rejects.toMatchObject({
+      code: 'secure-storage-unavailable',
+      message: expect.stringContaining('chaveiro'),
+    })
+    expect(configurations.list()).toEqual([])
+    expect(credentials.entries.size).toBe(0)
   })
 
   it('não persiste quando a validação falha e não expõe a credencial', async () => {

@@ -45,6 +45,12 @@ allowed only for local loopback services.
 
 ## Credentials and local data
 
+On Linux desktops without Chromium's native keyring selection, startup detects
+installed Secret Service or KWallet D-Bus services before Electron initializes.
+Explicit `--password-store` switches and recognized desktop selection are
+preserved. The credential vault still rejects `basic_text` and unavailable
+storage; detection never enables plaintext encryption.
+
 Provider keys are encrypted with Electron `safeStorage`, referenced by opaque
 identifiers and excluded from backups and diagnostics. SQLite, WAL/SHM, snapshots,
 workspace context and credential files use restrictive permissions where the

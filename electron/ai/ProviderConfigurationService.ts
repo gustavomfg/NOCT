@@ -8,6 +8,7 @@ import type { ProviderDiagnostic, ProviderDiagnosticError } from '../../shared/a
 import { performance } from 'node:perf_hooks'
 import type { ProviderAdapter } from './ProviderRegistry'
 import { ProviderRegistry } from './ProviderRegistry'
+import { ProviderCredentialVaultError } from '../security/ProviderCredentialVault'
 
 export interface ConfiguredProviderAdapterFactory {
   normalize(input: unknown): ProviderConfigurationInput
@@ -121,10 +122,13 @@ export class ProviderConfigurationService {
           normalized,
         ))
         return configuration
-      } catch {
+      } catch (error) {
         if (configuration) this.configurations.delete(configuration.id)
         if (credentialReference) {
           await this.credentials.delete(credentialReference).catch(() => undefined)
+        }
+        if (error instanceof ProviderCredentialVaultError && error.code === 'secure-storage-unavailable') {
+          throw secureStorageUnavailable()
         }
         throw new ProviderConfigurationServiceError(
           'operation-failed',
@@ -171,9 +175,12 @@ export class ProviderConfigurationService {
           await this.credentials.delete(currentReference).catch(() => undefined)
         }
         return updated
-      } catch {
+      } catch (error) {
         if (nextReference) {
           await this.credentials.delete(nextReference).catch(() => undefined)
+        }
+        if (error instanceof ProviderCredentialVaultError && error.code === 'secure-storage-unavailable') {
+          throw secureStorageUnavailable()
         }
         throw new ProviderConfigurationServiceError(
           'operation-failed',
@@ -287,7 +294,7 @@ export class ProviderConfigurationService {
       if (availability.status !== 'available') {
         throw new ProviderConfigurationServiceError(
           'validation-failed',
-          'O Provider não passou na validação de conexão.',
+          connectionFailureMessage(availability),
           availability,
         )
       }
@@ -335,6 +342,20 @@ function notFoundError() {
     'configuration-not-found',
     'Configuração de Provider não encontrada.',
   )
+}
+
+function secureStorageUnavailable() {
+  return new ProviderConfigurationServiceError(
+    'secure-storage-unavailable',
+    'Não foi possível salvar a chave: o cofre de credenciais do sistema está indisponível. Desbloqueie o chaveiro do sistema (Secret Service ou KWallet no Linux) e reinicie o aplicativo.',
+  )
+}
+
+function connectionFailureMessage(availability: ProviderAvailability) {
+  if (availability.status === 'authentication-required') return 'A chave foi recusada ou não está disponível. Confira a credencial do Provider.'
+  if (availability.status === 'offline') return 'Não foi possível conectar ao Provider. Confira a URL, a rede e a disponibilidade do serviço.'
+  if (availability.status === 'incompatible') return 'O endpoint não oferece um catálogo de modelos compatível. Confira a URL base do Provider.'
+  return 'O Provider não passou na validação de conexão.'
 }
 
 function toInput(

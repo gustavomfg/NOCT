@@ -43,6 +43,12 @@ para serviços locais em loopback.
 
 ## Credenciais e dados locais
 
+Em desktops Linux sem seleção nativa de chaveiro pelo Chromium, o startup detecta
+serviços D-Bus instalados de Secret Service ou KWallet antes de inicializar o
+Electron. Opções explícitas `--password-store` e a seleção de desktops reconhecidos
+são preservadas. O cofre continua recusando `basic_text` e armazenamento
+indisponível; a detecção nunca habilita cifragem com senha fixa ou texto puro.
+
 Chaves de Provider são cifradas com `safeStorage` do Electron, referenciadas por
 identificadores opacos e excluídas de backups e diagnósticos. SQLite, WAL/SHM, snapshots, contexto do
 workspace e arquivos de credencial usam permissões restritivas quando a

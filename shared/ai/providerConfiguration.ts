@@ -31,6 +31,7 @@ export interface ProviderConfigurationSummary extends ProviderConfigurationInput
 export type ProviderConfigurationErrorCode =
   | 'invalid-configuration'
   | 'credential-required'
+  | 'secure-storage-unavailable'
   | 'validation-failed'
   | 'configuration-not-found'
   | 'operation-failed'

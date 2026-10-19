@@ -12,6 +12,7 @@ import { ProviderConfigurationService } from './ai/ProviderConfigurationService'
 import { ChatCompletionsAdapterFactory } from './ai/providers/chat-completions/factory'
 import { ProviderCredentialVault } from './security/ProviderCredentialVault'
 import { ElectronCredentialEncryption } from './security/ElectronCredentialEncryption'
+import { configureLinuxCredentialStorage } from './security/LinuxCredentialStorage'
 import { ModelCatalogService } from './ai/ModelCatalogService'
 import { migrateProductUserData } from './persistence/ProductUserData'
 import productIdentity from '../shared/product-identity.json'
@@ -35,6 +36,7 @@ const APP_NAME = productIdentity.displayName
 const LEGACY_APP_NAME = productIdentity.legacyUserDataDirectory
 const APP_ICON = path.join(process.env.APP_ROOT, 'build', 'icon.png')
 app.setName(APP_NAME)
+configureLinuxCredentialStorage(app.commandLine)
 if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', migrateProductUserData(
     app.getPath('appData'),
