@@ -4,6 +4,7 @@ import type {
   ProviderExecutionResult,
 } from '../../../../shared/ai/providerExecution'
 import { CHAT_COMPLETIONS_LIMITS } from './config'
+import { errorFromPayload } from './errors'
 
 interface StreamOptions {
   /** Tool calls are accepted only when the request offered tools. */
@@ -69,6 +70,7 @@ export async function consumeChatCompletionsStream(
     }
     const payload = asRecord(parsed)
     if (!payload) throw new ChatCompletionsProtocolError()
+    if (payload.error !== undefined) throw errorFromPayload(payload, 502, options.toolsOffered)
 
     const choices = Array.isArray(payload.choices) ? payload.choices : []
     for (const choiceValue of choices) {
@@ -87,6 +89,7 @@ export async function consumeChatCompletionsStream(
         for (const fragment of delta.tool_calls) accumulateToolCall(toolCalls, fragment)
       }
       const nativeFinish = choice.finish_reason
+      if (nativeFinish === 'error') throw errorFromPayload(payload, 502, options.toolsOffered)
       if (nativeFinish === null || nativeFinish === undefined) continue
       if (nativeFinish === 'tool_calls' || nativeFinish === 'function_call') {
         if (!options.toolsOffered) throw new ChatCompletionsProtocolError()

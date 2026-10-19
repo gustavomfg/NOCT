@@ -2,7 +2,6 @@ import { lookup } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
 import type { LookupFunction } from 'node:net'
 import { Readable } from 'node:stream'
-import type { NormalizedErrorCode } from '../../../../shared/ai/execution'
 import { EMBEDDING_LIMITS, type EmbeddingExecutionControl, type EmbeddingRequest, type EmbeddingResult } from '../../../../shared/ai/embedding'
 import type { ModelDescriptor } from '../../../../shared/ai/model'
 import type { ProviderAvailability, ProviderDefinition } from '../../../../shared/ai/provider'
@@ -22,6 +21,7 @@ import {
   type ChatCompletionsConfig,
 } from './config'
 import { buildChatCompletionsRequest } from './request'
+import { errorFromPayload, providerError } from './errors'
 import {
   consumeChatCompletionsStream,
   ChatCompletionsProtocolError,
@@ -47,7 +47,7 @@ type ProviderHostResolver = (
 type PinnedProviderRequest = (
   url: URL,
   init: RequestInit | undefined,
-  resolved: ResolvedProviderAddress,
+  resolved: readonly ResolvedProviderAddress[],
 ) => Promise<Response>
 
 export class ChatCompletionsProviderAdapter implements ProviderAdapter {
@@ -310,7 +310,9 @@ export function createRemoteProviderTransport(
     ))) {
       throw new Error('O endpoint remoto resolveu para um endereço não público.')
     }
-    return requestAddress(url, init, addresses[0])
+    // Let the socket select a reachable address from this validated DNS snapshot.
+    // A single pinned address breaks providers on networks without working IPv6.
+    return requestAddress(url, init, addresses)
   }
 }
 
@@ -327,14 +329,14 @@ export async function resolveProviderHost(
 }
 
 export function createPinnedLookup(
-  resolved: ResolvedProviderAddress,
+  resolved: readonly ResolvedProviderAddress[],
 ): LookupFunction {
   return (_hostname, options, callback) => {
-    if (options.all) {
-      callback(null, [{ ...resolved }])
-      return
-    }
-    callback(null, resolved.address, resolved.family)
+    // DNS callbacks must run after the TLS socket has installed error handlers.
+    queueMicrotask(() => {
+      if (options.all) callback(null, resolved.map((address) => ({ ...address })))
+      else callback(null, resolved[0].address, resolved[0].family)
+    })
   }
 }
 
@@ -347,16 +349,18 @@ function requestUrl(input: RequestInfo | URL) {
 function requestPinnedAddress(
   url: URL,
   init: RequestInit | undefined,
-  resolved: ResolvedProviderAddress,
+  resolved: readonly ResolvedProviderAddress[],
 ) {
   return new Promise<Response>((resolve, reject) => {
-    const request = httpsRequest(url, {
+    const connectionOptions = {
       method: init?.method,
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
       signal: init?.signal ?? undefined,
       agent: false,
+      autoSelectFamily: true,
       lookup: createPinnedLookup(resolved),
-    }, (incoming) => {
+    }
+    const request = httpsRequest(url, connectionOptions, (incoming) => {
       const headers = new Headers()
       for (const [name, value] of Object.entries(incoming.headers)) {
         if (Array.isArray(value)) {
@@ -434,76 +438,13 @@ function availabilityFromError(error: ProviderExecutionError): ProviderAvailabil
 }
 
 async function errorFromResponse(response: Response, toolsOffered = false) {
-  if (toolsOffered && (response.status === 400 || response.status === 422)) {
-    return new ProviderExecutionError({
-      code: 'invalid-response',
-      message: 'O Provider recusou a solicitação. O modelo selecionado pode não suportar ferramentas (function calling), necessárias para o Build; escolha outro modelo.',
-      retryable: false,
-    }, true)
+  let body: unknown
+  try {
+    body = await readBoundedJson(response)
+  } catch {
+    // Keep HTTP classification even when an intermediary returns HTML or invalid JSON.
   }
-  if (response.status === 429) {
-    try {
-      if (isInsufficientCredits(await readBoundedJson(response))) {
-        return providerError(
-          'insufficient-credits',
-          'A API não possui créditos ou cota disponível. Adicione créditos na plataforma do Provider ou escolha outra conexão.',
-          false,
-        )
-      }
-    } catch {
-      // Preserve the generic, sanitized rate-limit response below.
-    }
-  }
-  return errorFromStatus(response.status)
-}
-
-function errorFromStatus(status: number) {
-  if (status === 401 || status === 403) {
-    return providerError(
-      'authentication-failed',
-      'A autenticação do Provider foi recusada.',
-      false,
-    )
-  }
-  if (status === 404) {
-    return providerError('model-unavailable', 'O modelo solicitado não está disponível.', false)
-  }
-  if (status === 408 || status === 504) {
-    return providerError('timeout', 'O Provider excedeu o tempo permitido.', true)
-  }
-  if (status === 429) {
-    return providerError('rate-limited', 'O limite temporário do Provider foi atingido.', true)
-  }
-  return providerError(
-    status >= 500 ? 'provider-unavailable' : 'invalid-response',
-    status >= 500
-      ? 'O Provider está temporariamente indisponível.'
-      : 'O Provider recusou a solicitação.',
-    status >= 500,
-  )
-}
-
-function isInsufficientCredits(value: unknown) {
-  const body = asRecord(value)
-  const error = asRecord(body?.error)
-  const identifiers = [
-    body?.code,
-    body?.type,
-    error?.code,
-    error?.type,
-  ].filter((item): item is string => typeof item === 'string')
-  return identifiers.some((identifier) => (
-    /insufficient[_-]?quota|billing[_-]?(?:hard[_-]?limit|not[_-]?active)|usage[_-]?limit|credit/i
-      .test(identifier)
-  ))
-}
-
-function providerError(
-  code: NormalizedErrorCode,
-  message: string,
-  retryable: boolean,
-) {
-  return new ProviderExecutionError({ code, message, retryable })
+  return errorFromPayload(body, response.status, toolsOffered)
 }
 
 function cancelledError() {

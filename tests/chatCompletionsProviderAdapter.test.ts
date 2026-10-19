@@ -252,16 +252,32 @@ describe('Chat Completions remote transport', () => {
     expect(requestAddress).toHaveBeenCalledWith(
       new URL('https://provider.example/v1/models'),
       { method: 'GET' },
-      { address: '203.0.114.10', family: 4 },
+      [
+        { address: '203.0.114.10', family: 4 },
+        { address: '2001:4860:4860::8888', family: 6 },
+      ],
     )
   })
 
-  it('fornece ao socket apenas o endereço fixado', () => {
+
+  it('oferece IPv4 ao socket quando o DNS retorna IPv6 primeiro', async () => {
+    const addresses = [{ address: '2606:4700::6812:373', family: 6 as const }, { address: '104.18.3.115', family: 4 as const }]
+    const requestAddress = vi.fn().mockResolvedValue(Response.json({ data: [] }))
+    await createRemoteProviderTransport(async () => addresses, requestAddress)('https://openrouter.ai/api/v1/models')
+    const callback = vi.fn()
+    createPinnedLookup(requestAddress.mock.calls[0][2])('openrouter.ai', { all: true }, callback)
+    await Promise.resolve()
+    expect(callback).toHaveBeenCalledWith(null, addresses)
+  })
+
+  it('fornece ao socket somente os endereços validados, de forma assíncrona', async () => {
     const pinned = { address: '8.8.8.8', family: 4 as const }
-    const resolver = createPinnedLookup(pinned)
+    const resolver = createPinnedLookup([pinned])
     const callback = vi.fn()
 
     resolver('provider.example', { all: true }, callback)
+    expect(callback).not.toHaveBeenCalled()
+    await Promise.resolve()
 
     expect(callback).toHaveBeenCalledWith(null, [pinned])
   })
@@ -317,6 +333,46 @@ describe('Chat Completions embeddings', () => {
 })
 
 describe('ChatCompletionsProviderAdapter', () => {
+  it('normaliza o catálogo OpenRouter com IDs de vendor e variantes gratuitas', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ data: [
+      { id: 'vendor/model:free', name: 'Model Free', context_length: 131072, supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+      { id: 'openrouter/auto', name: 'Auto Router' },
+    ] }))
+    const provider = adapter(request, { config: { ...config, baseUrl: 'https://openrouter.ai/api/v1' }, models: [] })
+    expect((await provider.listModels()).map(({ modelId }) => modelId)).toEqual(['vendor/model:free', 'openrouter/auto'])
+    expect(String(request.mock.calls[0][0])).toBe('https://openrouter.ai/api/v1/models')
+  })
+
+  it('classifica HTTP 402 como créditos insuficientes sem expor a resposta nativa', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ error: { code: 402, message: 'Bearer secret-key' } }, { status: 402 }))
+    const error = await adapter(request).execute(execution(), { signal: new AbortController().signal, emit: vi.fn() }).catch((error: unknown) => error)
+    expect(error).toMatchObject({ normalized: { code: 'insufficient-credits', retryable: false } })
+    expect(JSON.stringify(error)).not.toContain('secret-key')
+  })
+
+  it.each([
+    { error: { code: 429, message: 'Bearer secret-key' } },
+    { error: { code: 502, message: 'Bearer secret-key' }, choices: [{ delta: {}, finish_reason: 'error' }] },
+    { choices: [{ delta: {}, finish_reason: 'error' }] },
+  ])('não conclui como sucesso um erro enviado dentro do stream', async (payload) => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(sse([
+      'data: {"choices":[{"delta":{"content":"Partial"}}]}',
+      `data: ${JSON.stringify(payload)}`,
+      'data: [DONE]',
+    ]))
+    const error = await adapter(request).execute(execution(), { signal: new AbortController().signal, emit: vi.fn() }).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(ProviderExecutionError)
+    expect(JSON.stringify(error)).not.toContain('secret-key')
+  })
+
+  it('reconhece a recusa de ferramentas do OpenRouter sem confundir modelo inexistente', async () => {
+    const tools = [{ name: 'list_directory', description: 'Lista.', parameters: { type: 'object' } }]
+    for (const [message, toolsRejected] of [['No endpoints found that support tool use', true], ['Unknown model', false]] as const) {
+      const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ error: { code: 404, message } }, { status: 404 }))
+      await expect(adapter(request).execute({ ...execution(), tools }, { signal: new AbortController().signal, emit: vi.fn() })).rejects.toMatchObject({ toolsRejected })
+    }
+  })
+
   it('valida autenticação e catálogo com resposta limitada', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({ object: 'list', data: [{ id: 'model-1' }] }),
