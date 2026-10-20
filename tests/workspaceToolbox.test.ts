@@ -4,11 +4,13 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWorkspaceToolbox, type WorkspaceToolboxOptions } from '../electron/ai/agent/WorkspaceToolbox'
 import type { ProcessRunner } from '../electron/validation/CancellableProcessRunner'
+import { canonicalTestPath } from './helpers/platform'
 
 let workspace: string
 
 beforeEach(() => {
-  workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-toolbox-'))
+  // Windows may return an 8.3 alias for TEMP; commands use the native real path.
+  workspace = canonicalTestPath(fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-toolbox-')))
   fs.mkdirSync(path.join(workspace, 'src'))
   fs.mkdirSync(path.join(workspace, 'node_modules'))
   fs.writeFileSync(path.join(workspace, 'src', 'app.ts'), 'export const value = 1\nexport const other = 2\n')
@@ -84,7 +86,7 @@ describe('WorkspaceToolbox', () => {
     const approved = toolbox()
     await expect(approved.call('run_command', { command: 'npm', args: ['test'] })).resolves.toContain('Código de saída: 0')
     expect(approved.requestApproval).toHaveBeenCalledWith(expect.objectContaining({ kind: 'command', command: 'npm test', risk: 'safe' }))
-    expect(approved.runner.run).toHaveBeenCalledWith('npm', ['test'], expect.objectContaining({ cwd: fs.realpathSync(workspace) }))
+    expect(approved.runner.run).toHaveBeenCalledWith('npm', ['test'], expect.objectContaining({ cwd: workspace }))
 
     const declined = toolbox({ requestApproval: async () => false })
     await expect(declined.call('run_command', { command: 'npm', args: ['test'] })).resolves.toContain('recusou')
