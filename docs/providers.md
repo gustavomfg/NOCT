@@ -30,6 +30,12 @@ supported, general-purpose login for third-party applications, so an API key or 
 local model is the way to connect. Usage of an API key is billed by that
 provider; a chat subscription is a separate product.
 
+For Ollama and LM Studio, **Service address** lets you use a different local
+port; leaving it blank uses the displayed default. After saving a connection,
+**Refresh models** repeats discovery on that same service, including after a
+failure, without creating another connection. The entered key is cleared from
+the form as soon as the connection is saved.
+
 ## Connection rules
 
 The adapter supports model discovery, streaming, cancellation, function calling

@@ -208,3 +208,58 @@ html[data-theme='light'] .agent-mode-switch button.active, html[data-theme='ligh
   .quick-actions button { flex-shrink: 0; }
   .composer-ai { max-width: calc(100% - 100px); }
 }
+
+/* Settings keep feedback and section names visible at every supported size. */
+.settings-footer {
+  height: auto;
+  min-height: 68px;
+  flex: 0 0 auto;
+  gap: var(--spacing-md);
+  padding-block: var(--spacing-md);
+}
+.settings-footer > span { min-width: 0; overflow-wrap: anywhere; }
+.settings-footer .modal-actions { flex-shrink: 0; flex-wrap: wrap; }
+.settings-footer.confirm-discard { background: var(--color-panel); border-top-color: var(--color-danger); }
+.settings-footer.confirm-discard > span,
+.settings-footer.confirm-discard > span strong,
+.settings-footer.has-error > span { color: var(--color-danger); }
+.settings-content .provider-feedback.error {
+  color: var(--color-danger);
+  background: var(--color-panel);
+  border-color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+.settings-content .ai-step-box { max-width: none; }
+.settings-content .ai-settings + .settings-section { margin-top: var(--spacing-xl); }
+.settings-content .diagnostic-summary { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (width <= 720px) {
+  .settings-layout { display: flex; flex-direction: column; }
+  .settings-navigation {
+    flex-direction: row;
+    flex-shrink: 0;
+    padding: var(--spacing-sm);
+    gap: var(--spacing-2xs);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    overflow-x: auto;
+  }
+  .settings-navigation button {
+    flex: 1 0 auto;
+    min-height: var(--control-md);
+    padding: var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+  .settings-navigation button > span { display: flex; }
+  .settings-navigation small { display: none; }
+  .settings-content { flex: 1; min-height: 0; }
+  .settings-footer { flex-wrap: wrap; padding-inline: var(--spacing-lg); }
+  .settings-footer > span { display: block; flex: 1 1 100%; }
+  .settings-footer .modal-actions { margin-left: auto; }
+}
+
+@media (width <= 520px) {
+  .settings-navigation button { flex-direction: column; }
+  .settings-columns { grid-template-columns: minmax(0, 1fr); }
+  .settings-header { padding-inline: var(--spacing-lg); }
+}

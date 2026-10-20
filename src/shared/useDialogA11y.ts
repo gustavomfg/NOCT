@@ -1,5 +1,8 @@
 import { useEffect, useRef, type RefObject } from 'react'
 
+// Only the topmost dialog owns keyboard focus and Escape.
+const dialogStack: HTMLElement[] = []
+
 const focusable = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
 
 export function useDialogA11y<T extends HTMLElement>(onClose: () => void): RefObject<T | null> {
@@ -10,10 +13,13 @@ export function useDialogA11y<T extends HTMLElement>(onClose: () => void): RefOb
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const dialog = ref.current
-    const first = dialog?.querySelector<HTMLElement>(focusable)
-    requestAnimationFrame(() => first?.focus())
+    if (!dialog) return
+    dialogStack.push(dialog)
+    const first = dialog.querySelector<HTMLElement>(focusable)
+    const focusFrame = requestAnimationFrame(() => { if (dialogStack[dialogStack.length - 1] === dialog) (first ?? dialog).focus() })
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (dialogStack[dialogStack.length - 1] !== dialog) return
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); return }
       if (event.key !== 'Tab' || !dialog) return
       const items = Array.from(dialog.querySelectorAll<HTMLElement>(focusable)).filter((item) => item.offsetParent !== null)
@@ -25,7 +31,17 @@ export function useDialogA11y<T extends HTMLElement>(onClose: () => void): RefOb
     }
 
     document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown); requestAnimationFrame(() => previous?.focus()) }
+    return () => {
+      cancelAnimationFrame(focusFrame)
+      document.removeEventListener('keydown', onKeyDown)
+      const wasTop = dialogStack[dialogStack.length - 1] === dialog
+      const index = dialogStack.indexOf(dialog)
+      if (index !== -1) dialogStack.splice(index, 1)
+      requestAnimationFrame(() => {
+        const top = dialogStack[dialogStack.length - 1]
+        if (wasTop && previous?.isConnected && (!top || top.contains(previous))) previous.focus()
+      })
+    }
   }, [])
 
   return ref

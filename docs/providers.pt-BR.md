@@ -30,6 +30,12 @@ oferecem um login suportado e geral para aplicativos de terceiros; por isso a
 conexão é feita por chave de API ou modelo local. O uso de uma chave de API é
 cobrado pelo próprio Provider; um plano de chat é um produto separado.
 
+Nos presets Ollama e LM Studio, o campo **Endereço do serviço** permite usar
+outra porta local; em branco, mantém o endereço padrão mostrado. Depois de
+salvar a conexão, **Atualizar modelos** repete a descoberta no mesmo serviço,
+inclusive após uma falha, sem cadastrar outra conexão. A chave digitada é
+limpa do formulário assim que a conexão é salva.
+
 ## Regras de conexão
 
 O adapter oferece descoberta de modelos, streaming, cancelamento, function

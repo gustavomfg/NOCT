@@ -778,6 +778,8 @@ test.describe('renderer do produto', () => {
     await page.getByRole('button', { name: 'Salvar alterações' }).click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByRole('alert')).toContainText('Não foi possível salvar as configurações.')
+    await page.setViewportSize({ width: 520, height: 800 })
+    await expect(dialog.getByRole('alert')).toBeVisible()
     await expect(dialog).toBeVisible()
   })
 
@@ -846,8 +848,28 @@ test.describe('renderer do produto', () => {
     await expect(dialog.locator('.ai-list-connections').getByText('OpenRouter', { exact: true })).toBeVisible()
 
     await dialog.getByRole('button', { name: 'Remover OpenRouter' }).click()
-    await expect(dialog.getByText('Remover esta conexão?')).toBeVisible()
-    await dialog.getByRole('button', { name: 'Remover', exact: true }).click()
+    await expect(page.getByText('Remover esta conexão?')).toBeVisible()
+    const confirmation = page.getByRole('alertdialog')
+    await expect(confirmation.getByRole('button', { name: 'Cancelar', exact: true })).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(confirmation.getByRole('button', { name: 'Remover', exact: true })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(confirmation).toHaveCount(0)
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Remover OpenRouter' })).toBeFocused()
+    await page.evaluate(() => {
+      const remove = window.nocturne.providers.remove
+      let failed = false
+      window.nocturne.providers.remove = async (id) => {
+        if (!failed) { failed = true; throw new Error('Não foi possível remover a conexão.') }
+        return remove(id)
+      }
+    })
+    await dialog.getByRole('button', { name: 'Remover OpenRouter' }).click()
+    await confirmation.getByRole('button', { name: 'Remover', exact: true }).click()
+    await expect(confirmation.getByRole('alert')).toHaveText('Não foi possível remover a conexão.')
+    await expect(confirmation.getByRole('alert')).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Remover', exact: true }).click()
     await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
     await expect(dialog.getByRole('button', { name: 'Remover OpenRouter' })).toHaveCount(0)
     await expect(page.locator('.product-toast')).toContainText('Conexão removida.')

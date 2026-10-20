@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   Atom,
   Brain,
@@ -13,6 +15,7 @@ import {
   LoaderCircle,
   Network,
   Plus,
+  RefreshCw,
   Search,
   Server,
   Trash2,
@@ -28,6 +31,7 @@ import type {
 import type { ModelDescriptor, ModelReference } from '../../../shared/ai/model'
 import type { WorkspaceModelBindings } from '../../../shared/ai/bindings'
 import { providerCatalog, type ProviderCatalogId } from '../../../shared/ai/providerCatalog'
+import { useDialogA11y } from '../../shared/useDialogA11y'
 import { errorMessage } from '../../shared/format'
 import { useI18n } from '../../shared/i18n'
 
@@ -162,16 +166,17 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
     const available = items.filter((model) => model.providerId === providerId && !model.capabilities.includes('embeddings'))
     setModels(available)
     const current = defaultBinding?.providerId === providerId
-      ? available.find((model) => model.modelId === defaultBinding.modelId)
+      ? available.find((model) => model.modelId === defaultBinding.modelId && model.availability === 'available')
       : undefined
     const preferred = current ?? available.find((model) => model.availability === 'available')
     setSelectedModel(preferred ? { providerId, modelId: preferred.modelId } : null)
   }
 
-  const openProviderModels = async (service: ProviderConfigurationSummary) => {
+  const openProviderModels = async (service: Pick<ProviderConfigurationSummary, 'id' | 'displayName'>) => {
     if (connecting) return
     setModelProvider({ id: service.id, name: service.displayName })
     setModels([])
+    setSelectedModel(null)
     setModelFilter('')
     setStep('model')
     setConnecting(true)
@@ -221,6 +226,9 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
         timeoutMs: local ? 120_000 : 60_000,
       }
       const saved = await window.nocturne.providers.create(config, credential.trim() || undefined)
+      setCredential('')
+      setSelectedPreset(null)
+      setSelectedModel(null)
       setServices((current) => [saved, ...current.filter((item) => item.id !== saved.id)])
       setModelProvider({ id: saved.id, name: saved.displayName })
       setModels([])
@@ -287,7 +295,8 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
   }
 
   const remove = async (id: string) => {
-    if (confirmRemove !== id) { setConfirmRemove(id); return }
+    if (removingId) return
+    if (confirmRemove !== id) { setError(null); setConfirmRemove(id); return }
     setRemovingId(id)
     setError(null)
     try {
@@ -317,7 +326,7 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
   }
 
   return <div className="ai-page">
-    {error && <div className="provider-feedback error" role="alert">{error}</div>}
+    {error && !confirmRemove && <div className="provider-feedback error" role="alert">{error}</div>}
 
     {step === 'list' && <>
       <div className="ai-list-header">
@@ -407,7 +416,7 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
     </div>}
 
     {step === 'auth' && selectedPreset && <div className="ai-auth">
-      <button type="button" className="ai-auth-back" onClick={() => setStep('service')}>
+      <button type="button" className="ai-auth-back" disabled={connecting} onClick={() => setStep('service')}>
         <ArrowLeft size={14}/> {presetName(selectedPreset, t)}
       </button>
       <p className="ai-auth-desc">{
@@ -467,11 +476,17 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
         )}
       </>}
 
-      {selectedPreset.authType === 'local' && (
-        <p className="ai-local-note">
+      {selectedPreset.authType === 'local' && <>
+        <label className="ai-field-label" htmlFor="ai-local-url">
+          <span>{t('ai.serviceUrl')}</span>
+          <input id="ai-local-url" className="ai-input" type="url"
+            value={customUrl} onChange={(event) => setCustomUrl(event.target.value)}
+            placeholder={selectedPreset.baseUrl} aria-describedby="ai-local-hint"/>
+        </label>
+        <p id="ai-local-hint" className="ai-local-note">
           {t('ai.localRunning', { service: presetName(selectedPreset, t) })}
         </p>
-      )}
+      </>}
 
       <button className="ai-connect-btn" disabled={connecting} onClick={() => void connect()}>
         {connecting ? <><LoaderCircle className="spin" size={15}/> {t('ai.connecting')}</> : t('ai.connect')}
@@ -480,12 +495,12 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
 
     {step === 'model' && modelProvider && <div className="ai-step-box">
       <div className="ai-step-top">
-        <button className="ai-step-back" aria-label={t('ai.back')} onClick={() => selectedPreset ? setStep('auth') : resetWizard()}><ArrowLeft size={16}/></button>
+        <button className="ai-step-back" aria-label={t('ai.back')} disabled={connecting || saving} onClick={resetWizard}><ArrowLeft size={16}/></button>
         <div className="ai-step-copy"><strong>{t('ai.chooseModel')}</strong><small>{t('ai.chooseModelHintFor', { service: modelProvider.name })}</small></div>
       </div>
       <div className="ai-step-body">
         {connecting
-          ? <div className="ai-searching"><LoaderCircle className="spin" size={20}/><span>{t('ai.searchingModels')}</span></div>
+          ? <div className="ai-searching" role="status"><LoaderCircle className="spin" size={20}/><span>{t('ai.searchingModels')}</span></div>
           : <>
               {models.length > MODEL_FILTER_THRESHOLD && <label className="ai-model-filter" htmlFor="ai-model-filter">
                 <Search size={14} aria-hidden="true"/>
@@ -513,6 +528,10 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
             </>}
       </div>
       <div className="ai-step-foot">
+        <button className="ai-refresh-btn" disabled={connecting || saving}
+          onClick={() => void openProviderModels({ id: modelProvider.id, displayName: modelProvider.name })}>
+          <RefreshCw size={14} aria-hidden="true"/> {t('ai.refreshModels')}
+        </button>
         {!workspaceId && <span className="ai-workspace-required">{t('ai.selectWorkspace')}</span>}
         <button disabled={saving || connecting || !selectedModel || !workspaceId} className="ai-use-btn" onClick={() => void saveAndBind()}>
           {saving ? t('settings.saving') : t('ai.useModel')}
@@ -520,16 +539,31 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
       </div>
     </div>}
 
-    {confirmRemove && <div className="modal-backdrop" onMouseDown={() => setConfirmRemove(null)}>
-      <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-label={t('ai.confirmRemoval')} onMouseDown={(event) => event.stopPropagation()}>
-        <p>{t('ai.confirmRemove')}</p>
-        <div className="modal-actions">
-          <button onClick={() => setConfirmRemove(null)}>{t('settings.cancel')}</button>
-          <button className="danger" onClick={() => void remove(confirmRemove)}>{t('common.remove')}</button>
-        </div>
-      </div>
-    </div>}
+    {confirmRemove && <RemoveConnectionDialog
+      error={error}
+      busy={removingId !== null}
+      onClose={() => { if (!removingId) setConfirmRemove(null) }}
+      onConfirm={() => void remove(confirmRemove)}
+    />}
   </div>
+}
+
+function RemoveConnectionDialog({ error, busy, onClose, onConfirm }: { error: string | null; busy: boolean; onClose(): void; onConfirm(): void }) {
+  const { t } = useI18n()
+  const dialogRef = useDialogA11y<HTMLDivElement>(onClose)
+  return createPortal(<div className="modal-backdrop confirmation-backdrop" onMouseDown={(event) => { event.stopPropagation(); onClose() }}>
+    <div ref={dialogRef} className="confirmation-dialog" role="alertdialog" aria-modal="true"
+      aria-labelledby="remove-connection-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
+      <span className="confirmation-icon danger"><AlertTriangle size={19}/></span>
+      <div><h2 id="remove-connection-title">{t('ai.confirmRemove')}</h2>{error && <p role="alert">{error}</p>}</div>
+      <footer>
+        <button disabled={busy} onClick={onClose}>{t('settings.cancel')}</button>
+        <button className="danger" disabled={busy} onClick={onConfirm}>
+          {busy && <LoaderCircle className="spin" size={14}/>} {t('common.remove')}
+        </button>
+      </footer>
+    </div>
+  </div>, document.body)
 }
 
 function presetName(preset: ServicePreset, t: (key: string) => string) {
