@@ -1,4 +1,4 @@
-## Unreleased
+## 1.0.5 — 2026-10-21
 
 ### Changed
 
@@ -49,6 +49,13 @@
 - Docs runs through a provider are persisted as Docs instead of Build.
 - LM Studio and loopback custom endpoints are configured as local providers.
 - Connection action buttons in AI settings are laid out in a row.
+- AI connection setup accepts custom local ports, clears the key after saving,
+  refreshes models without duplicate connections and selects only available models.
+- Settings retain visible section names and complete error/discard feedback on
+  narrow windows. Nested connection removal contains keyboard focus, restores it
+  after Escape and offers retry after failure. Saving blocks accidental closure.
+- Windows workspace command tests canonicalize temporary paths consistently,
+  including short 8.3 aliases used by hosted runners.
 
 ### Kept for compatibility
 
@@ -57,7 +64,7 @@
   removed CLI fields and maps legacy provider types. Published `v1.0.1` release
   assets and tags are unchanged.
 
-## 1.0.2 — Release candidate (unreleased)
+## 1.0.2 — 2026-10-06
 
 ### Fixed
 

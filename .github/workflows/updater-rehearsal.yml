@@ -6,7 +6,7 @@ on:
       candidate_version:
         description: Stable candidate version to rehearse
         required: true
-        default: 1.0.2
+        default: 1.0.5
         type: string
 
 permissions:

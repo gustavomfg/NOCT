@@ -43,6 +43,8 @@ change to a project.
 
 ## Supported release artifacts
 
+[Download the stable v1.0.5 release](https://github.com/gustavomfg/nocturne-studio/releases/tag/v1.0.5).
+
 Official release validation currently covers:
 
 | Platform | Artifact configured by the build |
@@ -146,7 +148,7 @@ The full command list is in [development](docs/development.md).
 
 ## Current status
 
-The `v1.0.2` release uses `gustavomfg/nocturne-studio` as its publication and
+The `v1.0.5` stable release uses `gustavomfg/nocturne-studio` as its publication and
 updater repository. A version tag starts the GitHub-hosted release workflow,
 which validates the source, all platform inventories and published assets.
 Linux checksums are GPG-signed; Windows and macOS remain unsigned, and macOS
@@ -173,7 +175,7 @@ multi-agent orchestration are not part of this release contract.
 - [Troubleshooting](docs/troubleshooting.md) · [Português](docs/troubleshooting.pt-BR.md)
 - [Development](docs/development.md) · [Português](docs/development.pt-BR.md)
 - [Architecture](docs/architecture.md) · [Português](docs/architecture.pt-BR.md)
-- [1.0.2 release notes](docs/releases/v1.0.2.md) · [Português](docs/releases/v1.0.2.pt-BR.md)
+- [1.0.5 release notes](docs/releases/v1.0.5.md) · [Português](docs/releases/v1.0.5.pt-BR.md)
 - [GitHub Actions and releases](docs/github-actions.md)
 - [1.0.2 historical release readiness](docs/release-readiness-1.0.2.md)
 - [1.0.1 historical release notes](docs/releases/v1.0.1.md) · [Português](docs/releases/v1.0.1.pt-BR.md)

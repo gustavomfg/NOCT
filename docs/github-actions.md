@@ -13,8 +13,8 @@ independent reviewer is required for a stable release.
    ```bash
    git switch main
    git pull --ff-only
-   git tag v1.0.2
-   git push origin refs/tags/v1.0.2
+   git tag v1.0.5
+   git push origin refs/tags/v1.0.5
    ```
 
 3. Watch **Release · stable**. The tag push starts it automatically. A failed

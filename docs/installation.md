@@ -2,13 +2,13 @@
 
 [Português do Brasil](installation.pt-BR.md)
 
-## Official v1.0.1 artifacts
+## Official v1.0.5 artifacts
 
 Install only artifacts published for the intended release:
 
-- Windows 10/11 x64: `Nocturne-Studio-Windows-1.0.1-Setup.exe`;
-- Linux desktop: `Nocturne.Studio-Linux-1.0.1.AppImage` or `tar.gz`;
-- macOS ARM64: `Nocturne-Studio-Mac-1.0.1-Installer.dmg`; the updater uses
+- Windows 10/11 x64: `Nocturne-Studio-Windows-1.0.5-Setup.exe`;
+- Linux desktop: `Nocturne.Studio-Linux-1.0.5.AppImage` or `tar.gz`;
+- macOS ARM64: `Nocturne-Studio-Mac-1.0.5-Installer.dmg`; the updater uses
   the matching ZIP artifact.
 
 The canonical repository and updater source are

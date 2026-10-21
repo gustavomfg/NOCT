@@ -24,7 +24,7 @@ implicit step when the existing product flow keeps them separate.
 
 ## Current release line
 
-Current release line: `1.0.2`. The historical `v1.0.1` tag and release assets
+Current release line: `1.0.5`. The historical `v1.0.1` tag and release assets
 must not be moved or modified.
 
 Current priorities:

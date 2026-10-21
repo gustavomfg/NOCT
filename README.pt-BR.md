@@ -45,6 +45,8 @@ alteração final no projeto.
 
 ## Artefatos de release suportados
 
+[Baixar a release estável v1.0.5](https://github.com/gustavomfg/nocturne-studio/releases/tag/v1.0.5).
+
 A validação oficial de release cobre atualmente:
 
 | Plataforma | Artefato configurado pelo build |
@@ -151,7 +153,7 @@ A lista completa está em [desenvolvimento](docs/development.pt-BR.md).
 
 ## Estado atual
 
-O `v1.0.2` usa `gustavomfg/nocturne-studio` como repositório de publicação e de
+O `v1.0.5` estável usa `gustavomfg/nocturne-studio` como repositório de publicação e de
 atualização. Uma tag de versão inicia o workflow de release no GitHub, que valida
 o código-fonte, o inventário de todas as plataformas e os assets publicados.
 Checksums do Linux são assinados por GPG; Windows e macOS continuam sem
@@ -180,7 +182,7 @@ fazem parte deste contrato de release.
 - [Solução de problemas](docs/troubleshooting.pt-BR.md) · [English](docs/troubleshooting.md)
 - [Desenvolvimento](docs/development.pt-BR.md) · [English](docs/development.md)
 - [Arquitetura](docs/architecture.pt-BR.md) · [English](docs/architecture.md)
-- [Notas do candidato 1.0.2](docs/releases/v1.0.2.pt-BR.md) · [English](docs/releases/v1.0.2.md)
+- [Notas da release 1.0.5](docs/releases/v1.0.5.pt-BR.md) · [English](docs/releases/v1.0.5.md)
 - [Prontidão da release 1.0.2](docs/release-readiness-1.0.2.md)
 - [Notas históricas da versão 1.0.1](docs/releases/v1.0.1.pt-BR.md) · [English](docs/releases/v1.0.1.md)
 - [Checklist do candidato de release](docs/release-rc-checklist.pt-BR.md) · [English](docs/release-rc-checklist.md)

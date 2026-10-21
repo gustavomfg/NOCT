@@ -33,7 +33,7 @@ persistência e recuperação, integrações de Providers, armazenamento de
 credenciais e atualizações empacotadas. Providers externos têm suas próprias
 políticas.
 
-A linha estável atual é `1.0.2`. Notas históricas de releases não prometem
+A linha estável atual é `1.0.5`. Notas históricas de releases não prometem
 suporte a versões antigas.
 
 ## Projeto de segurança
