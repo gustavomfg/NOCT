@@ -3,3 +3,6 @@
 /mocks/
 /build/
 /references/
+
+# Generated detector cache
+/hook.cache.json

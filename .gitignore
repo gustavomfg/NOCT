@@ -59,6 +59,7 @@ tmp
 *.tmp-*
 
 # Test and tooling output
+.playwright-cli
 .nyc_output
 test-results
 playwright-report

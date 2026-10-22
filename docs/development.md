@@ -52,3 +52,19 @@ checks, not a replacement for signed release validation.
 
 Run `git diff --check` before submitting a change. Keep tests, contracts,
 preload APIs and documentation aligned when changing a native capability.
+
+## Generated files and repository layout
+
+Builds (`dist/`, `dist-electron/`, `dist-native/`), local packages (`release/`),
+renderer captures (`output/`), test reports and the Vite dependency cache are
+reproducible local output and stay ignored. Old packages can be removed locally;
+published installers remain attached to their versioned GitHub releases.
+
+Keep only referenced images in `docs/images/` and active comparison fixtures in
+`tests/renderer/__screenshots__/`. The canonical brand source and the three
+application image copies are described in [assets](../assets/README.md).
+Superseded planning drafts live in [the historical archive](archive/README.md).
+
+`.nocturne/`, credentials, databases and local editor settings are not build
+caches. Preserve them when cleaning generated output. Schema migrations and
+legacy installation identifiers remain necessary for supported upgrades.

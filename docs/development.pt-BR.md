@@ -52,3 +52,19 @@ de release, não substitutos da validação de uma release assinada.
 Execute `git diff --check` antes de enviar uma alteração. Mantenha testes,
 contratos, APIs do preload e documentação alinhados ao alterar uma capacidade
 nativa.
+
+## Arquivos gerados e organização do repositório
+
+Builds (`dist/`, `dist-electron/`, `dist-native/`), pacotes locais (`release/`),
+capturas do renderer (`output/`), relatórios de testes e o cache de dependências
+Vite são saídas locais reproduzíveis e ficam ignorados. Pacotes antigos podem
+ser removidos localmente; instaladores publicados permanecem nas releases do GitHub.
+
+Mantenha apenas imagens referenciadas em `docs/images/` e comparações ativas em
+`tests/renderer/__screenshots__/`. A marca original e suas três cópias usadas no
+aplicativo estão documentadas em [assets](../assets/README.md). Rascunhos de
+planejamento superados ficam no [arquivo histórico](archive/README.md).
+
+`.nocturne/`, credenciais, bancos e configurações locais do editor não são caches
+de build. Preserve-os ao limpar saídas geradas. Migrações do banco e identificadores
+legados de instalação continuam necessários para atualizações suportadas.
