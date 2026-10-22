@@ -17,5 +17,5 @@ The dialog images are native element screenshots at a 1440 × 900 viewport.
 They have no image edits. Review captures before replacing them, and keep raw
 browser output in the ignored `output/playwright/` directory.
 
-The older date-named images are retained as historical captures; the main
-READMEs use the current screenshots above.
+Only the screenshots used by the current READMEs are kept here. Older captures
+remain available in Git history and historical version tags.

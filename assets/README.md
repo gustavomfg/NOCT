@@ -4,11 +4,10 @@
 
 Use this image as the only source of the mark. Do not redraw its contours in SVG, CSS or individual rectangles. Preserve the native alpha and proportions. Small UI instances use normal image sampling so the high-resolution artwork remains readable.
 
-## Application copies and exports
+## Application copies
 
-- `../public/nocturne.png`: 128px transparent renderer copy.
-- `icons/nocturne-{32,128,512}.png`: transparent size exports.
-- `icons/favicon.png` and `../public/favicon.png`: small mark on the charcoal app tile.
-- `icons/electron.png`, `icons/github.png` and `../build/icon.png`: 512px application tile.
+- `../public/nocturne.png`: 128px transparent renderer copy used in navigation and assistant identity.
+- `../public/favicon.png`: small mark on the charcoal app tile, used by `index.html`.
+- `../build/icon.png`: 512px application tile, used by Electron and electron-builder.
 
-The tile keeps the pale artwork visible in browser tabs and launchers. Raster exports only resize or place the original image on its background; they do not alter the illustration. Each PNG embeds its prompt or source origin. Keep the logo small in navigation and assistant identity; no large decorative illustration is used in the application.
+The tile keeps the pale artwork visible in browser tabs and launchers. These are the copies consumed by the application and packaging; unused size exports and duplicate tiles have been removed. Raster exports only resize or place the original image on its background; they do not alter the illustration. Each PNG embeds its prompt or source origin. Keep the logo small in navigation and assistant identity; no large decorative illustration is used in the application.

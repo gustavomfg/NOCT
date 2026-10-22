@@ -634,11 +634,6 @@
   display: flex;
 }
 
-.settings-scroll {
-  padding-right: 3px;
-  overflow: auto;
-}
-
 .settings-section {
   border-bottom: 1px solid var(--color-surface-raised);
 }

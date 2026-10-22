@@ -789,7 +789,7 @@
   transform: scaleX(1);
 }
 
-.chat-scroll, .inspector-scroll, .conversation-list, .settings-scroll, .preview-content, .suggestion-dialog-body {
+.chat-scroll, .inspector-scroll, .conversation-list, .preview-content, .suggestion-dialog-body {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
