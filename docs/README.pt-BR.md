@@ -52,3 +52,5 @@ As [notas da versão 1.0.5](releases/v1.0.5.pt-BR.md) registram o corpo da
 release; as [notas históricas da versão 1.0.1](releases/v1.0.1.pt-BR.md)
 e o [checklist do candidato](release-rc-checklist.pt-BR.md) permanecem como
 registros da linha estável publicada.
+
+Os rascunhos superados da primeira release ficam no [arquivo histórico](archive/README.md).

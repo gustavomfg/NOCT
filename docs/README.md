@@ -51,3 +51,5 @@ The [1.0.5 release notes](releases/v1.0.5.md) record the release body;
 the [1.0.1 release notes](releases/v1.0.1.md) and the
 [release-candidate checklist](release-rc-checklist.md) remain historical
 records for the published stable line.
+
+Superseded first-release drafts are grouped in the [historical archive](archive/README.md).
