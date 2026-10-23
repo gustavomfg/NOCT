@@ -275,7 +275,10 @@ describe.runIf(protectedRollbackSupported())('native rollback capabilities (real
     expect(steps.trim().split('\n')).toHaveLength(40)
     expect(Buffer.byteLength(steps)).toBeLessThan(fs.statSync(path.join(value.recovery, 'operation.json')).size * 2)
     expect(JSON.parse(fs.readFileSync(path.join(value.recovery, 'operation.json'), 'utf8')).observations).toHaveLength(40)
-  })
+    // Forty sequential durable journal writes can exceed Vitest's default 5s
+    // on shared Windows disks. This checks journal growth, not I/O latency;
+    // keep the real filesystem writes and production command deadlines intact.
+  }, 30_000)
 
   it('classifies disposed unconfirmed publication as UNKNOWN and never replays the retained intent', async () => {
     const value = await fixture()
