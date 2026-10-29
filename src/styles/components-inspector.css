@@ -323,25 +323,6 @@
   line-height: var(--leading-ui);
 }
 
-.quick-actions {
-  gap: 5px;
-  max-width: 760px;
-  margin: 0 auto 6px;
-  display: flex;
-}
-
-.quick-actions button {
-  color: var(--color-text-muted);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-surface-raised);
-  border-radius: 6px;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 7px;
-  font-size: var(--font-caption);
-  display: flex;
-}
-
 .files-panel, .git-panel, .document-panel {
   background: var(--color-canvas);
   border: 1px solid var(--color-surface-raised);

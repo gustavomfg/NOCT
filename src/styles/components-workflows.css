@@ -557,20 +557,20 @@
   display: flex;
 }
 
-.connection.planning > span, .connection.waiting-approval > span, .connection.cancelling > span, .status-dot.planning, .status-dot.waiting-approval, .status-dot.cancelling {
+.status-dot.planning, .status-dot.waiting-approval, .status-dot.cancelling {
   background: #d5a45f;
   box-shadow: none;
 }
 
-.connection.completed > span, .status-dot.completed {
+.status-dot.completed {
   background: var(--green);
 }
 
-.connection.failed > span, .status-dot.failed {
+.status-dot.failed {
   background: #ef7777;
 }
 
-.connection.disconnected > span, .status-dot.disconnected {
+.status-dot.disconnected {
   background: #555;
 }
 
@@ -584,49 +584,6 @@
   padding: 12px;
   font: 450 var(--font-code)/1.6 var(--font-mono);
   overflow: auto;
-}
-
-.agent-mode-switch {
-  gap: 5px;
-  max-width: 760px;
-  margin: 0 auto 6px;
-  display: flex;
-}
-
-.agent-mode-switch button {
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-  align-items: center;
-  gap: 4px;
-  padding: 4px 7px;
-  font-size: var(--font-caption);
-  display: flex;
-}
-
-.agent-mode-switch button span {
-  background: #666;
-  border-radius: 50%;
-}
-
-.agent-mode-switch button.active {
-  color: var(--color-accent);
-}
-
-.agent-mode-switch button.active span {
-  background: var(--color-accent);
-  box-shadow: 0 0 6px var(--color-accent);
-}
-
-.agent-mode-switch button:first-child.active span {
-  background: #d59b62;
-}
-
-.agent-mode-switch button:nth-child(2).active span {
-  background: #70c59a;
-}
-
-.agent-mode-switch button:nth-child(3).active span {
-  background: #7b9cdd;
 }
 
 .beta-settings {

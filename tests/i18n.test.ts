@@ -6,8 +6,8 @@ describe('interface languages', () => {
     expect(isSupportedLanguage('pt-BR')).toBe(true)
     expect(isSupportedLanguage('en')).toBe(true)
     expect(isSupportedLanguage('fr')).toBe(false)
-    expect(translate('pt-BR', 'nav.newConversation')).toBe('Nova conversa')
-    expect(translate('en', 'nav.newConversation')).toBe('New conversation')
+    expect(translate('pt-BR', 'nav.newConversation')).toBe('Nova tarefa')
+    expect(translate('en', 'nav.newConversation')).toBe('New task')
   })
 
   it('interpolates bounded values in both languages', () => {

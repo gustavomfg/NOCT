@@ -53,7 +53,7 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir ajuda e atalhos' }).click()
     const help = page.getByRole('dialog', { name: 'Ajuda e atalhos' })
-    await expect(help.getByText('Nova conversa')).toBeVisible()
+    await expect(help.getByText('Nova tarefa')).toBeVisible()
     await help.getByRole('button', { name: 'Fechar ajuda' }).last().click()
     await page.keyboard.press('?')
     await expect(page.getByRole('dialog', { name: 'Ajuda e atalhos' })).toBeVisible()
@@ -135,7 +135,9 @@ test.describe('renderer do produto', () => {
     await dialog.getByRole('button', { name: 'Salvar alterações' }).click()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
-    await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'New task' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Your request', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Send request', exact: true })).toHaveText('Send request')
     await page.getByRole('button', { name: 'Open settings' }).first().click()
     const englishDialog = page.getByRole('dialog', { name: 'Settings' })
     await englishDialog.getByRole('button', { name: 'Application' }).click()
@@ -146,7 +148,7 @@ test.describe('renderer do produto', () => {
     await englishDialog.getByRole('button', { name: 'Save changes' }).click()
     await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    await expect(page.getByRole('button', { name: 'Nova conversa' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Nova tarefa' })).toBeVisible()
   })
 
   test('publica somente métricas agregadas de desempenho', async ({ page }) => {
@@ -225,9 +227,9 @@ test.describe('renderer do produto', () => {
       await page.setViewportSize(viewport)
       await ready(page)
       if (viewport.width <= 980) await page.getByRole('button', { name: 'Abrir barra lateral' }).click()
-      await page.getByRole('button', { name: 'Inteligência do projeto' }).click()
+      await page.getByRole('button', { name: 'Análise do projeto' }).click()
       await expect(page.locator('#project-index-view')).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Inteligência do projeto' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Análise do projeto' })).toBeVisible()
       await expect(page.locator('#agent-tab-project')).toHaveCount(0)
       await expect(page.locator('#agent-inspector [role="tab"]')).toHaveCount(4)
       if (viewport.width <= 980) await expect(page.locator('#workspace-sidebar')).toHaveClass(/collapsed/)
@@ -237,7 +239,7 @@ test.describe('renderer do produto', () => {
   test('pagina o histórico de validações e deduplica eventos durante o carregamento', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
-    await page.getByRole('button', { name: 'Inteligência do projeto' }).click()
+    await page.getByRole('button', { name: 'Análise do projeto' }).click()
     await page.evaluate(() => {
       const workspace = '/workspace/sample-project'
       const run = (index: number, status: 'passed' | 'failed' = 'passed') => ({
@@ -276,7 +278,7 @@ test.describe('renderer do produto', () => {
   test('não aplica resultado semântico atrasado de uma busca anterior', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
-    await page.getByRole('button', { name: 'Inteligência do projeto' }).click()
+    await page.getByRole('button', { name: 'Análise do projeto' }).click()
     await page.evaluate(() => {
       const pending: Array<(value: unknown) => void> = []
       window.nocturne.semanticIndex.search = async () => new Promise((resolve) => { pending.push((value) => resolve(value as never)) })
@@ -349,7 +351,7 @@ test.describe('renderer do produto', () => {
       }
       Object.defineProperty(window, '__sessionSwitch', { configurable: true, value: { pending, resolveWorkspace } })
     })
-    await page.getByRole('button', { name: 'Inteligência do projeto' }).click()
+    await page.getByRole('button', { name: 'Análise do projeto' }).click()
     await page.evaluate(() => (window as unknown as { __nocturneTest: { emitProjectIndexStatus(payload: unknown): void } }).__nocturneTest.emitProjectIndexStatus({ workspace: '/workspace/sample-project', status: 'completed' }))
     await expect.poll(() => page.evaluate(() => (window as unknown as { __sessionSwitch: { pending: Array<unknown> } }).__sessionSwitch.pending.length)).toBeGreaterThan(0)
     await page.locator('.workspace-card').click()
@@ -366,7 +368,7 @@ test.describe('renderer do produto', () => {
   test('refresh mais recente prevalece na mesma sessão, inclusive sobre erro tardio', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
-    await page.getByRole('button', { name: 'Inteligência do projeto' }).click()
+    await page.getByRole('button', { name: 'Análise do projeto' }).click()
     await page.evaluate(() => {
       const pending: Array<{ resolve(value: unknown): void; reject(error: Error): void }> = []
       window.nocturne.projectIndex.stack = async () => new Promise((resolve, reject) => {
@@ -468,10 +470,13 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir barra lateral' }).click()
     const first = page.getByRole('button', { name: 'Recolher barra lateral' })
-    const last = page.locator('#workspace-sidebar').getByRole('button', { name: 'Abrir configurações' })
     await expect(first).toBeFocused()
     await page.keyboard.press('Shift+Tab')
-    await expect(last).toBeFocused()
+    // Focus wraps to the last control inside the drawer, never to the page behind it.
+    await expect.poll(() => page.evaluate(() => {
+      const active = document.activeElement
+      return Boolean(active && document.querySelector('#workspace-sidebar')?.contains(active) && !active.matches('.sidebar-toggle'))
+    })).toBe(true)
     await page.keyboard.press('Tab')
     await expect(first).toBeFocused()
   })
@@ -492,15 +497,15 @@ test.describe('renderer do produto', () => {
     expect(await composer.evaluate((element) => element.getBoundingClientRect().height)).toBe(initialHeight)
   })
 
-  test('mantém um símbolo textual do estado do agente em 520px', async ({ page }) => {
+  test('mostra o estado do agente em texto no painel em 520px', async ({ page }) => {
     await page.setViewportSize({ width: 520, height: 760 })
     await ready(page)
-    const connection = page.locator('.connection')
-    await expect(connection.locator('.connection-symbol')).toBeVisible()
+    const header = page.locator('#agent-inspector .inspector-header > span')
+    await expect(header).toHaveText('Em espera')
+    await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'running' }))
+    await expect(header).not.toHaveText('Em espera')
     await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'ready' }))
-    await expect(connection.locator('.connection-symbol')).toHaveAttribute('data-symbol', 'ready')
-    await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'failed' }))
-    await expect(connection.locator('.connection-symbol')).toHaveAttribute('data-symbol', 'unavailable')
+    await expect(header).toHaveText('Em espera')
   })
 
   test('expõe streaming, erro e aprovação pendente sem deslocar controles essenciais', async ({ page }) => {
@@ -537,13 +542,36 @@ test.describe('renderer do produto', () => {
       }
     })
     await page.locator('.conversation-open').click()
-    await page.getByLabel('Mensagem para o agente').fill('Tente uma operação recuperável.')
-    await page.getByRole('button', { name: 'Enviar mensagem' }).click()
+    await page.getByLabel('Seu pedido').fill('Tente uma operação recuperável.')
+    await page.getByRole('button', { name: 'Enviar pedido' }).click()
     const alert = page.getByRole('alert')
     await expect(alert).toContainText('A operação excedeu o tempo limite')
     await alert.getByRole('button', { name: 'Tentar novamente' }).click()
     await expect(alert).toBeHidden()
     await expect.poll(() => page.evaluate(() => (window as unknown as { __retryCalls: number }).__retryCalls)).toBe(2)
+  })
+
+  test('leva à decisão pendente e mantém a aprovação explícita em janela compacta', async ({ page }) => {
+    await page.setViewportSize({ width: 720, height: 800 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Mostrar painel do agente' }).click()
+    await page.getByRole('tab', { name: 'Plano', exact: true }).click()
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => {
+      window.nocturne.ai.approve = async () => { throw new Error('Não deve aprovar implicitamente.') }
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void } }).__nocturneTest
+      bridge.emitEvent({ method: 'item/commandExecution/requestApproval', params: { approvalKey: 'task-decision', command: 'npm test' } })
+    })
+    await page.getByRole('button', { name: 'Revisar decisão' }).click()
+    await expect(page.locator('#agent-inspector')).toHaveClass(/open/)
+    await expect(page.getByRole('tab', { name: 'Atividade', exact: true })).toHaveAttribute('aria-selected', 'true')
+    const pending = page.locator('.approval-card.pending')
+    await expect(pending).toContainText('npm test')
+    await expect(pending.getByRole('button').first()).toBeFocused()
+    await expect(pending.getByRole('button')).toHaveCount(2)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: 'Mostrar painel do agente' })).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Revisar decisão' })).toBeVisible()
   })
 
   test('recupera uma conclusão já persistida após reinicialização do renderer', async ({ page }) => {
@@ -709,7 +737,7 @@ test.describe('renderer do produto', () => {
     await aiNav.hover(); await workspaces.hover(); await aiNav.hover(); await workspaces.hover()
     await expect(workspaces).toHaveCSS('transform', 'none')
     await page.waitForTimeout(240)
-    await expect(dialog.locator('p').filter({ hasText: 'Conectar inteligência' })).toBeVisible()
+    await expect(dialog.locator('p').filter({ hasText: 'Conexões, modelos e permissões' })).toBeVisible()
     await dialog.evaluate((element) => {
       element.scrollTo(0, 0)
       element.querySelectorAll<HTMLElement>('*').forEach((child) => child.scrollTo(0, 0))
@@ -744,7 +772,6 @@ test.describe('renderer do produto', () => {
     await page.setViewportSize({ width: 980, height: 820 })
     await ready(page)
     await page.locator('.title-block h1').evaluate((element) => { element.textContent = 'LimpadorEAnalisadorDeArmazenamentoComUmNomeExtremamenteLongo' })
-    await page.locator('.path-pill span').evaluate((element) => { element.textContent = 'LimpadorEAnalisadorDeArmazenamentoComUmNomeExtremamenteLongo' })
     const titleBlock = page.locator('.title-block')
     const actions = page.locator('.top-actions')
     const titleBox = await titleBlock.boundingBox()
@@ -803,7 +830,7 @@ test.describe('renderer do produto', () => {
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
-    await expect(dialog.locator('p').filter({ hasText: 'Conectar inteligência' })).toBeVisible()
+    await expect(dialog.locator('p').filter({ hasText: 'Conexões, modelos e permissões' })).toBeVisible()
 
     await expect(dialog.locator('.ai-active')).toContainText('Nenhuma IA selecionada')
     await dialog.getByRole('button', { name: 'Conectar uma IA' }).click()
@@ -816,7 +843,7 @@ test.describe('renderer do produto', () => {
 
     await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
     await expect(page.locator('.product-toast')).toContainText('Usando anthropic/claude-sonnet.')
-    await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
+    await expect(dialog.getByText('IA do projeto')).toBeVisible()
     await expect(dialog.locator('.ai-active')).toContainText('OpenRouter')
     await expect(dialog.locator('.ai-active')).toContainText('Claude Sonnet')
     await expect(dialog.locator('.ai-list-connections').getByText('OpenRouter', { exact: true })).toBeVisible()
@@ -832,7 +859,7 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
+    await expect(dialog.getByText('IA do projeto')).toBeVisible()
     await dialog.getByRole('button', { name: 'Conectar uma IA' }).click()
     await expect(dialog.getByText('Escolher acesso')).toBeVisible()
 
@@ -845,7 +872,7 @@ test.describe('renderer do produto', () => {
     await expect(dialog.getByText('Claude Sonnet')).toBeVisible()
 
     await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
-    await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
+    await expect(dialog.getByText('IA do projeto')).toBeVisible()
     await expect(dialog.locator('.ai-list-connections').getByText('OpenRouter', { exact: true })).toBeVisible()
 
     await dialog.getByRole('button', { name: 'Remover OpenRouter' }).click()
@@ -871,7 +898,7 @@ test.describe('renderer do produto', () => {
     await expect(confirmation.getByRole('alert')).toHaveText('Não foi possível remover a conexão.')
     await expect(confirmation.getByRole('alert')).toBeVisible()
     await confirmation.getByRole('button', { name: 'Remover', exact: true }).click()
-    await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
+    await expect(dialog.getByText('IA do projeto')).toBeVisible()
     await expect(dialog.getByRole('button', { name: 'Remover OpenRouter' })).toHaveCount(0)
     await expect(page.locator('.product-toast')).toContainText('Conexão removida.')
   })
@@ -964,8 +991,8 @@ test.describe('renderer do produto', () => {
     await page.setViewportSize({ width: 1180, height: 850 })
     await ready(page)
     await page.evaluate(() => { window.nocturne.ai.send = async () => {} })
-    await page.getByLabel('Mensagem para o agente').fill('Registre um aprendizado durável.')
-    await page.getByRole('button', { name: 'Enviar mensagem' }).click()
+    await page.getByLabel('Seu pedido').fill('Registre um aprendizado durável.')
+    await page.getByRole('button', { name: 'Enviar pedido' }).click()
     await page.evaluate(() => {
       const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void; emitStatus(payload: unknown): void } }).__nocturneTest
       const block = `Resposta sem metadados visíveis.\n\n\`\`\`nocturne-memories\n${JSON.stringify([{ kind: 'learning', scope: 'workspace', content: 'Validar restaurações antes de substituir dados locais.', confidence: 85 }])}\n\`\`\``
@@ -1244,8 +1271,8 @@ test('diferencia o estado vazio sem dados locais', async ({ page }) => {
   await installNocturneMock(page, { empty: true })
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
-  await expect(page.getByText('Nenhuma conversa ainda')).toBeVisible()
-  const welcome = page.getByRole('heading', { name: 'Área de trabalho' })
+  await expect(page.getByText('Nenhuma tarefa ainda')).toBeVisible()
+  const welcome = page.getByRole('heading', { name: 'O que você quer resolver?' })
   await expect(welcome).toBeVisible()
   // Entry actions stay visible before preparing or sending a request.
   await expect.poll(() => page.locator('.chat-scroll').evaluate((element) => element.scrollTop)).toBe(0)
@@ -1272,8 +1299,33 @@ test('mantém o erro inicial separado das ações e permite dispensá-lo', async
     expect(errorBounds!.width).toBeCloseTo(welcomeBounds!.width, 0)
     await alert.getByRole('button', { name: 'Fechar' }).click()
     await expect(alert).toBeHidden()
-    await expect(page.getByRole('button', { name: 'Abrir projeto', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'O que você quer resolver?' })).toBeVisible()
   }
+})
+
+test('troca o modo do pedido pelo teclado sem executar a IA e atualiza a instrução', async ({ page }) => {
+  await installNocturneMock(page, { empty: true })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await ready(page)
+  await page.evaluate(() => {
+    window.nocturne.ai.send = async () => { throw new Error('Trocar o modo não deve iniciar a IA.') }
+  })
+  const composer = page.getByLabel('Seu pedido')
+  await page.getByRole('radio', { name: 'Implementar', exact: true }).click()
+  await expect(page.getByRole('radio', { name: 'Implementar', exact: true })).toBeChecked()
+  await expect(composer).toHaveAttribute('placeholder', 'Descreva a mudança que você quer no projeto.')
+  await expect(page.locator('.mode-description')).toContainText('Comandos sempre pedem sua aprovação.')
+  await page.getByRole('radio', { name: 'Documentar', exact: true }).click()
+  await expect(composer).toHaveAttribute('placeholder', 'Qual documentação você precisa? Ela será proposta para revisão.')
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.getByRole('radio', { name: 'Implementar', exact: true })).toBeChecked()
+  await page.keyboard.press('Home')
+  await expect(page.getByRole('radio', { name: 'Analisar', exact: true })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Analisar', exact: true })).toBeFocused()
+  await expect(page.locator('.request-templates, .quick-actions')).toHaveCount(0)
+  await expect(composer).toBeEmpty()
+  await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'running' }))
+  await expect(page.getByRole('button', { name: 'Interromper execução', exact: true })).toHaveText('Interromper')
 })
 
 test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page }) => {
@@ -1303,7 +1355,7 @@ test('oferece APIs, runtimes locais e endpoint próprio sem login de assinatura'
   await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
   const dialog = page.getByRole('dialog', { name: 'Configurações' })
   await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
-  await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
+  await expect(dialog.getByText('IA do projeto')).toBeVisible()
   await expect(dialog.getByText(`O ${productIdentity.displayName} não depende de nenhuma IA específica.`, { exact: false })).toBeVisible()
   await dialog.getByRole('button', { name: 'Conectar uma IA' }).click()
   await expect(dialog.getByRole('button', { name: 'Google Gemini', exact: true })).toBeVisible()
@@ -1345,10 +1397,10 @@ test('orienta a relocalização de um projeto movido sem perder a conversa', asy
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
   await expect(page.getByText('Localizar projeto movido?')).toBeVisible()
-  await expect(page.getByText('Pasta do projeto não encontrada.')).toBeVisible()
+  await expect(page.getByRole('alertdialog', { name: 'Localizar projeto movido?' })).toContainText('A pasta deste projeto não foi encontrada.')
   await page.getByRole('button', { name: 'Localizar pasta' }).click()
   await expect(page.getByText('Localizar projeto movido?')).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Workspace renamed-project' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Projeto renamed-project' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { selectedExpected?: string; memoryReads: number } } }).__nocturneTest.calls())).toEqual({ selectedExpected: '/workspace/sample-project', memoryReads: 1 })
 })
 

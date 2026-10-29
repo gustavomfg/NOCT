@@ -71,23 +71,14 @@ html[data-theme='light'] .settings-header {
 }
 
 html[data-theme='light'] .artifact-icon,
-html[data-theme='light'] .inspector-tabs b,
-html[data-theme='light'] .agent-mode-switch button span {
+html[data-theme='light'] .inspector-tabs b {
   color: var(--color-accent-strong);
   background: var(--color-accent-surface);
   border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
 }
 
-html[data-theme='light'] .send-button:hover:not(:disabled) {
-  color: var(--color-on-accent);
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-html[data-theme='light'] .connection,
 html[data-theme='light'] .attachment-list > span,
-html[data-theme='light'] .message-attachments span,
-html[data-theme='light'] .agent-mode-switch button {
+html[data-theme='light'] .message-attachments span {
   color: var(--color-text-secondary);
   background: var(--color-surface);
   border-color: var(--color-border);
@@ -101,20 +92,12 @@ html[data-theme='light'] .icon-button:hover,
 html[data-theme='light'] .icon-button.selected,
 html[data-theme='light'] .settings-button:hover,
 html[data-theme='light'] .inspector-close:hover,
-html[data-theme='light'] .path-pill:hover,
 html[data-theme='light'] .branch-pill:hover,
-html[data-theme='light'] .agent-mode-switch button:hover,
 html[data-theme='light'] .secondary-setting:hover,
 html[data-theme='light'] .diagnostic-actions button:hover {
   color: var(--color-text);
   background: var(--color-surface-hover);
   border-color: var(--color-border-strong);
-}
-
-html[data-theme='light'] .agent-mode-switch button.active {
-  color: var(--color-accent-strong);
-  background: var(--color-accent-surface);
-  border-color: color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
 }
 
 html[data-theme='light'] .assistant-content code {
@@ -200,61 +183,16 @@ html[data-theme='light'] .diff-panel .removed {
   background: rgb(181 45 67 / 10%);
 }
 
-html[data-theme='light'] .connection.ready,
-html[data-theme='light'] .connection.completed {
-  color: var(--color-success);
-  background: #eaf7f0;
-  border-color: #a9d5bb;
-}
-
-html[data-theme='light'] .connection.running,
-html[data-theme='light'] .connection.starting {
-  color: var(--color-accent-strong);
-  background: var(--color-accent-surface);
-  border-color: var(--color-text);
-}
-
-html[data-theme='light'] .connection.planning,
-html[data-theme='light'] .connection.waiting-approval,
-html[data-theme='light'] .connection.cancelling,
 html[data-theme='light'] .approval-notice {
   color: var(--color-warning);
   background: #fff7e8;
   border-color: #e5c58f;
 }
 
-html[data-theme='light'] .connection.failed,
 html[data-theme='light'] .error-card {
   color: var(--color-danger);
   background: #fcebed;
   border-color: #e5a9b3;
-}
-
-html[data-theme='light'] .mode-build .agent-mode-switch button.active {
-  color: var(--color-warning);
-  background: #fff7e8;
-  border-color: #e5c58f;
-}
-
-html[data-theme='light'] .agent-mode-switch button span {
-  background: var(--color-border-strong);
-}
-
-html[data-theme='light'] .agent-mode-switch button.active span {
-  background: var(--color-accent);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent) 35%, transparent);
-}
-
-html[data-theme='light'] .agent-mode-switch button:first-child.active span {
-  background: var(--color-warning);
-}
-
-html[data-theme='light'] .agent-mode-switch button:nth-child(2).active span {
-  background: var(--color-success);
-}
-
-html[data-theme='light'] .agent-mode-switch button:nth-child(3).active span {
-  background: var(--color-info);
 }
 
 html[data-theme='light'] .modal-backdrop,
@@ -428,26 +366,6 @@ html[data-theme='light'] .assistant-name span {
 
 html[data-theme='light'] .error-card button {
   color: var(--color-danger);
-}
-
-html[data-theme='light'] .composer:hover {
-  border-color: var(--color-border-strong);
-}
-
-html[data-theme='light'] .send-button {
-  color: var(--color-on-accent);
-  background: var(--color-accent-strong);
-  box-shadow: none;
-}
-
-html[data-theme='light'] .send-button.stop {
-  color: #fff;
-  background: var(--color-danger);
-}
-
-html[data-theme='light'] .send-button:disabled {
-  color: var(--color-text-subtle);
-  background: var(--color-surface-raised);
 }
 
 html[data-theme='light'] .inspector-empty div {

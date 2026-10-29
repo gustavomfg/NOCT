@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Activity as ActivityIcon, Check, Eye, FileCode2, FileDown, GitBranch, ListChecks, LoaderCircle, PackageOpen, ShieldCheck, Trash2, X } from 'lucide-react'
 import type { Artifact, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
 import { useAppStore } from '../../store'
+import type { AgentState } from '../../../shared/agentState'
 import { relativeTime } from '../../shared/format'
 import { SuggestionsPanel } from '../suggestions/SuggestionsPanel'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
@@ -12,6 +13,7 @@ import { AgentActivityPanel } from './AgentActivityPanel'
 
 interface AgentPanelProps {
   open: boolean
+  approvalFocusRequest: number
   compact: boolean
   triggerRef: RefObject<HTMLElement | null>
   gitInfo: GitInfo | null
@@ -38,17 +40,29 @@ interface AgentPanelProps {
 const tabs = ['activity', 'plan', 'suggestions', 'artifacts'] as const
 type AgentPanelTab = typeof tabs[number]
 
-export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifactsHaveMore, suggestionsHaveMore, loadingCollection, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onLoadMoreArtifacts, onLoadMoreSuggestions, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
+export function AgentPanel({ approvalFocusRequest, open: isOpen, compact, triggerRef, gitInfo, artifactsHaveMore, suggestionsHaveMore, loadingCollection, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onLoadMoreArtifacts, onLoadMoreSuggestions, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
   useRendererRenderCounter('agentPanel')
   const { t } = useI18n()
-  const { running, planCount, suggestionsCount, artifactsCount } = useAppStore(useShallow((state) => ({
+  const { running, agentState, planCount, suggestionsCount, artifactsCount } = useAppStore(useShallow((state) => ({
     running: state.activities.some((activity) => activity.status === 'running'),
+    agentState: state.status,
     planCount: state.plan.length,
     suggestionsCount: state.suggestions.length,
     artifactsCount: state.artifacts.length,
   })))
   const [tab, setTab] = useState<AgentPanelTab>('activity')
   const inspectorRef = useOffCanvasPanel<HTMLElement>({ open: isOpen, modal: compact, onClose, triggerRef })
+  useEffect(() => {
+    if (!approvalFocusRequest) return
+    setTab('activity')
+    const frame = requestAnimationFrame(() => {
+      const decision = inspectorRef.current?.querySelector<HTMLButtonElement>('.approval-card.pending button')
+      decision?.scrollIntoView({ block: 'nearest', behavior: 'auto' })
+      decision?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [approvalFocusRequest, inspectorRef])
+
 
   useEffect(() => {
     if (inspectorRef.current) inspectorRef.current.inert = !isOpen
@@ -63,7 +77,7 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
   }
 
   return <aside id="agent-inspector" ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen} role={compact && isOpen ? 'dialog' : undefined} aria-modal={compact && isOpen ? true : undefined} aria-label={compact && isOpen ? t('agent.panel') : undefined} tabIndex={-1}>
-    <div className="inspector-header"><div><ActivityIcon size={16}/><strong>{t('agent.name')}</strong></div><span>{running ? t('agent.running') : t('agent.idle')}</span>{compact && <button className="inspector-close" aria-label={t('agent.closePanel')} title={t('agent.closePanel')} onClick={onClose}><X size={16}/></button>}</div>
+    <div className="inspector-header"><div><ActivityIcon size={16}/><strong>{t('agent.name')}</strong></div><span>{agentStateLabel(agentState, running, t)}</span>{compact && <button className="inspector-close" aria-label={t('agent.closePanel')} title={t('agent.closePanel')} onClick={onClose}><X size={16}/></button>}</div>
     <div className="inspector-tabs" role="tablist" aria-label={t('agent.panel')}>
       <TabButton id="activity" index={0} selected={tab === 'activity'} onKeyDown={moveTab} onSelect={setTab} icon={<ActivityIcon size={12}/>} label={t('agent.activity')}/>
       <TabButton id="plan" index={1} selected={tab === 'plan'} onKeyDown={moveTab} onSelect={setTab} icon={<ListChecks size={12}/>} label={t('agent.plan')} count={planCount}/>
@@ -110,4 +124,13 @@ function ArtifactsPanel({ artifacts, hasMore, loadingMore, onLoadMore, onOpen, o
   const { t, language } = useI18n()
   if (!artifacts.length) return <div className="inspector-empty"><div><PackageOpen size={22}/></div><p>{t('agent.noArtifacts')}</p><small>{t('agent.noArtifactsHint')}</small></div>
   return <div className="artifact-list">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><button className="artifact-main" onClick={() => onOpen(artifact)}><span className={`artifact-icon ${artifact.type}`}>{artifact.type === 'file' ? <FileCode2 size={15}/> : artifact.type === 'diff' ? <GitBranch size={15}/> : <FileDown size={15}/>}</span><span><strong>{artifact.title}</strong><small>{artifact.type} · {relativeTime(artifact.updatedAt, language)}</small></span><Eye size={13}/></button><button className="artifact-delete" aria-label={`${t('common.removeArtifact')} ${artifact.title}`} title={t('common.remove')} onClick={() => onDelete(artifact.id)}><Trash2 size={12}/></button></div>)}{hasMore && <button className="collection-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? t('common.loading') : t('agent.loadOlderArtifacts')}</button>}</div>
+}
+
+// The header states what the agent is doing, so waiting for a decision or a failure is never hidden.
+function agentStateLabel(state: AgentState, running: boolean, t: (key: string) => string) {
+  if (state === 'failed') return t('agent.stateFailed')
+  if (state === 'waiting-approval') return t('agent.stateWaiting')
+  if (state === 'cancelling') return t('agent.stateCancelling')
+  if (state === 'planning') return t('agent.statePlanning')
+  return running || state === 'running' ? t('agent.running') : t('agent.idle')
 }

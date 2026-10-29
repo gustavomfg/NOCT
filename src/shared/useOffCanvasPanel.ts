@@ -28,7 +28,7 @@ export function useOffCanvasPanel<T extends HTMLElement>({ open, modal, onClose,
         return
       }
       if (event.key !== 'Tab') return
-      const controls = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter((item) => item.offsetParent !== null)
+      const controls = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter((item) => item.checkVisibility())
       if (!controls.length) { event.preventDefault(); panel.focus(); return }
       const first = controls[0]
       const last = controls[controls.length - 1]

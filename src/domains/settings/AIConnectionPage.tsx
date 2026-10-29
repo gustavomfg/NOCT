@@ -400,18 +400,21 @@ export function AIConnectionPage({ workspaceId, onNotify }: AIConnectionPageProp
         <button className="ai-step-back" aria-label={t('ai.back')} onClick={() => setStep('list')}><ArrowLeft size={16}/></button>
         <div className="ai-step-copy"><strong>{t('ai.chooseAccess')}</strong><small>{t('ai.chooseAccessHint')}</small></div>
       </div>
-      <div className="ai-service-list">
-        {presets.map((preset) => {
-          const Icon = preset.icon
-          return <button key={preset.id} className="ai-service-opt" aria-label={presetName(preset, t)} aria-describedby={`ai-preset-${preset.id}`} onClick={() => pickService(preset)}>
-            <span className="ai-service-mark"><Icon size={17}/></span>
-            <span className="ai-service-copy">
-              <span className="ai-service-name">{presetName(preset, t)}</span>
-              <small id={`ai-preset-${preset.id}`}>{t(`ai.preset.${preset.id}`)}</small>
-            </span>
-            <ArrowLeft className="ai-service-arrow" size={14}/>
-          </button>
-        })}
+      <div className="ai-access-groups">
+        {(['local', 'remote', 'custom'] as const).map((group) => <section key={group} className="ai-access-group">
+          <h4>{t(`front.access.${group}`)}</h4>
+          <p>{t(`front.accessHint.${group}`)}</p>
+          <div className="ai-service-list">
+            {presets.filter((preset) => group === 'custom' ? preset.id === 'other' : group === 'local' ? preset.authType === 'local' : preset.authType === 'api-key' && preset.id !== 'other').map((preset) => {
+              const Icon = preset.icon
+              return <button key={preset.id} className="ai-service-opt" aria-label={presetName(preset, t)} aria-describedby={`ai-preset-${preset.id}`} onClick={() => pickService(preset)}>
+                <span className="ai-service-mark"><Icon size={17}/></span>
+                <span className="ai-service-copy"><span className="ai-service-name">{presetName(preset, t)}</span><small id={`ai-preset-${preset.id}`}>{t(`ai.preset.${preset.id}`)}</small></span>
+                <ArrowLeft className="ai-service-arrow" size={14}/>
+              </button>
+            })}
+          </div>
+        </section>)}
       </div>
     </div>}
 

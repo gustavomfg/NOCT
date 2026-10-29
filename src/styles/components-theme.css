@@ -26,7 +26,7 @@
   min-height: 0;
 }
 
-.topbar, .composer-wrap, .inspector-header, .inspector-tabs {
+.topbar, .inspector-header, .inspector-tabs {
   flex-shrink: 0;
 }
 
@@ -227,18 +227,7 @@
   gap: var(--spacing-md);
 }
 
-.title-block {
-  gap: var(--spacing-md);
-}
-
-.title-block h1 {
-  max-width: 420px;
-  font-size: var(--font-body);
-  letter-spacing: -.01em;
-  font-weight: 650;
-}
-
-.path-pill, .branch-pill {
+.branch-pill {
   gap: var(--spacing-xs);
   min-height: 30px;
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -248,20 +237,10 @@
   font-size: var(--font-small);
 }
 
-.connection {
-  gap: var(--spacing-xs);
-  color: var(--color-text-muted);
-  font-size: var(--font-small);
-}
-
-.connection > span, .status-dot {
+.status-dot {
   flex: 0 0 8px;
   width: 8px;
   height: 8px;
-}
-
-.top-actions {
-  gap: var(--spacing-sm);
 }
 
 .chat-content {
@@ -400,96 +379,7 @@
   font-size: var(--font-small);
 }
 
-.composer-wrap {
-  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-lg);
-}
-
-.composer, .quick-actions, .agent-mode-switch {
-  max-width: 820px;
-}
-
-.composer {
-  border-radius: var(--radius-lg);
-}
-
-.composer textarea {
-  color: var(--color-text);
-  font-size: var(--font-body);
-  line-height: 1.55;
-}
-
-.composer-tools {
-  gap: var(--spacing-sm);
-}
-
-.composer-tools button {
-  border-radius: var(--radius-sm);
-  width: 32px;
-  height: 32px;
-}
-
-.composer-tools span {
-  gap: var(--spacing-xs);
-  color: var(--color-text-muted);
-  font-size: var(--font-caption);
-}
-
 /* Active AI chip: always visible so the user knows which model will run. */
-.composer-ai {
-  min-width: 0;
-  max-width: min(320px, 45%);
-  min-height: var(--control-sm);
-  margin-left: var(--spacing-xs);
-  padding: 0 var(--spacing-sm);
-  align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--color-text-muted);
-  background: transparent;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-caption);
-  display: inline-flex;
-  cursor: pointer;
-  transition: var(--transition-interactive);
-}
-.composer-ai span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer-ai:hover { color: var(--color-text-secondary); background: var(--color-surface-hover); border-color: var(--color-border); }
-.composer-ai.missing { color: var(--color-warning); border-color: var(--color-warning); }
-
-.send-button {
-  border-radius: var(--radius-sm);
-}
-
-.composer-hint {
-  margin-top: var(--spacing-xs);
-  color: var(--color-text-subtle);
-  font-size: var(--font-caption);
-}
-
-.quick-actions, .agent-mode-switch {
-  margin-bottom: var(--spacing-sm);
-  gap: var(--spacing-xs);
-}
-
-.quick-actions button, .agent-mode-switch button {
-  gap: var(--spacing-xs);
-  min-height: 30px;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--color-text-muted);
-  border-color: var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-small);
-}
-
-.agent-mode-switch button small {
-  color: var(--color-text-subtle);
-  font-size: var(--font-caption);
-}
-
-.agent-mode-switch button span {
-  width: 7px;
-  height: 7px;
-}
 
 .attachment-list {
   gap: var(--spacing-xs);
@@ -501,44 +391,6 @@
   min-height: 28px;
   padding: var(--spacing-2xs) var(--spacing-sm);
   font-size: var(--font-caption);
-}
-
-.welcome {
-  padding: var(--spacing-3xl) var(--spacing-xl);
-}
-
-.welcome-orb {
-  border-radius: var(--radius-xl);
-  width: 66px;
-  height: 66px;
-}
-
-.welcome h2 {
-  margin: var(--spacing-xl) 0 var(--spacing-sm);
-  font-size: var(--font-display);
-  letter-spacing: -.035em;
-  font-weight: 650;
-}
-
-.welcome > p {
-  max-width: 520px;
-  color: var(--color-text-muted);
-  font-size: var(--font-body);
-  line-height: 1.65;
-}
-
-.welcome-actions {
-  gap: var(--spacing-sm);
-  margin: var(--spacing-xl) 0 var(--spacing-2xl);
-}
-
-.welcome-actions button {
-  gap: var(--spacing-sm);
-  min-height: 38px;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-color: var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-body);
 }
 
 .suggestions button {

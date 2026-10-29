@@ -28,9 +28,8 @@ interface ChatViewportProps {
   chatScrollRef: RefObject<HTMLElement | null>
   endRef: RefObject<HTMLDivElement | null>
   stickToBottomRef: MutableRefObject<boolean>
-  onNew(): void
+  workspaceReady: boolean
   onWorkspace(): void
-  onPrompt(prompt: string): void
   onLoadOlder(): void
   onLoadLatest(): void
   onScroll(): void
@@ -53,14 +52,14 @@ function StreamingResponse({ chatScrollRef, stickToBottomRef, onNewContent }: Pi
   return streaming ? <AssistantMessage content={streaming} streaming/> : null
 }
 
-export function ChatViewport({ active, messages, error, historyHasMore, historyHasNewer, historyLoading, newContent, chatScrollRef, endRef, stickToBottomRef, onNew, onWorkspace, onPrompt, onLoadOlder, onLoadLatest, onScroll, onNewContent, onDismissError, onRetryError, onJumpLatest }: ChatViewportProps) {
+export function ChatViewport({ active, messages, error, historyHasMore, historyHasNewer, historyLoading, newContent, chatScrollRef, endRef, stickToBottomRef, workspaceReady, onWorkspace, onLoadOlder, onLoadLatest, onScroll, onNewContent, onDismissError, onRetryError, onJumpLatest }: ChatViewportProps) {
   useRendererRenderCounter('chat')
   const { language, t } = useI18n()
   const errorDetails = error ? explainProductError(error, language) : null
   const errorCard = errorDetails && <div className="error-card" role="alert" aria-live="assertive"><AlertTriangle size={18}/><div><strong>{errorDetails.title}</strong><p>{errorDetails.cause}</p><small><b>{t('error.preserved')}:</b> {errorDetails.preserved}</small><small><b>{t('error.resolution')}:</b> {errorDetails.resolution}</small></div><span>{onRetryError && errorDetails.retryable && <button onClick={onRetryError}><RotateCcw size={13}/>{t('error.retry')}</button>}<button onClick={onDismissError}><X size={13}/>{t('common.close')}</button></span></div>
   return <>
     <section ref={chatScrollRef} className="chat-scroll" aria-label={t('chat.history')} onScroll={onScroll}>
-      {!active && !messages.length ? <div className="chat-content welcome-content">{errorCard}<Welcome onNew={onNew} onWorkspace={onWorkspace} onPrompt={onPrompt}/></div> : <div className="chat-content">
+      {!active && !messages.length ? <div className="chat-content welcome-content">{errorCard}<Welcome workspaceReady={workspaceReady} onWorkspace={onWorkspace}/></div> : <div className="chat-content">
         {historyHasMore && <button className="load-history" disabled={historyLoading} onClick={onLoadOlder}>{historyLoading ? t('common.loading') : t('chat.loadOlder')}</button>}
         {messages.map((message, index) => <div className="message-entry" data-message-id={message.id} key={message.id}>{(index === 0 || dayKey(messages[index - 1].createdAt, language === 'en' ? 'en-US' : 'pt-BR') !== dayKey(message.createdAt, language === 'en' ? 'en-US' : 'pt-BR')) && <div className="date-divider"><span>{dayLabel(message.createdAt, language)}</span></div>}<MessageBubble message={message}/></div>)}
         {historyHasNewer && <button className="load-history" onClick={onLoadLatest}>{t('chat.backToLatest')}</button>}

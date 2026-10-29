@@ -22,7 +22,7 @@ export function useDialogA11y<T extends HTMLElement>(onClose: () => void): RefOb
       if (dialogStack[dialogStack.length - 1] !== dialog) return
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); return }
       if (event.key !== 'Tab' || !dialog) return
-      const items = Array.from(dialog.querySelectorAll<HTMLElement>(focusable)).filter((item) => item.offsetParent !== null)
+      const items = Array.from(dialog.querySelectorAll<HTMLElement>(focusable)).filter((item) => item.checkVisibility())
       if (!items.length) { event.preventDefault(); dialog.focus(); return }
       const firstItem = items[0]
       const lastItem = items[items.length - 1]

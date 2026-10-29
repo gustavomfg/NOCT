@@ -1,24 +1,16 @@
 import { memo } from 'react'
-import { ArrowRight, Brain, Code2, FileCode2, FolderOpen, GitBranch, MessageSquarePlus, Paperclip } from 'lucide-react'
+import { Brain, FolderOpen, Paperclip } from 'lucide-react'
 import type { Message } from '../../types'
 import { SafeMarkdown } from '../../shared/SafeMarkdown'
 import { parseAwarenessSnapshot } from '../../../shared/awareness'
 import { useI18n } from '../../shared/i18n'
 
-export function Welcome({ onNew, onWorkspace, onPrompt }: { onNew(): void; onWorkspace(): void; onPrompt(prompt: string): void }) {
+export function Welcome({ workspaceReady, onWorkspace }: { workspaceReady: boolean; onWorkspace(): void }) {
   const { t } = useI18n()
   return <div className="welcome">
-    <div className="welcome-copy">
-      <h2>{t('welcome.title')}</h2>
-      <p>{t('welcome.subtitle')}</p>
-    </div>
-    <div className="welcome-actions"><button onClick={onWorkspace}><FolderOpen size={17}/><span>{t('welcome.openProject')}</span><ArrowRight size={16}/></button><button onClick={onNew}><MessageSquarePlus size={17}/>{t('nav.newConversation')}</button></div>
-    <h3 className="welcome-task-heading">{t('welcome.prepareTask')}</h3>
-    <div className="suggestions" aria-label={t('composer.quickActions')}>
-      <button onClick={() => onPrompt(t('quick.analyze'))}><Code2/><span><strong>{t('welcome.analyzeProject')}</strong><small>{t('welcome.analyzeProjectHint')}</small></span><ArrowRight className="suggestion-arrow"/></button>
-      <button onClick={() => onPrompt(t('quick.review'))}><GitBranch/><span><strong>{t('welcome.reviewChanges')}</strong><small>{t('welcome.reviewChangesHint')}</small></span><ArrowRight className="suggestion-arrow"/></button>
-      <button onClick={() => onPrompt(t('quick.documentation'))}><FileCode2/><span><strong>{t('welcome.createDocumentation')}</strong><small>{t('welcome.createDocumentationHint')}</small></span><ArrowRight className="suggestion-arrow"/></button>
-    </div>
+    <h2>{t('welcome.title')}</h2>
+    <p>{t('welcome.subtitle')}</p>
+    {!workspaceReady && <button type="button" className="welcome-open" onClick={onWorkspace}><FolderOpen size={16}/>{t('welcome.openProject')}</button>}
   </div>
 }
 
