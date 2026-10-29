@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { installNocturneMock } from './mockNocturne'
+import productIdentity from '../../shared/product-identity.json' with { type: 'json' }
 import type { Suggestion } from '../../src/types'
 import { RENDERER_LIMITS, UI_TIMING } from '../../shared/constants'
 
@@ -65,12 +66,12 @@ test.describe('renderer do produto', () => {
       status: 'available', currentVersion: '1.0.1', platform: 'linux', version: '1.1.0', releaseNotes: 'Melhorias de estabilidade.', releaseDate: null, discoveredBy: 'automatic',
     }))
     const toast = page.locator('.update-toast')
-    await expect(toast).toContainText('NOCT 1.1.0 está disponível')
+    await expect(toast).toContainText(`${productIdentity.displayName} 1.1.0 está disponível`)
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await toast.getByRole('button', { name: 'Ver detalhes' }).click()
     await expect(toast).toContainText('Melhorias de estabilidade.')
     await toast.getByRole('button', { name: 'Baixar atualização' }).click()
-    await expect(page.locator('.update-toast')).toContainText('Baixando NOCT 1.1.0')
+    await expect(page.locator('.update-toast')).toContainText(`Baixando ${productIdentity.displayName} 1.1.0`)
 
     await page.evaluate(() => (window as unknown as { __nocturneTest: { emitUpdateState(payload: unknown): void } }).__nocturneTest.emitUpdateState({
       status: 'downloading', currentVersion: '1.0.1', platform: 'linux', version: '1.1.0', percent: 68, transferred: 680, total: 1_000, bytesPerSecond: 100,
@@ -1280,7 +1281,7 @@ test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page })
   await installNocturneMock(page, { firstRun: true, aiBound: true })
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
-  const onboarding = page.getByRole('dialog', { name: 'Prontidão do Nocturne' })
+  const onboarding = page.getByRole('dialog', { name: `Prontidão do ${productIdentity.displayName}` })
   const readiness = onboarding.locator('.readiness-summary')
   await expect(readiness.locator('.readiness-summary-title')).toHaveText('Ambiente pronto para trabalhar')
   await expect(readiness.locator('.readiness-summary-description')).toHaveText('Todas as verificações essenciais foram concluídas.')
@@ -1290,7 +1291,7 @@ test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page })
   await onboarding.getByRole('button', { name: 'Continuar' }).click()
   await onboarding.getByRole('button', { name: 'Concluir configuração' }).click()
   await expect(onboarding).toBeHidden()
-  await expect(page.locator('.product-toast')).toContainText('Nocturne pronto para trabalhar.')
+  await expect(page.locator('.product-toast')).toContainText(`${productIdentity.displayName} pronto para trabalhar.`)
   await expect.poll(() => page.evaluate(() => localStorage.getItem('nocturne.onboarding.completed'))).toBe('true')
 })
 
@@ -1303,7 +1304,7 @@ test('oferece APIs, runtimes locais e endpoint próprio sem login de assinatura'
   const dialog = page.getByRole('dialog', { name: 'Configurações' })
   await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
   await expect(dialog.getByText('Escolha sua IA')).toBeVisible()
-  await expect(dialog.getByText('O Nocturne não depende de nenhuma IA específica.', { exact: false })).toBeVisible()
+  await expect(dialog.getByText(`O ${productIdentity.displayName} não depende de nenhuma IA específica.`, { exact: false })).toBeVisible()
   await dialog.getByRole('button', { name: 'Conectar uma IA' }).click()
   await expect(dialog.getByRole('button', { name: 'Google Gemini', exact: true })).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Outro', exact: true })).toBeVisible()
@@ -1315,7 +1316,7 @@ test('pede a escolha de uma IA no primeiro uso', async ({ page }) => {
   await installNocturneMock(page, { firstRun: true })
   await page.setViewportSize({ width: 1180, height: 850 })
   await ready(page)
-  const onboarding = page.getByRole('dialog', { name: 'Prontidão do Nocturne' })
+  const onboarding = page.getByRole('dialog', { name: `Prontidão do ${productIdentity.displayName}` })
   await expect(onboarding.locator('.readiness-summary-title')).toHaveText('2 etapa(s) precisam de atenção')
   await expect(onboarding.getByText(/Escolha a IA que preferir/)).toBeVisible()
   await onboarding.getByRole('button', { name: 'Agora não' }).click()
