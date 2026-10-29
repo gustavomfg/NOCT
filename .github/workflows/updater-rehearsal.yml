@@ -30,7 +30,7 @@ jobs:
       UPDATER_REHEARSAL_VERSION: ${{ inputs.candidate_version }}
       UPDATER_REHEARSAL_BASE_COMMIT: 0f6cd580c447e50e37d48523d5d1667c691f8286
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v6
