@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const language: Language = document.documentElement.lang === 'en' ? 'en' : 'pt-BR'
     return <main className="renderer-error" role="alert" aria-labelledby="renderer-error-title">
       <div className="renderer-error-panel">
-        <p className="renderer-error-kicker">Nocturne Studio</p>
+        <p className="renderer-error-kicker">NOCT</p>
         <h1 id="renderer-error-title">{translate(language, 'errorBoundary.title')}</h1>
         <p>{translate(language, 'errorBoundary.description')}</p>
         <button className="primary" type="button" onClick={this.reload}>{translate(language, 'errorBoundary.reload')}</button>

@@ -2,7 +2,7 @@
 
 [Português do Brasil](CONTRIBUTING.pt-BR.md)
 
-Thank you for your interest in contributing to **Nocturne Studio**.
+Thank you for your interest in contributing to **NOCT**.
 
 Whether you are fixing a bug, improving documentation, proposing a feature or submitting code, your contribution is appreciated.
 
@@ -120,4 +120,4 @@ Every contribution should respect the project's design priorities:
 4. Human control before automation.
 5. Extensibility before provider-specific implementations.
 
-Thank you for helping improve Nocturne Studio.
+Thank you for helping improve NOCT.

@@ -1,5 +1,5 @@
 ---
-name: "Nocturne Studio"
+name: "NOCT"
 description: "A neutral, compact desktop engineering workspace with a small generated pixel-art N image."
 colors:
   canvas: "#18191c"
@@ -171,7 +171,7 @@ components:
     height: "40px"
 ---
 
-# Design System: Nocturne Studio
+# Design System: NOCT
 
 ## Overview
 

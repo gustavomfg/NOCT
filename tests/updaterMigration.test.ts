@@ -15,9 +15,9 @@ describe('migração da identidade do updater', () => {
   it('faz novos pacotes apontarem para o repositório canônico', () => {
     const builder = fs.readFileSync(path.join(process.cwd(), 'electron-builder.json5'), 'utf8')
 
-    expect(productIdentity.repository).toBe('nocturne-studio')
+    expect(productIdentity.repository).toBe('NOCT')
     expect(builder).toContain('"owner": "gustavomfg"')
-    expect(builder).toContain('"repo": "nocturne-studio"')
+    expect(builder).toContain('"repo": "NOCT"')
     expect(builder).not.toContain('"repo": "Nocturne-Codex"')
   })
 

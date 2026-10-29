@@ -46,9 +46,9 @@ async function smokePackage() {
 
 function packagedExecutable() {
   const candidates = process.platform === 'win32'
-    ? [path.join(releaseDirectory, 'win-unpacked', 'Nocturne Studio.exe')]
+    ? [path.join(releaseDirectory, 'win-unpacked', 'NOCT.exe')]
     : process.platform === 'darwin'
-      ? [path.join(releaseDirectory, 'mac', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio'), path.join(releaseDirectory, 'mac-arm64', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio')]
+      ? [path.join(releaseDirectory, 'mac', 'NOCT.app', 'Contents', 'MacOS', 'NOCT'), path.join(releaseDirectory, 'mac-arm64', 'NOCT.app', 'Contents', 'MacOS', 'NOCT')]
       : [path.join(releaseDirectory, 'linux-unpacked', 'nocturne-studio')]
   const executable = candidates.find((candidate) => fs.existsSync(candidate))
   if (!executable) throw new Error(`Executável unpacked não encontrado em ${releaseDirectory}. Execute npm run package:dir ou npm run package primeiro.`)

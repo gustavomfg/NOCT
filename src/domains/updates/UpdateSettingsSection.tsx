@@ -21,7 +21,7 @@ export function UpdateSettingsSection({ state, connectionError, onCheck, onDownl
   const downloadFailure = state?.status === 'error' && (state.stage === 'download' || state.stage === 'validation')
 
   return <section className="update-settings-card" aria-label={t('updates.title')}>
-    <div className="update-settings-product"><div><strong>Nocturne Studio</strong><small>{t('updates.version', { version: currentVersion })}</small></div>{!unsupported && <span className="update-settings-check"><Check size={13}/>{t('updates.automatic')}</span>}</div>
+    <div className="update-settings-product"><div><strong>NOCT</strong><small>{t('updates.version', { version: currentVersion })}</small></div>{!unsupported && <span className="update-settings-check"><Check size={13}/>{t('updates.automatic')}</span>}</div>
     <div className={`update-settings-status update-status-${state?.status ?? 'idle'}`} role={state?.status === 'error' ? 'alert' : 'status'}>
       {state?.status === 'ready' && <CheckCircle2 size={15}/>} {state?.status === 'error' && <TriangleAlert size={15}/>}<span>{status}</span>
     </div>

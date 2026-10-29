@@ -1,4 +1,4 @@
-# Nocturne Studio
+# NOCT
 
 <!-- impeccable:product-schema 1 -->
 
@@ -26,7 +26,7 @@ The redesign is frontend-only. Preserve IPC contracts, persistence, security bou
 
 ## Brand Commitments
 
-The user requests a complete visual reformulation with a personal character and less generic AI styling. The illustrated night workshop and pixel owl were rejected. The confirmed direction uses Zed, Linear and Raycast as references for a neutral, compact desktop interface. Pixel art is limited to a small logo; no large illustration. The latest user instruction selects a generated raster image as the sole source of the logo, replacing code-drawn SVG attempts. The Nocturne Studio name remains.
+The user requests a complete visual reformulation with a personal character and less generic AI styling. The illustrated night workshop and pixel owl were rejected. The confirmed direction uses Zed, Linear and Raycast as references for a neutral, compact desktop interface. Pixel art is limited to a small logo; no large illustration. The latest user instruction selects a generated raster image as the sole source of the logo, replacing code-drawn SVG attempts. The NOCT name remains.
 
 ## Accessibility & Inclusion
 

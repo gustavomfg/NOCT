@@ -49,7 +49,7 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
         type: 'warning',
         title: 'Atualizar localização do projeto?',
         message: 'A pasta original não foi encontrada.',
-        detail: `O Nocturne Studio atualizará conversas, memórias, sugestões, artefatos e configurações deste workspace para:\n\n${workspace}`,
+        detail: `O NOCT atualizará conversas, memórias, sugestões, artefatos e configurações deste workspace para:\n\n${workspace}`,
         buttons: ['Cancelar', 'Atualizar localização'],
         defaultId: 1,
         cancelId: 0,

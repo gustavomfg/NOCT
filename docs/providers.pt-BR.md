@@ -2,7 +2,7 @@
 
 [English](providers.md)
 
-O Nocturne Studio não depende de nenhuma empresa de IA. Você conecta o Provider
+O NOCT não depende de nenhuma empresa de IA. Você conecta o Provider
 que preferir, escolhe um modelo para cada workspace, e esse modelo executa
 Review, Build e Docs. Não é preciso conta em fornecedor, CLI de fornecedor nem
 assinatura.

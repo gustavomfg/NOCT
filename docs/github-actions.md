@@ -1,6 +1,6 @@
 # GitHub Actions and releases
 
-Nocturne Studio has one maintainer. Normal CI and releases run only on GitHub-hosted
+NOCT has one maintainer. Normal CI and releases run only on GitHub-hosted
 Linux, Windows and macOS runners. No personal AI account, local Actions runner or
 independent reviewer is required for a stable release.
 

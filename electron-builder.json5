@@ -12,11 +12,11 @@
     "enableEmbeddedAsarIntegrityValidation": true,
     "onlyLoadAppFromAsar": true
   },
-  "productName": "Nocturne Studio",
+  "productName": "NOCT",
   "publish": [{
     "provider": "github",
     "owner": "gustavomfg",
-    "repo": "nocturne-studio",
+    "repo": "NOCT",
     "releaseType": "release"
   }],
   "asarUnpack": [

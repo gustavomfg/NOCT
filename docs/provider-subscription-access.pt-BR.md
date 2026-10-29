@@ -2,7 +2,7 @@
 
 [English](provider-subscription-access.md)
 
-O Nocturne Studio conecta-se a IAs por chave de API e por runtimes locais. Não
+O NOCT conecta-se a IAs por chave de API e por runtimes locais. Não
 oferece login com uma assinatura de chat de consumo.
 
 - **Chave de API:** funciona com qualquer Provider configurado; o uso é cobrado

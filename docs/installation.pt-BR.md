@@ -12,7 +12,7 @@ Instale somente artefatos publicados para a release desejada:
   o ZIP correspondente.
 
 O repositório canônico e a fonte do atualizador são
-`gustavomfg/nocturne-studio`. A arquitetura é a indicada pelo asset da
+`gustavomfg/NOCT`. A arquitetura é a indicada pelo asset da
 release; não trate um artefato do workflow de package-validation como release
 estável.
 

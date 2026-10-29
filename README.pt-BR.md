@@ -1,10 +1,10 @@
-# Nocturne Studio
+# NOCT
 
 > Um workspace desktop local-first para entender, revisar e evoluir projetos de software reais com a IA que você escolher.
 
 [English](README.md)
 
-Nocturne Studio é software livre sob a licença MIT. Ele mantém juntos o workspace
+NOCT é software livre sob a licença MIT. Ele mantém juntos o workspace
 de um projeto, suas conversas, achados de engenharia e conhecimento durável.
 É um workspace desktop de engenharia, não uma IDE, uma substituição autônoma do
 desenvolvedor nem um produto oficial de qualquer fornecedor de IA. Ele não depende
@@ -15,7 +15,7 @@ Ele enfrenta a fragmentação de contexto das ferramentas baseadas apenas em
 prompts: estado do projeto, evidências de revisão, decisões e conhecimento aprovado
 continuam conectados em vez de serem reconstruídos a cada conversa.
 
-![Workspace do Nocturne Studio com IA ativa, conversa e painel do agente](docs/images/workspace-overview.png)
+![Workspace do NOCT com IA ativa, conversa e painel do agente](docs/images/workspace-overview.png)
 
 As capturas mostram a interface atual em português com dados de demonstração.
 
@@ -45,7 +45,7 @@ alteração final no projeto.
 
 ## Artefatos de release suportados
 
-[Baixar a release estável v1.0.5](https://github.com/gustavomfg/nocturne-studio/releases/tag/v1.0.5).
+[Baixar a release estável v1.0.5](https://github.com/gustavomfg/NOCT/releases/tag/v1.0.5).
 
 A validação oficial de release cobre atualmente:
 
@@ -153,7 +153,7 @@ A lista completa está em [desenvolvimento](docs/development.pt-BR.md).
 
 ## Estado atual
 
-O `v1.0.5` estável usa `gustavomfg/nocturne-studio` como repositório de publicação e de
+O `v1.0.5` estável usa `gustavomfg/NOCT` como repositório de publicação e de
 atualização. Uma tag de versão inicia o workflow de release no GitHub, que valida
 o código-fonte, o inventário de todas as plataformas e os assets publicados.
 Checksums do Linux são assinados por GPG; Windows e macOS continuam sem
@@ -193,4 +193,4 @@ English é a fonte pública canônica. As traduções em português usam o sufix
 
 ## Licença
 
-Nocturne Studio é distribuído sob a [licença MIT](LICENSE).
+NOCT é distribuído sob a [licença MIT](LICENSE).

@@ -1,6 +1,6 @@
 # Desempenho e orçamentos internos
 
-O Nocturne Studio trata desempenho como parte da estabilidade. Os limites de
+O NOCT trata desempenho como parte da estabilidade. Os limites de
 coleções, buffers, paginação, persistência e backup são exercitados por testes.
 O renderer também publica métricas agregadas para o log local de diagnóstico.
 

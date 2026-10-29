@@ -27,7 +27,7 @@ export function registerDiagnosticsIpc(win: BrowserWindow, logger: Logger, provi
   const ipcMain = registrar ?? safeIpcMain(win)
   const ownsRegistrar = !registrar
   const diagnosticReport = () => ({
-    app: 'Nocturne Studio',
+    app: 'NOCT',
     version: packageMetadata.version,
     platform: process.platform,
     arch: process.arch,

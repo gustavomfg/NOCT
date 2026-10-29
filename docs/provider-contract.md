@@ -1,6 +1,6 @@
 # Contrato de Providers
 
-Todo adapter registrado no Nocturne Studio declara o mesmo contrato interno:
+Todo adapter registrado no NOCT declara o mesmo contrato interno:
 
 - identidade, origem, protocolo e versão quando disponível;
 - descoberta de modelos;

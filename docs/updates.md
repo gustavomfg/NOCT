@@ -44,7 +44,7 @@ its transport-only adapter does **not** certify native installer handoff.
 Operating-system trust prompts remain part of installation on those platforms.
 
 All v1.0.1 metadata points to the canonical GitHub repository
-`gustavomfg/nocturne-studio`, owner `gustavomfg`, release channel `release` and
+`gustavomfg/NOCT`, owner `gustavomfg`, release channel `release` and
 version `1.0.1`. Package metadata and release metadata are checked before
 publication; a checksum does not substitute for a platform signature.
 
@@ -56,6 +56,6 @@ recovering user data during the next startup.
 
 The published `v1.0.0` client embeds the historical
 `gustavomfg/Nocturne-Codex` slug. GitHub redirects that slug's API and asset URLs
-to `gustavomfg/nocturne-studio`, so it remains a compatibility bridge without
+to `gustavomfg/NOCT`, so it remains a compatibility bridge without
 duplicating release metadata or assets. New `v1.0.1` packages embed the
 canonical repository directly.

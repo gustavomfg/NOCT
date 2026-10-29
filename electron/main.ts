@@ -153,7 +153,7 @@ function recordFatalEvent(event: FatalShutdownEvent) {
   logger?.error('app', messages[event.phase], details)
   try {
     const fingerprint = 'error' in event ? describeFatalError(event.error).failureFingerprint : 'indisponível'
-    console.error(`Nocturne Studio: ${messages[event.phase]} [${event.failureType}; ${fingerprint}]`)
+    console.error(`NOCT: ${messages[event.phase]} [${event.failureType}; ${fingerprint}]`)
   } catch { /* diagnostics must not prevent the fatal exit path */ }
 }
 
@@ -447,7 +447,7 @@ else void app.whenReady().then(() => {
   if (app.isPackaged && process.env.NOCTURNE_PACKAGED_RECOVERY_OUTPUT) {
     packagedRecovery.writeStartupFailure(error)
   } else {
-    dialog.showErrorBox('Nocturne Studio não pôde iniciar', error instanceof Error ? error.message : String(error))
+    dialog.showErrorBox('NOCT não pôde iniciar', error instanceof Error ? error.message : String(error))
   }
   void shutdownResources().then(
     () => { process.exitCode = 1; app.exit(1) },

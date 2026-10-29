@@ -12,7 +12,7 @@ Install only artifacts published for the intended release:
   the matching ZIP artifact.
 
 The canonical repository and updater source are
-`gustavomfg/nocturne-studio`. The architecture is the one named by the release
+`gustavomfg/NOCT`. The architecture is the one named by the release
 asset; do not install an artifact from a package-validation workflow as if it
 were a stable release.
 

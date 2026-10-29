@@ -16,19 +16,19 @@ if (!metadataPath || !fs.existsSync(metadataPath)) throw new Error(`app-update.y
 const requireFromWorkspace = createRequire(path.join(root, 'package.json'))
 const yaml = requireFromWorkspace('js-yaml')
 const metadata = yaml.load(fs.readFileSync(metadataPath, 'utf8'))
-const expected = { provider: 'github', owner: 'gustavomfg', repo: 'nocturne-studio', releaseType: 'release' }
+const expected = { provider: 'github', owner: 'gustavomfg', repo: 'NOCT', releaseType: 'release' }
 for (const [key, value] of Object.entries(expected)) {
   if (metadata?.[key] !== value) throw new Error(`app-update.yml inválido: ${key} deve ser ${value}.`)
 }
-process.stdout.write(`Updater metadata ${platform}: provider github, gustavomfg/nocturne-studio, releaseType release.\n`)
+process.stdout.write(`Updater metadata ${platform}: provider github, gustavomfg/NOCT, releaseType release.\n`)
 
 function metadataLocation(name, targetArchitecture, directory) {
   const candidates = {
     linux: [path.join(directory, 'linux-unpacked', 'resources', 'app-update.yml')],
     windows: [path.join(directory, 'win-unpacked', 'resources', 'app-update.yml')],
     macos: [
-      ...(targetArchitecture === 'arm64' ? [] : [path.join(directory, 'mac', 'Nocturne Studio.app', 'Contents', 'Resources', 'app-update.yml')]),
-      path.join(directory, 'mac-arm64', 'Nocturne Studio.app', 'Contents', 'Resources', 'app-update.yml'),
+      ...(targetArchitecture === 'arm64' ? [] : [path.join(directory, 'mac', 'NOCT.app', 'Contents', 'Resources', 'app-update.yml')]),
+      path.join(directory, 'mac-arm64', 'NOCT.app', 'Contents', 'Resources', 'app-update.yml'),
     ],
   }
   return candidates[name].find((candidate) => fs.existsSync(candidate))

@@ -1,10 +1,10 @@
-# Nocturne Studio
+# NOCT
 
 [Português do Brasil](README.pt-BR.md)
 
 > A local-first desktop workspace for understanding, reviewing and evolving real software projects with the AI you choose.
 
-Nocturne Studio is free software under the MIT license. It keeps a project's
+NOCT is free software under the MIT license. It keeps a project's
 workspace, conversations, engineering findings and durable knowledge together.
 It is a desktop engineering workspace, not an IDE, an autonomous replacement
 for a developer, or an official product of any AI vendor. It does not depend on
@@ -15,7 +15,7 @@ It addresses the context fragmentation of prompt-only tools: project state,
 review evidence, decisions and approved knowledge remain connected instead of
 being reconstructed in every conversation.
 
-![Nocturne Studio workspace with the active AI, conversation and agent panel](docs/images/workspace-overview.png)
+![NOCT workspace with the active AI, conversation and agent panel](docs/images/workspace-overview.png)
 
 Screenshots show the current interface in Portuguese with demonstration data.
 
@@ -43,7 +43,7 @@ change to a project.
 
 ## Supported release artifacts
 
-[Download the stable v1.0.5 release](https://github.com/gustavomfg/nocturne-studio/releases/tag/v1.0.5).
+[Download the stable v1.0.5 release](https://github.com/gustavomfg/NOCT/releases/tag/v1.0.5).
 
 Official release validation currently covers:
 
@@ -148,7 +148,7 @@ The full command list is in [development](docs/development.md).
 
 ## Current status
 
-The `v1.0.5` stable release uses `gustavomfg/nocturne-studio` as its publication and
+The `v1.0.5` stable release uses `gustavomfg/NOCT` as its publication and
 updater repository. A version tag starts the GitHub-hosted release workflow,
 which validates the source, all platform inventories and published assets.
 Linux checksums are GPG-signed; Windows and macOS remain unsigned, and macOS
@@ -187,4 +187,4 @@ English is the canonical public source. Portuguese translations use the
 
 ## License
 
-Nocturne Studio is distributed under the [MIT License](LICENSE).
+NOCT is distributed under the [MIT License](LICENSE).

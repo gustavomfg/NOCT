@@ -2,7 +2,7 @@
 
 [Português do Brasil](getting-started.pt-BR.md)
 
-1. Open Nocturne Studio and complete the first-use screen.
+1. Open NOCT and complete the first-use screen.
 2. Select a project folder. The explicit selection authorizes only that root.
 3. Open **Settings > AI**.
 4. Click **Connect an AI** and choose a service: an API key (Gemini, OpenRouter,

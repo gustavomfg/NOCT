@@ -2,7 +2,7 @@
 
 [English](architecture.md)
 
-O Nocturne Studio é um workspace desktop Electron. O renderer apresenta estado
+O NOCT é um workspace desktop Electron. O renderer apresenta estado
 e solicita operações; não recebe acesso a Node.js, Electron, credenciais ou ao
 filesystem diretamente.
 

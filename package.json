@@ -3,9 +3,9 @@
   "private": true,
   "version": "1.0.5",
   "description": "Local-first desktop engineering workspace for projects and any AI provider the developer chooses.",
-  "desktopName": "Nocturne Studio",
+  "desktopName": "NOCT",
   "license": "MIT",
-  "author": "Nocturne Studio contributors",
+  "author": "NOCT contributors",
   "type": "module",
   "packageManager": "npm@11.18.0",
   "engines": {

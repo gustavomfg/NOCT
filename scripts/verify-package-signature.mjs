@@ -15,8 +15,8 @@ else verifyLinux()
 
 function verifyMac() {
   const app = firstExisting([
-    path.join(releaseDirectory, 'mac', 'Nocturne Studio.app'),
-    path.join(releaseDirectory, 'mac-arm64', 'Nocturne Studio.app'),
+    path.join(releaseDirectory, 'mac', 'NOCT.app'),
+    path.join(releaseDirectory, 'mac-arm64', 'NOCT.app'),
   ])
   execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' })
   execFileSync('spctl', ['--assess', '--type', 'execute', '--verbose=2', app], { stdio: 'inherit' })

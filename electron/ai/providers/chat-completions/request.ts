@@ -65,7 +65,7 @@ export function buildChatCompletionsRequest(
 
 function buildSystemContext(task: NormalizedTask, toolsAvailable: boolean) {
   const sections = [
-    `Você é o agente de engenharia do Nocturne Studio trabalhando no workspace "${task.workspace.name}".`,
+    `Você é o agente de engenharia do NOCT trabalhando no workspace "${task.workspace.name}".`,
     agentModeInstructions(task.mode),
     toolsAvailable
       ? toolInstructions(task)

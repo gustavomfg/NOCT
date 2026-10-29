@@ -2,7 +2,7 @@
 
 [English](getting-started.md)
 
-1. Abra o Nocturne Studio e conclua a apresentação inicial.
+1. Abra o NOCT e conclua a apresentação inicial.
 2. Selecione uma pasta de projeto. A seleção explícita autoriza somente essa
    raiz.
 3. Abra **Configurações > IA**.

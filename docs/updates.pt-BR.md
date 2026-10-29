@@ -44,7 +44,7 @@ de dados; seu adapter apenas de transporte **não** certifica handoff do instala
 Avisos de confiança do sistema operacional fazem parte da instalação nessas plataformas.
 
 Toda metadata da v1.0.1 aponta para o repositório canônico do GitHub
-`gustavomfg/nocturne-studio`, owner `gustavomfg`, canal `release` e versão
+`gustavomfg/NOCT`, owner `gustavomfg`, canal `release` e versão
 `1.0.1`. A metadata do pacote e da release é verificada antes da publicação;
 checksum não substitui assinatura de plataforma.
 
@@ -56,6 +56,6 @@ no próximo startup.
 
 O cliente `v1.0.0` publicado embute o slug histórico
 `gustavomfg/Nocturne-Codex`. O GitHub redireciona a API e as URLs de assets desse
-slug para `gustavomfg/nocturne-studio`, mantendo uma ponte de compatibilidade
+slug para `gustavomfg/NOCT`, mantendo uma ponte de compatibilidade
 sem duplicar metadados ou assets de release. Os novos pacotes `v1.0.1` embutem
 diretamente o repositório canônico.

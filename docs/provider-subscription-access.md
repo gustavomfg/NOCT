@@ -2,7 +2,7 @@
 
 [Português do Brasil](provider-subscription-access.pt-BR.md)
 
-Nocturne Studio connects to AI through API keys and local runtimes. It does not
+NOCT connects to AI through API keys and local runtimes. It does not
 offer a login with a consumer chat subscription.
 
 - **API key:** works with any configured provider; usage is billed by that

@@ -65,12 +65,12 @@ test.describe('renderer do produto', () => {
       status: 'available', currentVersion: '1.0.1', platform: 'linux', version: '1.1.0', releaseNotes: 'Melhorias de estabilidade.', releaseDate: null, discoveredBy: 'automatic',
     }))
     const toast = page.locator('.update-toast')
-    await expect(toast).toContainText('Nocturne Studio 1.1.0 está disponível')
+    await expect(toast).toContainText('NOCT 1.1.0 está disponível')
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await toast.getByRole('button', { name: 'Ver detalhes' }).click()
     await expect(toast).toContainText('Melhorias de estabilidade.')
     await toast.getByRole('button', { name: 'Baixar atualização' }).click()
-    await expect(page.locator('.update-toast')).toContainText('Baixando Nocturne Studio 1.1.0')
+    await expect(page.locator('.update-toast')).toContainText('Baixando NOCT 1.1.0')
 
     await page.evaluate(() => (window as unknown as { __nocturneTest: { emitUpdateState(payload: unknown): void } }).__nocturneTest.emitUpdateState({
       status: 'downloading', currentVersion: '1.0.1', platform: 'linux', version: '1.1.0', percent: 68, transferred: 680, total: 1_000, bytesPerSecond: 100,

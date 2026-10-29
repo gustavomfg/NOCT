@@ -4,7 +4,7 @@
 
 ## Our Commitment
 
-Nocturne Studio aims to provide a welcoming, respectful and collaborative environment for everyone.
+NOCT aims to provide a welcoming, respectful and collaborative environment for everyone.
 
 We value constructive technical discussions, mutual respect and open collaboration.
 
@@ -50,4 +50,4 @@ Public discussions should remain focused on the technical aspects of the project
 
 ---
 
-Thank you for helping build a respectful and collaborative community around Nocturne Studio.
+Thank you for helping build a respectful and collaborative community around NOCT.

@@ -2,7 +2,7 @@
 
 [English](privacy.md)
 
-O Nocturne Studio é local-first. Banco local, conversas, sugestões, memórias,
+O NOCT é local-first. Banco local, conversas, sugestões, memórias,
 configurações e logs ficam no dispositivo, no diretório de dados do produto.
 
 Conteúdo sai do dispositivo somente quando o usuário executa uma tarefa com um
@@ -33,5 +33,5 @@ aplicam as políticas do Provider escolhido ao conteúdo enviado. A saída das
 ferramentas (conteúdo de arquivos e de comandos) faz parte desse conteúdo quando
 o agente o envia ao modelo.
 
-O Nocturne Studio é independente e não é um produto oficial de nenhum fornecedor
+O NOCT é independente e não é um produto oficial de nenhum fornecedor
 de IA.

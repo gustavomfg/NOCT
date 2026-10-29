@@ -2,7 +2,7 @@
 
 [Português do Brasil](SECURITY.pt-BR.md)
 
-Nocturne Studio is a local desktop application, but it handles project files,
+NOCT is a local desktop application, but it handles project files,
 provider credentials and communication with external AI services. Security
 reports are welcome.
 

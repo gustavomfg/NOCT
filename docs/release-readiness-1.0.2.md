@@ -37,7 +37,7 @@ authorization to modify the historical `v1.0.1` or `v1.0.0` lines.
 The stabilization history was fast-forwarded into `main` at
 `cb08556dd3ae4e7b99c26bf632fb8c2ebd6652e7`; no history was squashed or rewritten.
 Its integrated hosted source/renderer/three-platform package gate passed in
-[run 36513047693](https://github.com/gustavomfg/nocturne-studio/actions/runs/36513047693).
+[run 36513047693](https://github.com/gustavomfg/NOCT/actions/runs/36513047693).
 This is baseline evidence, **not certification of later commits**.
 
 Local validation after the terminal/updater/dependency fixes, at source baseline
@@ -80,7 +80,7 @@ the selected SHA; absence of evidence means `NOT VERIFIED`, not PASS.
 | Release metadata | `npm run verify:release-metadata`; candidate/version/updater identity consistent |
 
 CodeQL default setup now includes Actions, JavaScript/TypeScript and C/C++.
-[Run 36515332891](https://github.com/gustavomfg/nocturne-studio/actions/runs/36515332891)
+[Run 36515332891](https://github.com/gustavomfg/NOCT/actions/runs/36515332891)
 analyzed `82d2577`; C++ used build mode `none` and reported 1 of 2 source/header
 files scanned. This is Linux-hosted static analysis, **not coverage certification
 of every Windows/macOS conditional branch**. The final run and outstanding alert

@@ -1,16 +1,16 @@
 # Identidade estável do produto
 
-Este documento define os identificadores do Nocturne Studio que devem
+Este documento define os identificadores do NOCT que devem
 permanecer estáveis durante a linha 1.x.
 
 | Finalidade | Identificador |
 | --- | --- |
-| Nome de exibição e processo | `Nocturne Studio` |
+| Nome de exibição e processo | `NOCT` |
 | Pacote npm | `nocturne-studio` |
 | App ID de distribuição | `com.nocturne.codex` |
 | Diretório atual de dados | `Nocturne Studio` |
 | Diretório legado de dados | `Nocturne Codex` |
-| Repositório canônico de publicação e atualização | `gustavomfg/nocturne-studio` |
+| Repositório canônico de publicação e atualização | `gustavomfg/NOCT` |
 
 `shared/product-identity.json` é a fonte canônica desses valores.
 
@@ -31,7 +31,7 @@ migração falhar, o aplicativo continua usando o diretório legado.
 
 O build `v1.0.0` publicado no SHA `310f86a1a71814f8cc05ef3275ce27e1babbb15d`
 embute `gustavomfg/Nocturne-Codex` no `app-update.yml`. A API e os downloads
-desse slug retornam redirect para `gustavomfg/nocturne-studio`, que é seguido
+desse slug retornam redirect para `gustavomfg/NOCT`, que é seguido
 pelo `electron-updater`; por isso não é necessário duplicar metadata ou assets
 no repositório legado. O `v1.0.1` passa a embutir diretamente o repositório
 canônico.

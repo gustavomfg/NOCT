@@ -1,8 +1,8 @@
-# Nocturne Studio — Agent Instructions
+# NOCT — Agent Instructions
 
 ## Product identity
 
-Nocturne Studio is a local desktop Engineering Workspace for coordinating
+NOCT is a local desktop Engineering Workspace for coordinating
 a developer, user-selected AI providers, and the state of a real software project.
 It is free software, independent of any AI vendor; no vendor CLI or account is required.
 

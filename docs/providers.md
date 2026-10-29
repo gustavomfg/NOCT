@@ -2,7 +2,7 @@
 
 [Português do Brasil](providers.pt-BR.md)
 
-Nocturne Studio does not depend on a specific AI company. You connect the
+NOCT does not depend on a specific AI company. You connect the
 provider you prefer, choose a model for each workspace and that model runs
 Review, Build and Docs. Nothing else is required: no vendor account, no vendor
 CLI and no subscription.

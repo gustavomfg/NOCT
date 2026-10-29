@@ -1,4 +1,4 @@
-# Nocturne Studio brand assets
+# NOCT brand assets
 
 `logo/nocturne-logo.png` is the canonical generated raster logo: an ivory and muted-peach pixel-art N with interlocking strokes on a transparent background. It was produced with the built-in Imagegen tool. The exact prompt and source are recorded in `logo/nocturne-logo.provenance.json`.
 

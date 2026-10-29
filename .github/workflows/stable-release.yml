@@ -230,6 +230,6 @@ jobs:
             echo 'The release already exists; refusing to replace published assets.' >&2
             exit 1
           fi
-          gh release create "$RELEASE_TAG" release-assets/* --verify-tag --notes-file "docs/releases/$RELEASE_TAG.md" --title "Nocturne Studio $RELEASE_TAG"
+          gh release create "$RELEASE_TAG" release-assets/* --verify-tag --notes-file "docs/releases/$RELEASE_TAG.md" --title "NOCT $RELEASE_TAG"
       - name: Verify published tag, notes and asset digests
         run: node scripts/verify-published-release.mjs release-assets

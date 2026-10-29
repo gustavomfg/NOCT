@@ -2,7 +2,7 @@
 
 [Português do Brasil](privacy.pt-BR.md)
 
-Nocturne Studio is local-first. The local database, conversations, suggestions,
+NOCT is local-first. The local database, conversations, suggestions,
 memories, settings and application logs remain on the device under the product
 user-data directory.
 
@@ -33,4 +33,4 @@ Performance metrics are aggregate numbers only. The policies of the selected
 provider also apply to any content sent to it. Tool output (file contents and
 command output) is part of that content when the agent sends it to the model.
 
-Nocturne Studio is independent and is not an official product of any AI vendor.
+NOCT is independent and is not an official product of any AI vendor.

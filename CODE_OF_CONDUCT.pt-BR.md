@@ -4,7 +4,7 @@
 
 ## Nosso compromisso
 
-O Nocturne Studio busca oferecer um ambiente acolhedor, respeitoso e
+O NOCT busca oferecer um ambiente acolhedor, respeitoso e
 colaborativo para todos. Valorizamos discussões técnicas construtivas, respeito
 mútuo e colaboração aberta.
 

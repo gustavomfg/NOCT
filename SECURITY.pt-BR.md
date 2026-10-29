@@ -2,7 +2,7 @@
 
 [English](SECURITY.md)
 
-O Nocturne Studio é um aplicativo desktop local, mas lida com arquivos de
+O NOCT é um aplicativo desktop local, mas lida com arquivos de
 projeto, credenciais de Providers e comunicação com serviços de IA externos.
 Relatos de segurança são bem-vindos.
 

@@ -7,7 +7,7 @@ import path from 'node:path'
 const root = process.cwd()
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version
 const tag = `v${version}`
-const repository = process.env.GITHUB_REPOSITORY || 'gustavomfg/nocturne-studio'
+const repository = process.env.GITHUB_REPOSITORY || 'gustavomfg/NOCT'
 const expectedSha = process.env.RELEASE_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 const directory = path.resolve(process.argv[2] || path.join('release', version))
 

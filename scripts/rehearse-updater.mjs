@@ -246,11 +246,11 @@ async function findExecutable(directory) {
   const candidates = process.platform === 'linux'
     ? [path.join(directory, 'linux-unpacked', 'nocturne-studio')]
     : process.platform === 'win32'
-      ? [path.join(directory, 'win-unpacked', 'Nocturne Studio.exe')]
+      ? [path.join(directory, 'win-unpacked', 'NOCT.exe')]
       : [
-          path.join(directory, 'mac', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio'),
-          path.join(directory, 'mac-arm64', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio'),
-          path.join(directory, 'mac-x64', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio'),
+          path.join(directory, 'mac', 'NOCT.app', 'Contents', 'MacOS', 'NOCT'),
+          path.join(directory, 'mac-arm64', 'NOCT.app', 'Contents', 'MacOS', 'NOCT'),
+          path.join(directory, 'mac-x64', 'NOCT.app', 'Contents', 'MacOS', 'NOCT'),
         ]
   for (const candidate of candidates) if (await pathExists(candidate)) return candidate
   throw new Error(`Executável empacotado não encontrado em ${directory}. Execute o build base e o build candidato primeiro.`)

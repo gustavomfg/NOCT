@@ -163,7 +163,7 @@ try {
     setDiagnosticStage('prepare-fixture', 'manual-valid-recovery')
     corruptDatabase(valid.userData)
     await fsp.copyFile(baselineDatabase, path.join(valid.userData, 'nocturne.db.recovery-valid'))
-    process.stdout.write('Confirme “Restaurar ponto de recuperação” no diálogo nativo do Nocturne Studio para concluir a etapa manual.\n')
+    process.stdout.write('Confirme “Restaurar ponto de recuperação” no diálogo nativo do NOCT para concluir a etapa manual.\n')
     const validResult = await launch(executable, valid.userData, valid.workspace, 'verify', valid.report, { timeoutMs: 120_000, harnessRoot: temporaryRoot, scenario: 'manual-valid-recovery' })
     setDiagnosticStage('write-report', 'manual-valid-recovery')
     const validState = await readReport(valid.report)
@@ -192,9 +192,9 @@ try {
 function packagedExecutable() {
   const releaseDirectory = path.join(root, 'release', packageMetadata.version)
   const candidates = process.platform === 'win32'
-    ? [path.join(releaseDirectory, 'win-unpacked', 'Nocturne Studio.exe')]
+    ? [path.join(releaseDirectory, 'win-unpacked', 'NOCT.exe')]
     : process.platform === 'darwin'
-      ? [path.join(releaseDirectory, 'mac', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio'), path.join(releaseDirectory, 'mac-arm64', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio'), path.join(releaseDirectory, 'mac-x64', 'Nocturne Studio.app', 'Contents', 'MacOS', 'Nocturne Studio')]
+      ? [path.join(releaseDirectory, 'mac', 'NOCT.app', 'Contents', 'MacOS', 'NOCT'), path.join(releaseDirectory, 'mac-arm64', 'NOCT.app', 'Contents', 'MacOS', 'NOCT'), path.join(releaseDirectory, 'mac-x64', 'NOCT.app', 'Contents', 'MacOS', 'NOCT')]
       : [path.join(releaseDirectory, 'linux-unpacked', 'nocturne-studio')]
   const executable = candidates.find((candidate) => fs.existsSync(candidate))
   if (!executable) throw new Error(`Executável empacotado não encontrado em release/${packageMetadata.version}. Execute npm run package:dir -- --publish never.`)
@@ -204,9 +204,9 @@ function packagedExecutable() {
 function assertIsolatedUserData(rootDirectory, userData) {
   const temporary = path.resolve(os.tmpdir())
   const forbidden = [
-    path.join(os.homedir(), '.config', 'Nocturne Studio'),
-    path.join(os.homedir(), 'AppData', 'Roaming', 'Nocturne Studio'),
-    path.join(os.homedir(), 'Library', 'Application Support', 'Nocturne Studio'),
+    path.join(os.homedir(), '.config', 'NOCT'),
+    path.join(os.homedir(), 'AppData', 'Roaming', 'NOCT'),
+    path.join(os.homedir(), 'Library', 'Application Support', 'NOCT'),
   ].map((candidate) => path.resolve(candidate))
   const canonicalRoot = canonicalizePath(rootDirectory)
   const canonicalUserData = canonicalizePath(userData)
