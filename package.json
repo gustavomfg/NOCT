@@ -53,7 +53,7 @@
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "typescript": "^6.0.3",
-    "zod": "^4.4.3",
+    "zod": "^4.6.7",
     "zustand": "^5.0.14"
   },
   "overrides": {
@@ -68,20 +68,20 @@
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
     "@vitejs/plugin-react": "^6.0.3",
-    "electron": "43.5.0",
+    "electron": "43.8.4",
     "electron-builder": "^26.15.7",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.0.0",
     "postcss": "^8.5.16",
-    "vite": "^8.1.5",
+    "vite": "^8.1.6",
     "vite-plugin-electron": "^1.1.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.12"
   },
   "main": "dist-electron/main.js",
   "allowScripts": {
-    "electron@43.5.0": true,
+    "electron@43.8.4": true,
     "better-sqlite3@13.0.3": true,
     "electron-winstaller@5.4.0": true
   }

@@ -41,6 +41,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Audit build tooling and the packaged Electron runtime
+        run: npm audit --include=dev --audit-level=high
       - name: Generate CycloneDX SBOM
         run: npm sbom --sbom-format cyclonedx > nocturne-studio.cdx.json
       - name: Upload SBOM
