@@ -18,6 +18,9 @@ continuam conectados em vez de serem reconstruídos a cada conversa.
 ![Workspace do NOCT com IA ativa, conversa e painel do agente](docs/images/workspace-overview.png)
 
 As capturas mostram a interface atual em português com dados de demonstração.
+O pedido fica no centro, com planos e aprovações ao lado. O contexto do projeto
+e os modelos de pedido podem ser recolhidos; Analisar, Implementar e Documentar
+explicam a função de cada modo antes do envio.
 
 ## O que ele faz
 
@@ -79,7 +82,7 @@ publicam checksums sem assinatura de plataforma nem notarização; consulte
 
 Ollama, LM Studio e endpoints próprios usam o mesmo fluxo de conexão.
 
-![Opções de runtimes locais e endpoint próprio](docs/images/local-models.png)
+![Opções de modelos locais em Configurações → IA](docs/images/local-models.png)
 
 A conexão ativa mostra o Provider e o modelo vinculados ao workspace.
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-18T21:22:41.121Z",
+  "generatedAt": "2026-10-29T19:47:54.386Z",
   "title": "Design System: NOCT",
   "extensions": {
     "colorMeta": {
@@ -680,7 +680,7 @@
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Start heading; effective studio override."
+        "purpose": "Start question; 28px studio display, 20px at compact widths."
       },
       "headline": {
         "displayName": "Headline",
@@ -696,7 +696,7 @@
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Navigation, metadata, modes, and compact controls; 13px floor."
+        "purpose": "Navigation, task modes, metadata, and compact controls; 13px floor."
       },
       "code": {
         "displayName": "Code",
@@ -712,7 +712,7 @@
       {
         "name": "shadow-md",
         "value": "0 12px 36px rgb(0 0 0 / 36%)",
-        "purpose": "Existing dark structural overlay elevation; working surfaces remain flat."
+        "purpose": "Dark structural overlay elevation, including the open request-template popover; working surfaces remain flat."
       },
       {
         "name": "shadow-lg",
@@ -857,15 +857,15 @@
       "kind": "input",
       "refersTo": "search-field",
       "description": "Transparent sidebar search gains a surface and stronger border on focus.",
-      "html": "<label class=\"ds-search\"><input aria-label=\"Search conversations\" placeholder=\"Search conversations\"></label>",
+      "html": "<label class=\"ds-search\"><input aria-label=\"Search tasks\" placeholder=\"Search tasks\"></label>",
       "css": ".ds-search { display:flex; align-items:center; min-height:var(--control-md); padding:0 var(--spacing-sm); border:1px solid transparent; border-radius:var(--radius-sm); background:transparent; transition:var(--transition-interactive); } .ds-search input { font-family:var(--font-sans); font-size:var(--font-small); color:var(--color-text); background:transparent; border:0; width:100%; outline:none; } .ds-search input::placeholder { color:var(--color-text-subtle); } .ds-search:focus-within { background:var(--color-surface); border-color:var(--color-border-strong); }"
     },
     {
       "name": "Selected navigation",
       "kind": "nav",
       "refersTo": "navigation-active",
-      "description": "Neutral selected sidebar tool; selection remains textual and structural.",
-      "html": "<nav aria-label=\"Workspace\"><button class=\"ds-nav\" type=\"button\" aria-current=\"page\">Conversations</button></nav>",
+      "description": "Neutral selected project tool; task history uses the same compact text hierarchy.",
+      "html": "<nav aria-label=\"Workspace\"><button class=\"ds-nav\" type=\"button\" aria-current=\"page\">Project intelligence</button></nav>",
       "css": ".ds-nav {font-family:var(--font-sans); font-size:var(--font-body); font-weight:450; transition:var(--transition-interactive); width:100%; text-align:left; min-height:var(--control-md); padding:0 var(--spacing-sm); border:0; border-radius:var(--radius-sm); color:var(--color-text); background:var(--color-surface-raised); font-size:var(--font-small); } .ds-nav:hover { background:var(--color-surface-raised); } .ds-nav:active { transform:none; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
     },
     {
@@ -885,28 +885,28 @@
       "css": ".ds-activity { font-family:var(--font-sans); font-size:var(--font-small); color:var(--color-text-secondary); background:transparent; border:1px solid var(--color-border-subtle); border-radius:var(--radius-md); overflow:hidden; } .ds-activity summary { display:flex; align-items:center; min-height:var(--control-lg); padding:0 var(--spacing-md); font-weight:450; cursor:pointer; list-style:none; } .ds-activity summary:hover { background:var(--color-surface-raised); } .ds-activity[open] summary { background:var(--color-surface-raised); border-bottom:1px solid var(--color-border); } .ds-activity summary:focus-visible { outline:2px solid var(--color-accent); outline-offset:-2px; } .ds-activity p { padding:var(--spacing-md); color:var(--color-text-muted); }"
     },
     {
-      "name": "Composer mode header",
+      "name": "Provider access groups",
       "kind": "custom",
-      "refersTo": "mode-selected",
-      "description": "Current mode has a neutral selected surface and an accessible visible description.",
-      "html": "<div class=\"ds-mode-header\"><div class=\"ds-modes\" role=\"radiogroup\" aria-label=\"Agent mode\"><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-checked=\"false\" tabindex=\"-1\">Build</button><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-checked=\"true\" aria-describedby=\"ds-mode-description\">Review</button><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-checked=\"false\" tabindex=\"-1\">Docs</button></div><p id=\"ds-mode-description\">Analysis only. No workspace changes.</p></div>",
-      "css": ".ds-mode-header { display:flex; align-items:center; justify-content:space-between; gap:var(--spacing-md); max-width:var(--content-width); } .ds-modes { display:flex; flex-shrink:0; gap:var(--spacing-2xs); } .ds-mode { font-family:var(--font-sans); font-size:var(--font-small); font-weight:520; min-height:var(--control-sm); padding:var(--spacing-xs) var(--spacing-sm); border:0; border-radius:var(--radius-sm); color:var(--color-text-muted); background:transparent; transition:var(--transition-interactive); } .ds-mode[aria-checked=\"true\"] { color:var(--color-text); background:var(--color-surface-hover); } .ds-mode:hover { color:var(--color-text); background:var(--color-surface); } .ds-mode-header p { margin:0; color:var(--color-text-muted); font-family:var(--font-sans); font-size:var(--font-caption); line-height:var(--leading-ui); text-align:right; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+      "refersTo": "provider-option",
+      "description": "AI settings separate local models, API-key services, and custom endpoints; options use two columns, collapsing at 520px.",
+      "html": "<section class=\"ds-access\"><h4>On your machine</h4><p>Use a local model without an API key.</p><div class=\"ds-providers\"><button class=\"ds-provider\" type=\"button\" aria-label=\"Ollama\" aria-describedby=\"ds-ollama-hint\"><span class=\"ds-provider-mark\"><svg aria-hidden=\"true\" width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M5 4h14v12H5zM3 20h18l-2-4H5z\"/></svg></span><span><strong>Ollama</strong><small id=\"ds-ollama-hint\">Local models through Ollama.</small></span></button><button class=\"ds-provider\" type=\"button\" aria-label=\"LM Studio\" aria-describedby=\"ds-lmstudio-hint\"><span class=\"ds-provider-mark\"><svg aria-hidden=\"true\" width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"7\" rx=\"2\"/><rect x=\"3\" y=\"14\" width=\"18\" height=\"7\" rx=\"2\"/><path d=\"M7 6.5h.01M7 17.5h.01\"/></svg></span><span><strong>LM Studio</strong><small id=\"ds-lmstudio-hint\">Local LM Studio server.</small></span></button></div><h4>With an API key</h4><p>Your selected service processes requests and charges for usage.</p></section>",
+      "css": " .ds-access { font-family:var(--font-sans); } .ds-access h4 { margin:0; font-size:var(--font-body); font-weight:550; color:var(--color-text); } .ds-access p { margin:var(--spacing-2xs) 0 var(--spacing-md); font-size:var(--font-caption); line-height:var(--leading-ui); color:var(--color-text-muted); } .ds-providers { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--spacing-sm); margin-bottom:var(--spacing-xl); } .ds-provider { display:flex; align-items:flex-start; gap:var(--spacing-sm); min-height:84px; padding:var(--spacing-md); text-align:left; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-panel); color:var(--color-text-secondary); font-family:var(--font-sans); transition:var(--transition-interactive); } .ds-provider > span:last-child { min-width:0; } .ds-provider strong { display:block; font-size:var(--font-body); font-weight:500; } .ds-provider small { display:block; margin-top:var(--spacing-2xs); font-size:var(--font-caption); line-height:var(--leading-ui); color:var(--color-text-muted); white-space:normal; } .ds-provider-mark { display:flex; align-items:center; justify-content:center; flex:0 0 var(--control-sm); height:var(--control-sm); border-radius:var(--radius-sm); background:var(--color-surface-raised); } .ds-provider:hover { background:var(--color-surface); border-color:var(--color-border-strong); } .ds-provider:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); } .ds-provider:active { transform:none; } @media (max-width:520px) { .ds-providers { grid-template-columns:minmax(0,1fr); } }"
     },
     {
       "name": "Start command row",
       "kind": "custom",
       "refersTo": "command-row",
-      "description": "Task preparation command with useful supporting copy and a stable row target.",
-      "html": "<button class=\"ds-command\" type=\"button\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m8 8-4 4 4 4m8-8 4 4-4 4m-3-9-2 18\"/></svg><span><strong>Analyze project</strong><small>Understand the structure and next steps.</small></span><svg class=\"ds-command-arrow\" aria-hidden=\"true\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
-      "css": ".ds-command { display:flex; align-items:center; gap:var(--spacing-lg); width:100%; min-height:64px; padding:var(--spacing-sm) 0; text-align:left; color:var(--color-text-muted); background:transparent; border:0; border-radius:var(--radius-md); font-family:var(--font-sans); transition:var(--transition-interactive); } .ds-command > svg { margin-left:var(--spacing-sm); flex-shrink:0; } .ds-command > span { display:flex; flex-direction:column; gap:var(--spacing-2xs); } .ds-command strong { font-size:var(--font-body); font-weight:500; color:var(--color-text-secondary); } .ds-command small { font-size:var(--font-caption); color:var(--color-text-muted); } .ds-command .ds-command-arrow { margin-left:auto; margin-right:var(--spacing-sm); } .ds-command:hover { background:var(--color-surface); } .ds-command:active { transform:none; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
+      "description": "Bordered, flat request preparation row; selection fills the composer without sending.",
+      "html": "<button class=\"ds-command\" type=\"button\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m8 8-4 4 4 4m8-8 4 4-4 4m-3-9-2 18\"/></svg><span><strong>Analyze project</strong><small>Understand the structure and risks without changing files.</small></span><svg class=\"ds-command-arrow\" aria-hidden=\"true\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-command { display:flex; align-items:center; gap:var(--spacing-lg); width:100%; min-height:64px; padding:var(--spacing-sm) var(--spacing-md); text-align:left; color:var(--color-text-muted); background:transparent; border:1px solid var(--color-border-subtle); border-radius:var(--radius-md); font-family:var(--font-sans); transition:var(--transition-interactive); } .ds-command > svg { flex-shrink:0; } .ds-command > span { display:flex; flex-direction:column; gap:var(--spacing-2xs); } .ds-command strong { font-size:var(--font-body); font-weight:500; color:var(--color-text-secondary); } .ds-command small { font-size:var(--font-caption); color:var(--color-text-muted); } .ds-command .ds-command-arrow { margin-left:auto; margin-right:0; } .ds-command:hover { background:var(--color-surface); border-color:var(--color-border-strong); } .ds-command:active { transform:none; } .ds-primary:focus-visible, .ds-secondary:focus-visible, .ds-nav:focus-visible, .ds-mode:focus-visible, .ds-command:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); }"
     },
     {
-      "name": "Composer",
+      "name": "Request composer",
       "kind": "input",
       "refersTo": "composer",
-      "description": "Flat compact message surface; focus strengthens the border without decorative elevation.",
-      "html": "<label class=\"ds-composer\"><textarea aria-label=\"Message\" placeholder=\"Describe the task\" rows=\"2\"></textarea></label>",
-      "css": ".ds-composer { display:block; max-width:var(--content-width); border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface); transition:var(--transition-interactive); } .ds-composer:hover { border-color:var(--color-border-strong); } .ds-composer:focus-within { border-color:var(--color-text-subtle); box-shadow:none; } .ds-composer textarea { display:block; width:100%; min-height:60px; padding:var(--spacing-lg); border:0; outline:none; resize:none; font-family:var(--font-sans); font-size:var(--font-body); color:var(--color-text); background:transparent; caret-color:var(--color-accent); } .ds-composer textarea::placeholder { color:var(--color-text-muted); }"
+      "description": "One request boundary contains the textarea, explained modes, AI selector, and send action; the light theme keeps its existing white fill.",
+      "html": "<div class=\"ds-request\"><label class=\"ds-request-label\" for=\"ds-request-text\">Your request</label><form class=\"ds-composer\"><textarea id=\"ds-request-text\" placeholder=\"Describe the goal and expected result\" rows=\"2\"></textarea><div class=\"ds-modes\" role=\"radiogroup\" aria-label=\"Agent mode\"><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-label=\"Implement (Build)\" aria-checked=\"false\" tabindex=\"-1\"><strong aria-hidden=\"true\">Implement</strong><small aria-hidden=\"true\">Build</small></button><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-label=\"Analyze (Review)\" aria-checked=\"true\" aria-describedby=\"ds-request-description\"><strong aria-hidden=\"true\">Analyze</strong><small aria-hidden=\"true\">Review</small></button><button class=\"ds-mode\" type=\"button\" role=\"radio\" aria-label=\"Document (Docs)\" aria-checked=\"false\" tabindex=\"-1\"><strong aria-hidden=\"true\">Document</strong><small aria-hidden=\"true\">Docs</small></button></div><p id=\"ds-request-description\" class=\"ds-request-description\">Reads and suggests. Does not change files.</p><div class=\"ds-request-actions\"><button class=\"ds-request-ai\" type=\"button\">Choose AI<svg aria-hidden=\"true\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m6 9 6 6 6-6\"/></svg></button><button class=\"ds-request-send\" type=\"button\" disabled>Send request</button></div></form><details class=\"ds-request-templates\"><summary>Request templates</summary><div><button type=\"button\">Prepare project analysis</button><button type=\"button\">Prepare documentation</button></div></details></div>",
+      "css": ".ds-request { max-width:var(--content-width); font-family:var(--font-sans); color:var(--color-text); } .ds-request-label { display:block; margin-bottom:var(--spacing-sm); font-size:var(--font-small); font-weight:550; } .ds-composer { border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-panel); transition:var(--transition-interactive); } .ds-composer:hover { border-color:var(--color-border-strong); } .ds-composer:focus-within { border-color:var(--color-accent); box-shadow:none; } .ds-composer textarea { box-sizing:border-box; display:block; width:100%; min-height:76px; padding:var(--spacing-lg); border:0; outline:none; resize:none; font-family:var(--font-sans); font-size:var(--font-body); color:var(--color-text); background:transparent; caret-color:var(--color-accent); } .ds-composer textarea::placeholder { color:var(--color-text-muted); } .ds-modes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--spacing-xs); padding:0 var(--spacing-md); } .ds-mode { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:var(--spacing-2xs); min-height:52px; padding:var(--spacing-sm) var(--spacing-md); border:1px solid var(--color-border-subtle); border-radius:var(--radius-sm); background:transparent; color:var(--color-text); font-family:var(--font-sans); transition:var(--transition-interactive); } .ds-mode strong { font-size:var(--font-small); font-weight:550; line-height:var(--leading-tight); } .ds-mode small { font-size:var(--font-caption); color:var(--color-text-muted); line-height:var(--leading-tight); } .ds-mode[aria-checked=\"true\"] { background:var(--color-surface-raised); border-color:var(--color-border-strong); } .ds-mode:hover { background:var(--color-surface); } .ds-mode:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); } .ds-mode:active { transform:none; } .ds-request-description { margin:var(--spacing-sm) var(--spacing-lg); color:var(--color-text-secondary); font-size:var(--font-caption); line-height:var(--leading-ui); } .ds-request-actions { display:flex; align-items:center; gap:var(--spacing-xs); padding:var(--spacing-sm) var(--spacing-md); border-top:1px solid var(--color-border-subtle); } .ds-request-ai { display:flex; align-items:center; gap:var(--spacing-xs); min-height:var(--control-sm); padding:0 var(--spacing-sm); border:1px solid var(--color-border); border-radius:var(--radius-sm); font-family:var(--font-sans); font-size:var(--font-small); color:var(--color-accent); background:transparent; } .ds-request-send { margin-left:auto; min-height:var(--control-md); padding:0 var(--spacing-md); border:0; border-radius:var(--radius-sm); font-family:var(--font-sans); font-size:var(--font-small); color:var(--color-on-control); background:var(--color-control); } .ds-request-ai:hover { background:var(--color-surface); } .ds-request-send:hover:not(:disabled) { background:var(--color-control); } .ds-request-send:disabled { background:var(--color-surface-hover); color:var(--color-text-muted); cursor:not-allowed; } .ds-request-ai:focus-visible, .ds-request-send:focus-visible, .ds-request-templates summary:focus-visible, .ds-request-templates button:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; box-shadow:var(--focus-ring); } .ds-request-templates { position:relative; margin-top:var(--spacing-xs); color:var(--color-text-muted); font-size:var(--font-caption); } .ds-request-templates summary { display:flex; align-items:center; min-height:var(--control-sm); cursor:pointer; list-style:none; } .ds-request-templates summary:hover { color:var(--color-text); } .ds-request-templates[open] > div { position:absolute; bottom:100%; left:0; display:flex; flex-direction:column; width:max-content; max-width:280px; padding:var(--spacing-sm); border:1px solid var(--color-border-strong); border-radius:var(--radius-md); background:var(--color-surface); box-shadow:var(--shadow-md); } .ds-request-templates button { min-height:var(--control-sm); padding:0 var(--spacing-sm); border:0; border-radius:var(--radius-sm); text-align:left; font-family:var(--font-sans); font-size:var(--font-caption); color:var(--color-text-muted); background:transparent; } .ds-request-templates button:hover { color:var(--color-text); background:var(--color-surface-hover); } @media (max-width:520px) { .ds-mode { padding-inline:var(--spacing-sm); } }"
     },
     {
       "name": "Settings field",
@@ -919,11 +919,12 @@
   ],
   "narrative": {
     "northStar": "The Quiet Desktop",
-    "overview": "A precise desktop workspace whose hierarchy comes from alignment, readable text, and useful content. Neutral charcoal surfaces, pale primary controls, quiet separators, and restrained peach details support long engineering sessions. The light theme follows the same neutral structure with dark primary controls.\n\nZed, Linear, and Raycast inform the compact desktop grammar. Nocturne retains its own small generated raster N in ivory and muted peach in the brand and assistant identity. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. Navigation, conversation, and evidence remain visibly distinct.",
+    "overview": "A precise desktop workspace whose hierarchy comes from alignment, readable text, and useful content. Neutral charcoal surfaces, pale primary controls, quiet separators, and restrained peach details support long engineering sessions. The light theme follows the same neutral structure with dark primary controls.\n\nZed, Linear, and Raycast inform the compact desktop grammar. Nocturne retains its own small generated raster N in ivory and muted peach in the brand and assistant identity. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. The request anchors the working area, plans and decisions sit alongside it, and project context can recede during reading or writing.",
     "keyCharacteristics": [
       "Neutral dark and light surfaces with clear reading contrast.",
       "Neutral primary controls; peach marks focus and selected semantic details.",
       "Compact rows, restrained corners, and flat working surfaces.",
+      "A central request surface, adjacent progress and decisions, and collapsible context.",
       "One small generated pixel-art N image; conventional interface and code typography."
     ],
     "rules": [
@@ -939,7 +940,7 @@
       },
       {
         "name": "The Flat Workspace Rule",
-        "body": "Use tonal layers and quiet separators for working regions. Keep the composer, command rows, and primary actions flat; reserve structural elevation for overlays and drawers.",
+        "body": "Use tonal layers and quiet separators for working regions. Keep the composer, command rows, and primary actions flat; reserve structural elevation for overlays, drawers, and the open request-template popover.",
         "section": "elevation"
       }
     ],
@@ -949,7 +950,8 @@
       "Do preserve immediate visible focus, keyboard navigation, dialog focus containment and restoration, and reduced-motion behavior.",
       "Do keep the small generated N mark crisp and the interface text in Geist, with Geist Mono for code and shortcuts.",
       "Do preserve canonical responsive drawers, independent scrolling, bounded histories, and stable control geometry.",
-      "Do keep the selected mode description visible and associated with the current mode control."
+      "Do keep the selected mode description visible and associated with the current mode control.",
+      "Do keep request preparation separate from sending, and decision navigation separate from approval."
     ],
     "donts": [
       "Don't bring back the owl, a mascot, a large illustration, or the rejected workshop scene.",

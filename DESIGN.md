@@ -144,24 +144,38 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.md}"
   mode-selected:
-    backgroundColor: "{colors.surface-hover}"
+    backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.text}"
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
-    padding: "6px 8px"
-    height: "32px"
+    padding: "8px 12px"
+    height: "52px"
   command-row:
     backgroundColor: "transparent"
     textColor: "{colors.text-secondary}"
     typography: "{typography.body}"
     rounded: "{rounded.md}"
-    padding: "8px 0"
+    padding: "8px 12px"
     height: "64px"
   composer:
-    backgroundColor: "{colors.surface}"
+    backgroundColor: "{colors.panel}"
     textColor: "{colors.text}"
     typography: "{typography.body}"
     rounded: "{rounded.lg}"
+  workspace-selector:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.label}"
+    rounded: "{rounded.md}"
+    padding: "12px"
+    height: "64px"
+  provider-option:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: "12px"
+    height: "84px"
   settings-field:
     backgroundColor: "{colors.panel}"
     textColor: "{colors.text}"
@@ -179,13 +193,14 @@ components:
 
 A precise desktop workspace whose hierarchy comes from alignment, readable text, and useful content. Neutral charcoal surfaces, pale primary controls, quiet separators, and restrained peach details support long engineering sessions. The light theme follows the same neutral structure with dark primary controls.
 
-Zed, Linear, and Raycast inform the compact desktop grammar. Nocturne retains its own small generated raster N in ivory and muted peach in the brand and assistant identity. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. Navigation, conversation, and evidence remain visibly distinct.
+Zed, Linear, and Raycast inform the compact desktop grammar. Nocturne retains its own small generated raster N in ivory and muted peach in the brand and assistant identity. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. The request anchors the working area, plans and decisions sit alongside it, and project context can recede during reading or writing.
 
 **Key Characteristics:**
 
 - Neutral dark and light surfaces with clear reading contrast.
 - Neutral primary controls; peach marks focus and selected semantic details.
 - Compact rows, restrained corners, and flat working surfaces.
+- A central request surface, adjacent progress and decisions, and collapsible context.
 - One small generated pixel-art N image; conventional interface and code typography.
 
 ## Colors
@@ -216,7 +231,7 @@ The palette is neutral charcoal in dark mode and clean gray in light mode, with 
 
 The interface uses conventional, compact letterforms. Medium weights establish hierarchy without heavy promotional headings; pixel art is confined to the small identity mark.
 
-- **Display:** the effective display token comes from the final studio stylesheet, overriding the earlier base value. It is used by the start heading with tight leading and slight negative tracking.
+- **Display:** the effective display token comes from the studio stylesheet, overriding the earlier base value. It is used by the start heading with tight leading and slight negative tracking.
 - **Headline:** settings page headings and major section titles.
 - **Title:** dialog and compact page titles; the brand wordmark uses its own established medium weight.
 - **Body:** task descriptions, conversation text, and form controls. Long assistant prose uses the existing more generous line height of 1.8.
@@ -227,13 +242,17 @@ The interface uses conventional, compact letterforms. Medium weights establish h
 
 ## Layout
 
-The application fills the desktop window and keeps independently scrollable navigation, conversation, and evidence regions. At wide desktop sizes, the sidebar is (256px), the inspector is (344px), and the central reading/composer width is capped at (840px). The small spacing rhythm starts on a (4px) grid; the frontmatter preserves the real named scale, including the compact (6px) step.
+The application fills the desktop window and keeps independently scrollable navigation, task history, and progress regions. The task-workspace layer sets a (236px) sidebar, a (336px) progress panel, and a flexible central column whose reading and request surfaces are capped at (840px). The sidebar begins with the project selector and a prominent new-task action; recent tasks remain available while recent projects use a disclosure. The topbar is (64px) high. It shows the task title and only the actions that act on it (branch, editor, terminal, memory, settings, help, progress panel). The project name lives in the sidebar, and the agent state lives in the progress panel, so the header never repeats them. Assistant prose is bounded at (72ch).
 
-The final studio override sets the sidebar to (240px) and inspector to (320px) from (981px) through (1320px), including the canonical (1120px) compact-desktop range. At (980px) and below, the existing left and right drawers replace inline side panels: left width `min(310px, 88vw)`, right width `min(390px, 92vw)`. Preserve their backdrops, dismissal behavior, and focus handling. The renderer keeps its minimum window content width (360px).
+From (981px) through (1320px), the sidebar and progress panel become (224px) and (304px), including the canonical (1120px) compact-desktop range. At (980px) and below, existing left and right drawers replace inline side panels: left width `min(310px, 88vw)`, right width `min(390px, 92vw)`. Preserve their backdrops, dismissal behavior, focus containment and restoration. The renderer keeps its minimum window content width (360px). These are task-workspace overrides of the base shell dimensions, not new shared primitive tokens.
 
-At (720px) and below, topbar and composer side padding tightens, secondary topbar actions recede, settings navigation compresses, and quick actions can scroll horizontally. At (520px) and below, welcome actions stack and the start content uses smaller insets. The current mode description remains visible beside the mode choices; do not infer that a compact layout authorizes hiding it. Preserve the existing canonical breakpoints rather than adding a competing responsive scale.
+At (720px) and below, topbar and composer side padding use the compact (16px) inset, the branch chip stays out of the header at (520px) and below, and settings navigation becomes a horizontal strip with visible section names. At (520px) and below, welcome actions stack, the composer footer can wrap, the send action keeps its icon and accessible name, and provider choices become one column. The three mode choices and current mode description remain visible. Preserve the canonical (520px), (720px), (980px), (1120px), and (1320px) responsive ranges.
 
-The start surface uses a compact heading, a project action, and a vertical command list. Its content container is capped at (620px). These start-surface details remain local to that view; other surfaces should follow their content needs. Keep async and error messages in normal layout flow so they cannot cover the project actions.
+The start surface uses a short statement of the working contract and, only when no project is open, one project action. Its content is capped at (680px), with (32px) padding on desktop and (24px) at compact sizes. It scrolls independently above the persistent request composer. Keep async and error messages in normal layout flow, at the same width as the start content. Request modes are the only way to choose what a request does; there are no separate quick-start commands or templates.
+
+Settings use a bounded dialog up to (1000px) wide and (760px) high, constrained by a (48px) total viewport inset. The navigation column is (220px), then (180px) at the drawer range. At (720px) and below, the dialog uses a (24px) total viewport inset and horizontal navigation; content scrolls while header and save/cancel feedback remain available. Provider selection groups local models, API-key services, and custom connections under explanatory headings, with a two-column grid that becomes one column at (520px).
+
+The small spacing rhythm starts on a (4px) grid; the frontmatter preserves the actual named scale, including the compact (6px) step.
 
 ## Elevation & Depth
 
@@ -245,7 +264,7 @@ Motion uses the existing short state transitions and easing. Focus appears immed
 
 ## Shapes
 
-Use the actual radius scale in the frontmatter. Small controls and fields use the compact small radius; conversation and navigation rows use the medium radius; the composer and message containers use the large radius. The extra-large token currently resolves to the same corner size as large. The legacy pill token resolves to the small radius in the studio layer, so a token name does not imply a capsule silhouette.
+Use the actual radius scale in the frontmatter. Small controls, mode choices, and task-history rows use the compact small radius; the project selector, user messages, provider choices, and request command rows use the medium radius; the composer uses the large radius. The extra-large token currently resolves to the same corner size as large. The legacy pill token resolves to the small radius in the studio layer, so a token name does not imply a capsule silhouette.
 
 The mark is a generated raster N with interlocking ivory and muted-peach strokes, preserved as the canonical PNG in assets/logo/nocturne-logo.png. It occupies a transparent brand box (28px); the assistant mark is drawn at (24px) inside a (28px) identity slot. The light theme darkens the same mark through its existing filter. Use the generated image directly; preserve its alpha, proportions, and native edge detail rather than redrawing the artwork in code. Small instances use normal image sampling. Status dots retain circular geometry.
 
@@ -253,21 +272,21 @@ The mark is a generated raster N with interlocking ivory and muted-peach strokes
 
 ### Buttons
 
-Primary actions are compact and neutral. Shared dialog primary actions use the frontmatter's small radius, body typography, and standard control sizing; start project actions use the established medium radius and label typography. Send is an icon control using the same neutral color pair. Disabled controls remain visibly inactive; the send control changes to a separate stop/cancel state during execution.
+Primary actions are compact and neutral. Shared dialog primary actions use the frontmatter's small radius, body typography, and standard control sizing; start project actions use the established medium radius and label typography. The new-task action uses the neutral control pair in dark mode; its existing light treatment remains a white surface with dark text. Send pairs its icon with a text label, hiding only that visible label at the narrow breakpoint while preserving the accessible name. Disabled controls remain visibly inactive; the send control changes to a separate stop/cancel state during execution.
 
-Secondary and new-conversation actions use text, transparent or surface fills, and quiet borders. Hover changes color or border treatment without translation or scale. All actionable targets preserve the minimum (32px) interaction floor. The header path action explicitly uses that minimum even though its text looks secondary.
+Secondary actions use text, transparent or surface fills, and quiet borders. Hover changes color or border treatment without translation or scale. All actionable targets preserve the minimum (32px) interaction floor. The header path action explicitly uses that minimum even though its text looks secondary.
 
 ### Inputs / Fields
 
-Search rests on a transparent surface and gains a stronger surface/border on focus. The composer uses a surface fill, a quiet border, and the large radius; focus strengthens the border without a glow. Preserve its labelled textarea, attachment actions, model choice, send/stop behavior, and existing growth bound.
+Search rests on a transparent surface and gains a stronger surface/border on focus. The request composer is one box with a visible label outside it: the textarea sits above a single footer that holds the attachment control, the AI selector and the send/stop action. The mode switch and its one-line description sit above the box, never inside it. The textarea begins at (72px) and grows to the existing (220px) bound before scrolling. Missing-AI guidance is the AI selector itself, in the accent color, not a separate line. Preserve disabled, cancellation, and saving states.
 
 Settings use the same shared tokens rather than a separate theme: form fields have the small radius, panel fill, body text, and the current field minimum (40px). Hover clarifies the border; focus uses the shared peach outline and focus ring. Checkbox visuals stay compact inside labelled interaction rows; checked state uses the semantic accent pair. Inline errors remain textually clear and connected to their context.
 
 ### Navigation
 
-Sidebar tools and conversation rows use neutral selected surfaces with visible text states. New-conversation and search controls share the compact sidebar rhythm. Stable row actions must remain keyboard reachable. Settings navigation reuses the neutral selected surface and medium radius, with larger rows suited to its title and description.
+Sidebar tools and task-history rows use neutral selected surfaces with visible text states; the selected task also has an inset border in dark mode. The project selector has a bounded surface, while recent projects recede into a disclosure. New-task and search controls share the compact sidebar rhythm. Settings is a labelled footer action. Stable row actions must remain keyboard reachable. Settings navigation reuses the neutral selected surface and medium radius, with larger rows suited to its title and description.
 
-Inspector tabs use text and a quiet underline for the selected view; decorative tab icons recede. Empty activity states use a useful sentence and supporting hint. Other existing inspector views may retain small functional icons; do not replace idle guidance with another brand illustration.
+The progress panel has a compact heading, execution state, and four text tabs with a quiet selected underline. The tabs keep a (44px) minimum height. Empty activity states use a useful sentence and supporting hint beneath a separator, aligned with the working content. Other existing inspector views may retain small functional icons; do not replace idle guidance with another brand illustration.
 
 ### Chips
 
@@ -277,11 +296,17 @@ Branch metadata is a quiet text treatment on a transparent background, with comp
 
 Activity containers use the medium radius, transparent working surface, and subtle border. Their summary row keeps the established large control height (44px); opened sections gain a tonal heading surface. Plans, files, diffs, artifacts, and documents remain flat, bounded working regions. Preserve progressive disclosure and independent scrolling for long content.
 
-### Mode Header and Command List
+### Task Modes and Decisions
 
-Build, Review, and Docs sit directly above the composer as a keyboard-operable radio group. The active choice uses a neutral selected surface. A visible current description is linked with `aria-describedby`; arrow keys and Home/End move between modes. Keep the visible Build safety note and pending-approval notice.
+Analyze, Implement, and Document appear as one segmented radio group above the request box, sized to its labels. Each choice shows only its action name; the one-line description beneath the group states what the selected mode does to the project (reads and suggests, edits files and asks for approval of commands, writes documentation). The internal mode names Review, Build, and Docs are not shown. The active choice uses a neutral selected surface; arrow keys and Home/End move between modes. The placeholder of the request box follows the selected mode.
 
-The start list presents existing task commands as full-width rows with a small functional icon, a clear title, supporting text, and a trailing arrow. Rows have a stable minimum height (64px), a quiet hover surface, and no elevated card treatment. They prepare the task through the existing actions; styling does not alter approvals or execution boundaries.
+The pending-approval notice pairs warning color with explicit text and a review action. That action opens the progress panel, selects Activity, and focuses the pending decision. It never accepts the decision. Plans, activities, suggestions, artifacts, and validation retain their distinct views and existing approval boundaries.
+
+The pending-approval notice sits above the mode group and leads to the pending decision in the progress panel; it never accepts the decision.
+
+### AI Connections
+
+Settings retain the shared field and navigation grammar. The active connection is a flat medium-radius surface, followed by existing connection controls and a neutral add action. Connection selection separates local models, services using an API key, and custom endpoints with plain explanatory copy. Provider options use a panel fill, medium radius, subtle icon block, and (84px) minimum height; hover clarifies the border and surface. Descriptions wrap at narrow widths, and each choice exposes its provider name with associated supporting text. Authentication, model selection, feedback, and saved-state behavior remain explicit.
 
 ## Do's and Don'ts
 
@@ -293,6 +318,7 @@ The start list presents existing task commands as full-width rows with a small f
 - Do keep the small generated N mark crisp and the interface text in Geist, with Geist Mono for code and shortcuts.
 - Do preserve canonical responsive drawers, independent scrolling, bounded histories, and stable control geometry.
 - Do keep the selected mode description visible and associated with the current mode control.
+- Do keep the request separate from sending, and decision navigation separate from approval.
 
 ### Don't:
 

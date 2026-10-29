@@ -18,6 +18,9 @@ being reconstructed in every conversation.
 ![NOCT workspace with the active AI, conversation and agent panel](docs/images/workspace-overview.png)
 
 Screenshots show the current interface in Portuguese with demonstration data.
+The request stays in the center, with plans and approvals alongside it.
+Project context can be collapsed; Analyze, Implement and Document say what each
+mode does to the project before you send.
 
 ## What it does
 
@@ -76,7 +79,7 @@ checksums without platform signing/notarization. See
 
 Ollama, LM Studio and custom endpoints use the same connection flow.
 
-![Local runtimes and custom endpoint options](docs/images/local-models.png)
+![Local runtime choices in Settings → AI](docs/images/local-models.png)
 
 The active connection shows the provider and model bound to the workspace.
 
