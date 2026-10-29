@@ -56,3 +56,32 @@ force-move it or touch a published version.
 The historical v1.0.1 cross-platform backfill was a one-time recovery. The
 stable workflow now publishes the full platform inventory in one run and does
 not silently replace published assets.
+
+## Keeping validation current
+
+Workflow failures need to be classified before changing test budgets:
+
+- A native I/O timeout is different from a failed integrity assertion. Keep
+  durable writes and production deadlines; give only the affected integration
+  test an explicit budget when runner timings justify it.
+- Branding changes must update renderer tests and reviewed screenshot baselines
+  together. Test expectations use `shared/product-identity.json` for the display
+  name. Screenshot tolerances stay unchanged; never regenerate baselines in CI.
+- A dependency audit can fail after a new advisory even when source has not
+  changed. Update affected packages and their lockfile, then rerun the audit;
+  do not suppress the advisory or lower the severity threshold.
+
+The dependency workflow checks production dependencies and the full dependency
+tree separately. Electron is declared as a development dependency but ships as
+the application's runtime, so omitting development dependencies misses runtime
+advisories. Both checks reject high-severity findings.
+
+Dependabot proposes weekly npm maintenance updates in separate runtime and
+tooling groups, skips npm major upgrades, and also checks GitHub Actions. PRs
+still require review and the normal CI; no automatic merge is configured.
+Electron upgrades must also update the exact `allowScripts` entry, verify native
+SQLite ABI and run package smoke. Dependency automation does not certify an
+upgrade or replace native/platform validation.
+Electron and better-sqlite3 updates are kept out of the maintenance groups so
+their PRs can receive those native checks separately. Keep the corresponding
+exact `allowScripts` entries synchronized for both packages.
