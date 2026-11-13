@@ -6,6 +6,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use noct_core::workspace_evidence::{EvidenceKind, EvidenceReference};
 use noct_db::Database;
 use noct_db::Result;
 use noct_db::repositories::artifacts::Artifacts;
@@ -14,6 +15,7 @@ use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::settings::Settings;
+use noct_db::repositories::workspace_evidence::WorkspaceEvidence;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
 use noct_db::repositories::workspace_model_bindings::ModelBindings;
 use noct_db::repositories::workspaces::Workspaces;
@@ -203,4 +205,69 @@ fn reconciles_like_the_typescript_repository() {
         .expect("reconcile-expected.json");
     let expected: Value = serde_json::from_str(&text).expect("reconcile-expected.json is JSON");
     assert_eq!(reconcile_snapshot(db.connection()), expected);
+}
+
+/// A stale mark records the clock of the run that made it, so the value is masked and
+/// only its presence is compared. Every other field is compared exactly.
+fn mask_stale_clock(value: &mut Value) {
+    match value {
+        Value::Array(items) => items.iter_mut().for_each(mask_stale_clock),
+        Value::Object(map) => {
+            if let Some(stamp) = map.get_mut("staleDetectedAt")
+                && !stamp.is_null()
+            {
+                *stamp = json!("<clock>");
+            }
+            map.values_mut().for_each(mask_stale_clock);
+        }
+        _ => {}
+    }
+}
+
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn evidence_matches_the_typescript_repository() {
+    let directory = scratch("row-gate-evidence");
+    fs::create_dir_all(&directory).expect("scratch directory");
+    fs::copy(
+        gate_directory().join("evidence-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before the stale mark");
+    let db = Database::open(&directory).expect("open the copy");
+    let evidence = WorkspaceEvidence::new(db.connection());
+
+    let text = fs::read_to_string(gate_directory().join("evidence-expected.json"))
+        .expect("evidence-expected.json");
+    let expected: Value = serde_json::from_str(&text).expect("evidence-expected.json is JSON");
+    let parent_id = expected["parentId"].as_str().expect("parent id");
+    let reason = expected["reason"].as_str().expect("reason");
+    evidence.mark_stale(parent_id, reason).expect("mark stale");
+
+    let mut listed = json!(evidence.list("/work/alpha", None).expect("list"));
+    let mut by_source = json!(
+        evidence
+            .by_source(EvidenceKind::ProjectIndex, "pix-gate")
+            .expect("by source")
+    );
+    let references: Vec<EvidenceReference> = evidence
+        .index_references("/work/alpha")
+        .expect("index references");
+    let mut expected_list = expected["list"].clone();
+    let mut expected_by_source = expected["bySource"].clone();
+    for value in [
+        &mut listed,
+        &mut by_source,
+        &mut expected_list,
+        &mut expected_by_source,
+    ] {
+        mask_stale_clock(value);
+    }
+    assert_eq!(listed, expected_list, "list differs");
+    assert_eq!(by_source, expected_by_source, "bySource differs");
+    assert_eq!(
+        json!(references),
+        expected["indexReferences"],
+        "indexReferences differs"
+    );
 }

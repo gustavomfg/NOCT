@@ -10,6 +10,7 @@ pub mod model_catalog;
 pub mod operation_recovery;
 pub mod provider_configurations;
 pub mod settings;
+pub mod workspace_evidence;
 pub mod workspace_memory;
 pub mod workspace_model_bindings;
 pub mod workspaces;

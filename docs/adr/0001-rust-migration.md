@@ -164,17 +164,22 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   - Provider configurations. The table holds only a UUID credential reference; the
     secret stays in the operating system store.
   - Startup reconciliation of interrupted operations, with its interrupted-operation
-    contract in `noct-core` (this commit).
+    contract in `noct-core`.
+  - Workspace state evidence: immutable manifests, stale propagation along references,
+    verification and index references. Its contract is in `noct-core`, and the gate
+    checks it against manifests the TypeScript repository wrote (this commit).
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
   conversations, messages, artifacts, workspace memory and provider configurations.
-  Approvals are not in the gate yet. Reconciliation is checked differently: the
+  Workspace evidence is checked by a third scenario, with its stale-clock values masked
+  because each run records its own time. Approvals are not in the gate yet.
+  Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** checkpoints, executions and evidence, change sets, validation,
-  suggestions, brain memories, project index, semantic index, engineering intelligence,
-  backup and import, recovery, and the `Database` facade.
+- **Remaining, phase 2:** checkpoints, executions, execution evidence, change sets,
+  validation, suggestions, brain memories, project index, semantic index, engineering
+  intelligence, backup and import, recovery, and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

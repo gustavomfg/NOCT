@@ -152,6 +152,42 @@ const RECONCILE_TABLES = [
   ['interrupted_operations', 'SELECT id, workspace, execution_id, kind, source_id, original_status, message FROM interrupted_operations ORDER BY id'],
 ]
 
+// Workspace evidence is written through the TypeScript repository. The database is copied
+// before a parent manifest is marked stale, so Rust can repeat the same steps on the copy and
+// must read the same manifests, stale chain and verification.
+function evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, directory) {
+  const database = new BetterSqlite3(path.join(directory, 'nocturne.db'))
+  database.pragma('foreign_keys = ON')
+  const evidence = new WorkspaceEvidenceRepository(database)
+  const parent = evidence.record({
+    kind: 'project-index',
+    workspace: '/work/alpha',
+    sourceId: 'pix-gate',
+    startedAt: at(50),
+    paths: [{ path: 'src/a.ts', hash: 'a'.repeat(64) }, { path: 'docs/readme.md', hash: null }],
+  })
+  const child = evidence.record({
+    kind: 'before',
+    workspace: '/work/alpha',
+    sourceId: 'before-gate',
+    startedAt: at(51),
+    references: [{ kind: 'manifest', id: parent.id }],
+  })
+  evidence.saveVerification(child.id, { checkedAt: at(52), matchedPaths: 1, mismatchedPaths: 0, uncheckedPaths: 1 })
+  database.exec(`VACUUM INTO '${path.join(directory, 'evidence-before.db')}'`)
+  const reason = 'Fonte alterada no gate.'
+  evidence.markStale(parent.id, reason)
+  const expected = {
+    parentId: parent.id,
+    reason,
+    list: evidence.list('/work/alpha'),
+    bySource: evidence.bySource('project-index', 'pix-gate'),
+    indexReferences: evidence.indexReferences('/work/alpha'),
+  }
+  database.close()
+  return expected
+}
+
 function reconcileParity(BetterSqlite3, OperationRecoveryRepository, directory) {
   const database = new BetterSqlite3(path.join(directory, 'nocturne.db'))
   database.pragma('foreign_keys = ON')
@@ -192,15 +228,18 @@ compileTree(path.join(root, 'electron'))
 compileTree(path.join(root, 'shared'))
 const { LocalDatabase } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/Database.js')
 const { OperationRecoveryRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/OperationRecoveryRepository.js')
+const { WorkspaceEvidenceRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/WorkspaceEvidenceRepository.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
 try {
   const expected = seed(LocalDatabase, gateDirectory)
+  const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'evidence-expected.json'), `${JSON.stringify(evidence, null, 2)}\n`)
   const run = spawnSync(
     'cargo',
     ['test', '-p', 'noct-db', '--test', 'row_gate', '--', '--ignored', '--nocapture'],
