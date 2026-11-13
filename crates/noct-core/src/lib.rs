@@ -7,6 +7,7 @@ pub mod contracts;
 pub mod json;
 pub mod limits;
 pub mod operation_recovery;
+pub mod suggestions;
 pub mod text;
 pub mod validation;
 pub mod validation_run;

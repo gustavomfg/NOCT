@@ -19,6 +19,10 @@ thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }
 sha2 = "0.10.9"
 uuid = { version = "1.29.2", features = ["v4"] }
+# Unicode tables for the suggestion identity (NFKD and general categories). Only the compiled
+# tables are enabled: the default features would also add the UTF-16 and UTF-8 iterators.
+icu_normalizer = { version = "2.4.0", default-features = false, features = ["compiled_data"] }
+icu_properties = "2.4.0"
 
 [profile.release]
 opt-level = 3

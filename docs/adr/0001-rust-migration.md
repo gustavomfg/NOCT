@@ -179,13 +179,27 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     its execution, as one unit. Command arguments are kept to 100 entries of 4,096 units
     and messages to 500,000 units, as in the TypeScript repository. Rust refuses a stored
     run or command whose kind or status it does not know, where TypeScript returns it
-    unchecked (this commit).
+    unchecked (`12c92d9`).
+  - Review suggestions: the stored shape, the identity that matches a suggestion across
+    reviews, and the repository (add, status changes with their history, reconciliation).
+    The identity needs Unicode normalization and general categories, so `noct-core` uses
+    `icu_normalizer` with its compiled tables only, and `icu_properties`. Tauri's URL stack
+    already compiles both, and the lockfile gains only the two dependency edges, no new
+    package. Node's ICU and these tables may carry different Unicode
+    versions; the gate compares the identity for the hard cases (compatibility forms, final
+    sigma, dotted capital I, controls, emoji). A review is also compared with the TypeScript
+    repository on a copy of the seeded database. Reading agent output into suggestions and
+    the structured-review instructions belong to the AI layer, which is not ported yet
+    (this commit).
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
   conversations, messages, artifacts, workspace memory and provider configurations.
   Executions, checkpoints, change sets, hunks, validation runs, execution commands,
-  errors, validation links and workspace evidence are in the main gate. The TypeScript `listFiles` leaks an
+  errors, validation links, workspace evidence and review suggestions are in the main
+  gate. Suggestion identities are compared for the hard Unicode cases. A review is
+  reconciled on a copy by both sides, and the results are compared without identifiers
+  or clock values. The TypeScript `listFiles` leaks an
   internal `existsFlag` alias; Rust does not reproduce it, and the gate removes it on the
   TypeScript side. It goes away with the TypeScript repository.
   Workspace evidence is checked by a third scenario, with its stale-clock values masked
@@ -193,8 +207,8 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** suggestions, brain memories, project index, semantic index,
-  engineering intelligence, backup and import, recovery, and the `Database` facade.
+- **Remaining, phase 2:** brain memories, project index, semantic index, engineering
+  intelligence, backup and import, recovery, and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

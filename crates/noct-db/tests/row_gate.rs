@@ -6,6 +6,10 @@
 use std::fs;
 use std::path::PathBuf;
 
+use noct_core::suggestions::{
+    ReviewComparisonItem, SuggestionCategory, SuggestionInput, sanitize_suggestion_title,
+    suggestion_identity,
+};
 use noct_core::workspace_evidence::{EvidenceKind, EvidenceReference};
 use noct_db::Database;
 use noct_db::Result;
@@ -20,6 +24,7 @@ use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::settings::Settings;
+use noct_db::repositories::suggestions::Suggestions;
 use noct_db::repositories::validation_runs::ValidationRuns;
 use noct_db::repositories::workspace_evidence::WorkspaceEvidence;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
@@ -104,6 +109,23 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         .expect("credential references");
     provider_references.sort();
 
+    let suggestions_api = Suggestions::new(conn);
+    let suggestion_ids = keys(&expected, "suggestionById");
+    let identities: Map<String, Value> = keys(&expected, "suggestionIdentities")
+        .into_iter()
+        .map(|title| {
+            let identity = suggestion_identity(SuggestionCategory::Bug, &title);
+            (title, json!(identity))
+        })
+        .collect();
+    let sanitized: Map<String, Value> = keys(&expected, "sanitizedTitles")
+        .into_iter()
+        .map(|title| {
+            let clean = sanitize_suggestion_title(&title);
+            (title, json!(clean))
+        })
+        .collect();
+
     let actual = json!({
         "modelCatalog": ModelCatalog::new(conn).list(None).expect("model catalog"),
         "workspaceModelBindings": ModelBindings::new(conn).list().expect("bindings"),
@@ -137,6 +159,11 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         "commands": keyed(&["exec-g1".to_string()], |id| ExecutionEvidence::new(conn).list_commands(id, None)),
         "errors": keyed(&["exec-g1".to_string()], |id| ExecutionEvidence::new(conn).list_errors(id, None)),
         "validationLinks": keyed(&["exec-g1".to_string()], |id| ExecutionEvidence::new(conn).list_validation_links(id)),
+        "suggestionList": suggestions_api.list("conv-1").expect("suggestions"),
+        "suggestionPage": page_json(suggestions_api.page("conv-1", 0, Some(2)).expect("suggestion page")),
+        "suggestionById": keyed(&suggestion_ids, |id| suggestions_api.get(id, None)),
+        "suggestionIdentities": Value::Object(identities),
+        "sanitizedTitles": Value::Object(sanitized),
     });
 
     for key in expected.as_object().expect("object").keys() {
@@ -190,6 +217,54 @@ const RECONCILE_TABLES: [(&str, &str); 10] = [
     ),
 ];
 
+/// A stored value as JSON. Blobs are not used by the schema, so they read as null.
+fn value_of(value: ValueRef<'_>) -> Value {
+    match value {
+        ValueRef::Null => Value::Null,
+        ValueRef::Integer(value) => json!(value),
+        ValueRef::Real(value) => json!(value),
+        ValueRef::Text(text) => json!(std::str::from_utf8(text).expect("UTF-8 text")),
+        ValueRef::Blob(_) => Value::Null,
+    }
+}
+
+/// The rows of a query as objects keyed by column name.
+fn rows_json(conn: &Connection, sql: &str) -> Value {
+    let mut statement = conn.prepare(sql).expect("query");
+    let names: Vec<String> = statement.column_names().map(str::to_string).collect();
+    let rows = statement
+        .query_map([], |row| {
+            let mut object = Map::new();
+            for (index, name) in names.iter().enumerate() {
+                object.insert(name.clone(), value_of(row.get_ref(index)?));
+            }
+            Ok(Value::Object(object))
+        })
+        .expect("rows")
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .expect("rows");
+    Value::Array(rows)
+}
+
+/// The keys of an object in the expected file, in order.
+fn keys(expected: &Value, key: &str) -> Vec<String> {
+    expected[key]
+        .as_object()
+        .expect("object")
+        .keys()
+        .cloned()
+        .collect()
+}
+
+fn titles(items: &[ReviewComparisonItem]) -> Value {
+    json!(
+        items
+            .iter()
+            .map(|item| item.title.clone())
+            .collect::<Vec<_>>()
+    )
+}
+
 fn reconcile_snapshot(conn: &Connection) -> Value {
     let mut tables = Map::new();
     for (table, sql) in RECONCILE_TABLES {
@@ -199,15 +274,7 @@ fn reconcile_snapshot(conn: &Connection) -> Value {
             .query_map([], |row| {
                 let mut values = Vec::with_capacity(columns);
                 for index in 0..columns {
-                    values.push(match row.get_ref(index)? {
-                        ValueRef::Null => Value::Null,
-                        ValueRef::Integer(value) => json!(value),
-                        ValueRef::Real(value) => json!(value),
-                        ValueRef::Text(text) => {
-                            json!(std::str::from_utf8(text).expect("UTF-8 text"))
-                        }
-                        ValueRef::Blob(_) => Value::Null,
-                    });
+                    values.push(value_of(row.get_ref(index)?));
                 }
                 Ok(Value::Array(values))
             })
@@ -304,4 +371,54 @@ fn evidence_matches_the_typescript_repository() {
         expected["indexReferences"],
         "indexReferences differs"
     );
+}
+
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn reconciles_suggestions_like_the_typescript_repository() {
+    let directory = scratch("row-gate-suggestions");
+    fs::create_dir_all(&directory).expect("scratch directory");
+    fs::copy(
+        gate_directory().join("suggestions-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before the review");
+    let db = Database::open(&directory).expect("open the copy");
+    let conn = db.connection();
+
+    let text = fs::read_to_string(gate_directory().join("suggestion-expected.json"))
+        .expect("suggestion-expected.json");
+    let expected: Value = serde_json::from_str(&text).expect("suggestion-expected.json is JSON");
+    let review: Vec<SuggestionInput> =
+        serde_json::from_value(expected["review"].clone()).expect("review input");
+
+    let result = Suggestions::new(conn)
+        .reconcile("conv-1", "/work/alpha", &review, true)
+        .expect("reconcile");
+    let comparison = &result.comparison;
+
+    // Identifiers and the review clock differ per run, so they are not in the snapshot.
+    let actual = json!({
+        "rows": rows_json(conn, "SELECT title, status, severity, confidence, source, responsible, result FROM suggestions WHERE conversation_id='conv-1' ORDER BY title"),
+        "decisions": rows_json(conn, "SELECT s.title AS title, d.status AS status, d.result AS result FROM suggestion_decisions d JOIN suggestions s ON s.id = d.suggestion_id WHERE s.conversation_id='conv-1' ORDER BY s.title, d.status, d.result"),
+        "returned": result.suggestions.iter().map(|item| json!({
+            "title": item.title,
+            "status": serde_json::to_value(item.status).expect("status"),
+            "severity": serde_json::to_value(item.severity).expect("severity"),
+            "historyStatuses": item.history.iter()
+                .map(|entry| serde_json::to_value(entry.status).expect("status"))
+                .collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+        "comparison": {
+            "newSuggestions": titles(&comparison.new_suggestions),
+            "persistentSuggestions": titles(&comparison.persistent_suggestions),
+            "resolvedSuggestions": titles(&comparison.resolved_suggestions),
+            "severityChanges": comparison.severity_changes.iter().map(|change| json!({
+                "title": change.title,
+                "from": serde_json::to_value(change.from).expect("from"),
+                "to": serde_json::to_value(change.to).expect("to"),
+            })).collect::<Vec<_>>(),
+        },
+    });
+    assert_eq!(actual, expected["snapshot"]);
 }

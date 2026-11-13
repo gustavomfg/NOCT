@@ -44,6 +44,53 @@ function compileTree(directory) {
 // repositories reading that same file, so they hold whatever the application stores.
 const at = (second) => new Date(Date.UTC(2026, 0, 1, 12, 0, second)).toISOString()
 
+// Suggestion fixtures. The titles include compatibility forms, combining marks, final sigma,
+// a dotted capital I, controls and emoji, so the identity is checked on its hard cases too.
+const IDENTITY_TITLES = [
+  'Ação: revisar  ‘Config’',
+  '  AÇÃO — revisar\tconfig!  ',
+  'ﬁle e ação',
+  'v2 é/ok',
+  '!!! ---',
+  'a\u0007\tb c  ',
+  'Ｆｕｌｌｗｉｄｔｈ ＡＢＣ',
+  'Ǆ ǅ ǆ',
+  'İstanbul',
+  'ΣΊΣΥΦΟΣ',
+  'ȩ́x',
+  '🙂 emoji 😀 x',
+  '  ',
+  'x​zero-width',
+  '',
+]
+
+function suggestionInput(title, severity, extra = {}) {
+  return {
+    title,
+    description: 'Descrição do problema.',
+    reasoning: 'Motivo da conclusão.',
+    category: 'bug',
+    severity,
+    affectedFiles: ['src/a.ts'],
+    proposedChanges: 'Ajustar a leitura.',
+    expectedBenefits: ['Menos falhas.'],
+    complexity: 'low',
+    risk: 'medium',
+    ...extra,
+  }
+}
+
+// The review the parity scenario runs on a copy of the seeded database. It persists the
+// accepted suggestion with a new severity, and adds one. The open suggestion it no longer
+// finds is resolved.
+const SUGGESTION_REVIEW = [
+  suggestionInput('revisar CONFIGURAÇÃO', 'critical'),
+  suggestionInput('Documentar API', 'low', {
+    category: 'documentation',
+    evidence: [{ source: 'documentação', detail: 'Sem seção.', location: 'docs/api.md' }],
+  }),
+]
+
 function seed(LocalDatabase, directory) {
   const db = new LocalDatabase(directory)
   db.importData({
@@ -160,6 +207,20 @@ function seed(LocalDatabase, directory) {
   db.executionEvidence.linkValidation({ executionId: 'exec-g1', changeId: null, validationId: 'val-g2', phase: 'before' })
   db.executionEvidence.linkValidation({ executionId: 'exec-g1', changeId: 'chg-g2', validationId: 'val-g1', phase: 'after-decision' })
 
+  // Review suggestions are written through their repository: an add, status changes with a
+  // result, and two reviews that persist, resolve and update suggestions by identity.
+  const suggestionIds = new Set()
+  const first = db.suggestions.add('conv-1', '/work/alpha', suggestionInput('Revisar configuração', 'medium', {
+    evidence: [{ source: 'arquivo', detail: 'Leitura direta.', location: 'src/a.ts:12' }, { source: 'teste', detail: 'Sem cobertura.' }],
+    confidence: 85,
+  }))
+  suggestionIds.add(first.id)
+  db.suggestions.setStatus(first.id, 'in-analysis')
+  db.suggestions.setStatus(first.id, 'accepted', 'Aceita pelo gate. ✓')
+  const firstReview = db.suggestions.reconcile('conv-1', '/work/alpha', [suggestionInput('Remover cache', 'low'), suggestionInput('Nova análise', 'info')], true)
+  const secondReview = db.suggestions.reconcile('conv-1', '/work/alpha', [suggestionInput('REVISAR CONFIGURAÇÃO', 'high'), suggestionInput('Verificar testes', 'critical', { category: 'testing' })], true)
+  for (const item of [...firstReview.suggestions, ...secondReview.suggestions, ...secondReview.comparison.resolvedSuggestions]) suggestionIds.add(item.id)
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -199,6 +260,11 @@ function seed(LocalDatabase, directory) {
     commands: { 'exec-g1': db.executionEvidence.listCommands('exec-g1') },
     errors: { 'exec-g1': db.executionEvidence.listErrors('exec-g1') },
     validationLinks: { 'exec-g1': db.executionEvidence.listValidationLinks('exec-g1') },
+    suggestionList: db.suggestions.list('conv-1'),
+    suggestionPage: db.suggestions.page('conv-1', 0, 2),
+    suggestionById: Object.fromEntries([...suggestionIds].sort().map((id) => [id, db.suggestions.get(id)])),
+    suggestionIdentities: Object.fromEntries(IDENTITY_TITLES.map((title) => [title, suggestionIdentity({ category: 'bug', title })])),
+    sanitizedTitles: Object.fromEntries(IDENTITY_TITLES.map((title) => [title, sanitizeSuggestionTitle(title)])),
   }
   db.close()
   return expected
@@ -293,11 +359,41 @@ function reconcileParity(BetterSqlite3, OperationRecoveryRepository, directory) 
   return snapshot
 }
 
+// Review suggestions are reconciled on a copy of the seeded database, taken before any other
+// parity scenario changes it. The TypeScript run and the Rust run read the same review input.
+// Identifiers and clock values are left out of the snapshot because each run makes its own;
+// titles, statuses, severities, results and the comparison are compared exactly.
+function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review) {
+  const copy = path.join(directory, 'suggestions-ts.db')
+  fs.copyFileSync(path.join(directory, 'suggestions-before.db'), copy)
+  const database = new BetterSqlite3(copy)
+  database.pragma('foreign_keys = ON')
+  const repository = new SuggestionRepository(database, {
+    run: (_operation, callback) => database.transaction(callback)(),
+  })
+  const result = repository.reconcile('conv-1', '/work/alpha', review, true)
+  const snapshot = {
+    rows: database.prepare("SELECT title, status, severity, confidence, source, responsible, result FROM suggestions WHERE conversation_id='conv-1' ORDER BY title").all(),
+    decisions: database.prepare("SELECT s.title AS title, d.status AS status, d.result AS result FROM suggestion_decisions d JOIN suggestions s ON s.id = d.suggestion_id WHERE s.conversation_id='conv-1' ORDER BY s.title, d.status, d.result").all(),
+    returned: result.suggestions.map((item) => ({ title: item.title, status: item.status, severity: item.severity, historyStatuses: item.history.map((entry) => entry.status) })),
+    comparison: {
+      newSuggestions: result.comparison.newSuggestions.map((item) => item.title),
+      persistentSuggestions: result.comparison.persistentSuggestions.map((item) => item.title),
+      resolvedSuggestions: result.comparison.resolvedSuggestions.map((item) => item.title),
+      severityChanges: result.comparison.severityChanges.map(({ title, from, to }) => ({ title, from, to })),
+    },
+  }
+  database.close()
+  return snapshot
+}
+
 compileTree(path.join(root, 'electron'))
 compileTree(path.join(root, 'shared'))
 const { LocalDatabase } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/Database.js')
 const { OperationRecoveryRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/OperationRecoveryRepository.js')
 const { WorkspaceEvidenceRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/WorkspaceEvidenceRepository.js')
+const { SuggestionRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/SuggestionRepository.js')
+const { suggestionIdentity, sanitizeSuggestionTitle } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/suggestions.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
@@ -306,13 +402,16 @@ try {
   // The parity scenarios change rows the row gate does not expect, so they run on a copy.
   const copy = new BetterSqlite3(path.join(gateDirectory, 'nocturne.db'))
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'parity.db')}'`)
+  copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'suggestions-before.db')}'`)
   copy.close()
   const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
+  const suggestionSnapshot = suggestionParity(BetterSqlite3, SuggestionRepository, gateDirectory, SUGGESTION_REVIEW)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'evidence-expected.json'), `${JSON.stringify(evidence, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'), `${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
   const run = spawnSync(
     'cargo',
     ['test', '-p', 'noct-db', '--test', 'row_gate', '--', '--ignored', '--nocapture'],

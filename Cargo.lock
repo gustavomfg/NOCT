@@ -2769,6 +2769,8 @@ dependencies = [
 name = "noct-core"
 version = "1.0.5"
 dependencies = [
+ "icu_normalizer",
+ "icu_properties",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
