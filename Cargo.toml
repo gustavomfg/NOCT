@@ -23,6 +23,8 @@ uuid = { version = "1.29.2", features = ["v4"] }
 # tables are enabled: the default features would also add the UTF-16 and UTF-8 iterators.
 icu_normalizer = { version = "2.4.0", default-features = false, features = ["compiled_data"] }
 icu_properties = "2.4.0"
+# Brain memory credential filter and search tokens. The lockfile already resolves this version.
+regex = "1.13.1"
 
 [profile.release]
 opt-level = 3

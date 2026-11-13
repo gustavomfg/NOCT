@@ -3,9 +3,16 @@
 //! return, in `NOCT_ROW_GATE_DIR`. Rust must open the same file and return the same
 //! rows. The test is ignored by default because it needs that directory.
 
+// The expected-rows object is one `json!` literal with many keys, which the default limit rejects.
+#![recursion_limit = "256"]
+
 use std::fs;
 use std::path::PathBuf;
 
+use noct_core::brain_memory::{
+    BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, CreateBrainMemoryInput,
+    UpdateBrainMemoryInput, is_safe_brain_memory_content,
+};
 use noct_core::suggestions::{
     ReviewComparisonItem, SuggestionCategory, SuggestionInput, sanitize_suggestion_title,
     suggestion_identity,
@@ -15,6 +22,7 @@ use noct_db::Database;
 use noct_db::Result;
 use noct_db::repositories::Page;
 use noct_db::repositories::artifacts::Artifacts;
+use noct_db::repositories::brain_memories::BrainMemories;
 use noct_db::repositories::change_sets::ChangeSets;
 use noct_db::repositories::checkpoints::Checkpoints;
 use noct_db::repositories::conversations::Conversations;
@@ -126,6 +134,33 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         })
         .collect();
 
+    let brain = BrainMemories::new(conn);
+    let brain_ids = keys(&expected, "brainMemoryById");
+    let brain_history_ids = keys(&expected, "brainMemoryHistory");
+    let removed_ids = keys(&expected, "brainMemoryAfterDelete");
+    let constraint_id: String = conn
+        .query_row(
+            "SELECT id FROM brain_memories WHERE content = ?1",
+            ["Não alterar o schema sem migração."],
+            |row| row.get(0),
+        )
+        .expect("the constraint memory");
+    let brain_errors = json!({
+        "invalidTransition": error_of(brain.update(&constraint_id, "/work/alpha", &status_update(BrainMemoryStatus::Outdated))),
+        "missing": error_of(brain.update("missing-brain", "/work/alpha", &status_update(BrainMemoryStatus::Active))),
+        "conversationRequired": error_of(brain.create("/work/alpha", &brain_input(BrainMemoryScope::Conversation, None, "Sem conversa."))),
+        "otherWorkspace": error_of(brain.create("/work/beta", &brain_input(BrainMemoryScope::Conversation, Some("conv-1"), "Conversa de outro workspace."))),
+    });
+    let brain_safety: Vec<Value> = expected["brainSafety"]
+        .as_array()
+        .expect("brain safety cases")
+        .iter()
+        .map(|case| {
+            let input = case["input"].as_str().expect("the case input");
+            json!({ "input": input, "safe": is_safe_brain_memory_content(input) })
+        })
+        .collect();
+
     let actual = json!({
         "modelCatalog": ModelCatalog::new(conn).list(None).expect("model catalog"),
         "workspaceModelBindings": ModelBindings::new(conn).list().expect("bindings"),
@@ -164,6 +199,20 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         "suggestionById": keyed(&suggestion_ids, |id| suggestions_api.get(id, None)),
         "suggestionIdentities": Value::Object(identities),
         "sanitizedTitles": Value::Object(sanitized),
+        "brainMemoryById": keyed(&brain_ids, |id| brain.get(id, "/work/alpha")),
+        "brainMemoryAfterDelete": keyed(&removed_ids, |id| brain.get(id, "/work/alpha")),
+        "brainMemoryHistory": keyed(&brain_history_ids, |id| brain.list_history(id, "/work/alpha")),
+        "brainMemoryPage": page_json(brain.list_page("/work/alpha", 0, Some(2), "", None).expect("brain page")),
+        "brainMemorySearch": page_json(brain.list_page("/work/alpha", 0, Some(10), "sqlite electron", None).expect("brain search")),
+        "brainMemoryStatus": page_json(brain.list_page("/work/alpha", 0, Some(1), "", Some(BrainMemoryStatus::Active)).expect("brain status page")),
+        "brainMemoryRetrieve": brain.retrieve("/work/alpha", "conv-1", "sqlite migrações português", None).expect("brain retrieve"),
+        "brainMemoryEquivalent": {
+            "active": brain.find_equivalent("/work/alpha", BrainMemoryScope::Workspace, None, "  usar sqlite LOCAL para persistência e migrações.  ").expect("active equivalent"),
+            "conversation": brain.find_equivalent("/work/alpha", BrainMemoryScope::Conversation, Some("conv-1"), "prefere RESPOSTAS em português.").expect("conversation equivalent"),
+            "outdated": brain.find_equivalent("/work/alpha", BrainMemoryScope::Workspace, None, "O projeto usa Electron.").expect("outdated equivalent"),
+        },
+        "brainMemoryErrors": brain_errors,
+        "brainSafety": brain_safety,
     });
 
     for key in expected.as_object().expect("object").keys() {
@@ -218,6 +267,38 @@ const RECONCILE_TABLES: [(&str, &str); 10] = [
 ];
 
 /// A stored value as JSON. Blobs are not used by the schema, so they read as null.
+/// The error text a call returns, or null when it succeeds, as the TypeScript side records it.
+fn error_of<T>(result: Result<T>) -> Value {
+    match result {
+        Ok(_) => Value::Null,
+        Err(error) => json!(error.to_string()),
+    }
+}
+
+fn status_update(status: BrainMemoryStatus) -> UpdateBrainMemoryInput {
+    UpdateBrainMemoryInput {
+        status: Some(status),
+        ..Default::default()
+    }
+}
+
+fn brain_input(
+    scope: BrainMemoryScope,
+    conversation: Option<&str>,
+    content: &str,
+) -> CreateBrainMemoryInput {
+    CreateBrainMemoryInput {
+        conversation_id: conversation.map(str::to_string),
+        kind: BrainMemoryKind::Fact,
+        scope,
+        content: content.to_string(),
+        confidence: None,
+        source_type: None,
+        source_id: None,
+        status: None,
+    }
+}
+
 fn value_of(value: ValueRef<'_>) -> Value {
     match value {
         ValueRef::Null => Value::Null,

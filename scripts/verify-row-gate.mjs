@@ -91,6 +91,41 @@ const SUGGESTION_REVIEW = [
   }),
 ]
 
+// Contents the credential filter of a brain memory answers for. They cover the thresholds of
+// the patterns, UTF-16 counting, JavaScript whitespace, and the case folding the `/i` flag does
+// and does not do. Rust must answer each one as the TypeScript filter does.
+const BRAIN_SAFETY_CASES = [
+  'Usar SQLite local para persistência.',
+  '',
+  'Authorization: Bearer abcdefgh',
+  'authorization:abcdefgh',
+  'authorization: short',
+  'api_key = 123456789012',
+  'api-key=12345678901',
+  'senha=abcdefghijkl',
+  'senha=abcdefghijk',
+  'sk-abcdefghijklmnop',
+  'sk-abcdefghijklmno',
+  'GHP_abcdefghijklmnopqrst',
+  'ghp_abcdefghijklmnopqrs',
+  'token=😀😀😀😀😀😀',
+  'token=😀😀😀😀😀',
+  'password: 漢漢漢漢漢漢漢漢漢漢漢漢',
+  'password: 漢漢漢漢漢漢漢漢漢漢漢',
+  'token = aaaaaaaaaaaa',
+  'token﻿=﻿aaaaaaaaaaaa',
+  'token = aaaaaaaaaaaa',
+  'token\u0085=aaaaaaaaaaaaaaaa',
+  'token᠎=aaaaaaaaaaaa',
+  'token\u000B=\u000Caaaaaaaaaaaa',
+  'token=​aaaaaaaaaaaa',
+  'secret: 　abcdefghijkl',
+  'apiKey=123456789012',
+  'ſk-abcdefghijklmnop',
+  'SK-abcdefghijklmnop',
+  'bearer token only',
+]
+
 function seed(LocalDatabase, directory) {
   const db = new LocalDatabase(directory)
   db.importData({
@@ -221,6 +256,41 @@ function seed(LocalDatabase, directory) {
   const secondReview = db.suggestions.reconcile('conv-1', '/work/alpha', [suggestionInput('REVISAR CONFIGURAÇÃO', 'high'), suggestionInput('Verificar testes', 'critical', { category: 'testing' })], true)
   for (const item of [...firstReview.suggestions, ...secondReview.suggestions, ...secondReview.comparison.resolvedSuggestions]) suggestionIds.add(item.id)
 
+  // Brain memories are written through their repository: a workspace memory and a conversation
+  // memory, agent candidates in which one repeats another, an approval, an edit, a return to use,
+  // an outdated and an archived memory, a deletion, and a memory of another workspace. Every change
+  // is recorded in the history. The repository stamps the wall clock, so the update times are set
+  // to fixed values afterwards: the orders the pages and retrieval return must not depend on the run.
+  const brainCaught = (action) => {
+    try {
+      action()
+      return null
+    } catch (error) {
+      return error.message
+    }
+  }
+  const workspaceBrain = db.createBrainMemory('/work/alpha', { kind: 'decision', scope: 'workspace', content: '  Usar SQLite local para persistência.  ', confidence: 90, sourceType: 'manual', status: 'active' })
+  const conversationBrain = db.createBrainMemory('/work/alpha', { kind: 'preference', scope: 'conversation', conversationId: 'conv-1', content: 'Prefere respostas em português.', sourceType: 'message' })
+  const [electronBrain, constraintBrain] = db.createBrainMemoryCandidates('/work/alpha', 'conv-1', [
+    { kind: 'fact', scope: 'workspace', content: 'O projeto usa Electron.', confidence: 80 },
+    { kind: 'constraint', scope: 'conversation', content: 'Não alterar o schema sem migração.', confidence: 75 },
+    { kind: 'fact', scope: 'workspace', content: '  o PROJETO usa electron.  ', confidence: 60 },
+  ])
+  const removedBrain = db.createBrainMemory('/work/alpha', { kind: 'learning', scope: 'workspace', content: 'Memória para remover.', sourceType: 'agent' })
+  const betaBrain = db.createBrainMemory('/work/beta', { kind: 'fact', scope: 'workspace', content: 'Projeto beta usa Go.', status: 'active' })
+  db.updateBrainMemory(electronBrain.id, '/work/alpha', { status: 'active' })
+  db.updateBrainMemory(workspaceBrain.id, '/work/alpha', { content: 'Usar SQLite local para persistência e migrações.', confidence: 95 })
+  db.updateBrainMemory(conversationBrain.id, '/work/alpha', { status: 'archived' })
+  db.updateBrainMemory(conversationBrain.id, '/work/alpha', { status: 'active' })
+  db.updateBrainMemory(electronBrain.id, '/work/alpha', { status: 'outdated' })
+  db.updateBrainMemory(constraintBrain.id, '/work/alpha', { status: 'archived' })
+  db.deleteBrainMemory(removedBrain.id, '/work/alpha')
+  db.markBrainMemoriesUsed([workspaceBrain.id, workspaceBrain.id, conversationBrain.id])
+  const clock = new BetterSqlite3(path.join(directory, 'nocturne.db'))
+  const stampUpdate = clock.prepare('UPDATE brain_memories SET updated_at = ? WHERE id = ?')
+  for (const [index, memory] of [workspaceBrain, conversationBrain, electronBrain, constraintBrain, betaBrain].entries()) stampUpdate.run(at(400 + index), memory.id)
+  clock.close()
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -265,6 +335,25 @@ function seed(LocalDatabase, directory) {
     suggestionById: Object.fromEntries([...suggestionIds].sort().map((id) => [id, db.suggestions.get(id)])),
     suggestionIdentities: Object.fromEntries(IDENTITY_TITLES.map((title) => [title, suggestionIdentity({ category: 'bug', title })])),
     sanitizedTitles: Object.fromEntries(IDENTITY_TITLES.map((title) => [title, sanitizeSuggestionTitle(title)])),
+    brainMemoryById: Object.fromEntries([workspaceBrain, conversationBrain, electronBrain, constraintBrain, betaBrain].map((memory) => [memory.id, db.getBrainMemory(memory.id, '/work/alpha')])),
+    brainMemoryAfterDelete: { [removedBrain.id]: db.getBrainMemory(removedBrain.id, '/work/alpha') },
+    brainMemoryHistory: Object.fromEntries([workspaceBrain, conversationBrain, electronBrain, constraintBrain].map((memory) => [memory.id, db.listBrainMemoryHistory(memory.id, '/work/alpha')])),
+    brainMemoryPage: db.listBrainMemoryPage('/work/alpha', 0, 2),
+    brainMemorySearch: db.listBrainMemoryPage('/work/alpha', 0, 10, 'sqlite electron'),
+    brainMemoryStatus: db.listBrainMemoryPage('/work/alpha', 0, 1, '', 'active'),
+    brainMemoryRetrieve: db.retrieveBrainMemories('/work/alpha', 'conv-1', 'sqlite migrações português'),
+    brainMemoryEquivalent: {
+      active: db.findEquivalentBrainMemory('/work/alpha', 'workspace', null, '  usar sqlite LOCAL para persistência e migrações.  '),
+      conversation: db.findEquivalentBrainMemory('/work/alpha', 'conversation', 'conv-1', 'prefere RESPOSTAS em português.'),
+      outdated: db.findEquivalentBrainMemory('/work/alpha', 'workspace', null, 'O projeto usa Electron.'),
+    },
+    brainMemoryErrors: {
+      invalidTransition: brainCaught(() => db.updateBrainMemory(constraintBrain.id, '/work/alpha', { status: 'outdated' })),
+      missing: brainCaught(() => db.updateBrainMemory('missing-brain', '/work/alpha', { status: 'active' })),
+      conversationRequired: brainCaught(() => db.createBrainMemory('/work/alpha', { kind: 'fact', scope: 'conversation', content: 'Sem conversa.' })),
+      otherWorkspace: brainCaught(() => db.createBrainMemory('/work/beta', { kind: 'fact', scope: 'conversation', conversationId: 'conv-1', content: 'Conversa de outro workspace.' })),
+    },
+    brainSafety: BRAIN_SAFETY_CASES.map((input) => ({ input, safe: isSafeBrainMemoryContent(input) })),
   }
   db.close()
   return expected
@@ -394,6 +483,7 @@ const { OperationRecoveryRepository } = createRequire(path.join(buildDirectory, 
 const { WorkspaceEvidenceRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/WorkspaceEvidenceRepository.js')
 const { SuggestionRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/SuggestionRepository.js')
 const { suggestionIdentity, sanitizeSuggestionTitle } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/suggestions.js')
+const { isSafeBrainMemoryContent } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/brainMemory.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))

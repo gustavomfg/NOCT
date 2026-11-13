@@ -2771,6 +2771,7 @@ version = "1.0.5"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
