@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/noct-core", "crates/noct-native"]
+members = ["crates/noct-app", "crates/noct-core", "crates/noct-native"]
 
 [workspace.package]
 version = "1.0.5"

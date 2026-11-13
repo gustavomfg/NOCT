@@ -1,0 +1,6 @@
+{
+  "identifier": "main-window",
+  "description": "Main NOCT window. Deny by default: each privileged command is granted here explicitly.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
