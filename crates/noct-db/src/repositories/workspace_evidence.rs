@@ -308,6 +308,30 @@ impl<'a> WorkspaceEvidence<'a> {
         Ok(references)
     }
 
+    /// The checkpoints of an execution that are ready, as references for other evidence.
+    pub fn checkpoint_references(
+        &self,
+        execution_id: Option<&str>,
+    ) -> Result<Vec<EvidenceReference>> {
+        let Some(execution_id) = execution_id.filter(|id| !id.is_empty()) else {
+            return Ok(Vec::new());
+        };
+        let mut statement = self.conn.prepare(
+            "SELECT phase, id FROM checkpoints WHERE execution_id=?1 AND status='ready' \
+             ORDER BY captured_at LIMIT 20",
+        )?;
+        let references = statement
+            .query_map([execution_id], |row| {
+                Ok(EvidenceReference {
+                    kind: row.get(0)?,
+                    id: row.get(1)?,
+                    payload_hash: None,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(references)
+    }
+
     fn reference(
         &self,
         workspace: &str,

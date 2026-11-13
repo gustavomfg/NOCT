@@ -9,15 +9,18 @@ use std::path::PathBuf;
 use noct_core::workspace_evidence::{EvidenceKind, EvidenceReference};
 use noct_db::Database;
 use noct_db::Result;
+use noct_db::repositories::Page;
 use noct_db::repositories::artifacts::Artifacts;
 use noct_db::repositories::change_sets::ChangeSets;
 use noct_db::repositories::checkpoints::Checkpoints;
 use noct_db::repositories::conversations::Conversations;
+use noct_db::repositories::execution_evidence::ExecutionEvidence;
 use noct_db::repositories::executions::Executions;
 use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::settings::Settings;
+use noct_db::repositories::validation_runs::ValidationRuns;
 use noct_db::repositories::workspace_evidence::WorkspaceEvidence;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
 use noct_db::repositories::workspace_model_bindings::ModelBindings;
@@ -47,6 +50,11 @@ fn copy_typescript_database(name: &str) -> PathBuf {
     )
     .expect("copy the TypeScript database");
     directory
+}
+
+/// `Page` has no serialized form of its own; the gate compares its items and flag.
+fn page_json<T: Serialize>(page: Page<T>) -> Value {
+    json!({ "items": page.items, "hasMore": page.has_more })
 }
 
 fn expected() -> Value {
@@ -121,6 +129,14 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         "changeById": keyed(&["chg-g1".to_string(), "chg-g2".to_string()], |id| change_sets_api.get_change(id, None)),
         "hunks": change_sets_api.list_hunks("chg-g1").expect("hunks"),
         "hunkById": keyed(&["hk-g1".to_string(), "hk-g2".to_string()], |id| change_sets_api.get_hunk(id)),
+        "workspaceEvidence": WorkspaceEvidence::new(conn).list("/work/alpha", None).expect("evidence"),
+        "validationRuns": ValidationRuns::new(conn).list("/work/alpha", None).expect("validation runs"),
+        "validationRunLatest": ValidationRuns::new(conn).latest("/work/alpha").expect("latest run"),
+        "validationRunPage": page_json(ValidationRuns::new(conn).page("/work/alpha", 0, Some(1)).expect("page")),
+        "validationRunsBeta": ValidationRuns::new(conn).list("/work/beta", None).expect("beta runs"),
+        "commands": keyed(&["exec-g1".to_string()], |id| ExecutionEvidence::new(conn).list_commands(id, None)),
+        "errors": keyed(&["exec-g1".to_string()], |id| ExecutionEvidence::new(conn).list_errors(id, None)),
+        "validationLinks": keyed(&["exec-g1".to_string()], |id| ExecutionEvidence::new(conn).list_validation_links(id)),
     });
 
     for key in expected.as_object().expect("object").keys() {

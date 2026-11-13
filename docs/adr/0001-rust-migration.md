@@ -173,12 +173,19 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     its files and its evidence as one unit.
   - Change sets, file changes, hunk annotations and review decisions. A decision
     updates the change set, the change and the execution, records its evidence and
-    completes its operation as one unit (this commit).
+    completes its operation as one unit (`790fb15`).
+  - Validation runs and execution evidence (commands, errors, validation links). A run
+    records its evidence with the latest index manifests and the ready checkpoints of
+    its execution, as one unit. Command arguments are kept to 100 entries of 4,096 units
+    and messages to 500,000 units, as in the TypeScript repository. Rust refuses a stored
+    run or command whose kind or status it does not know, where TypeScript returns it
+    unchecked (this commit).
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
   conversations, messages, artifacts, workspace memory and provider configurations.
-  Executions, checkpoints, change sets and hunks are in the main gate. The TypeScript `listFiles` leaks an
+  Executions, checkpoints, change sets, hunks, validation runs, execution commands,
+  errors, validation links and workspace evidence are in the main gate. The TypeScript `listFiles` leaks an
   internal `existsFlag` alias; Rust does not reproduce it, and the gate removes it on the
   TypeScript side. It goes away with the TypeScript repository.
   Workspace evidence is checked by a third scenario, with its stale-clock values masked
@@ -186,9 +193,8 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** execution evidence (commands, errors, validation links),
-  validation, suggestions, brain memories, project index, semantic index, engineering
-  intelligence, backup and import, recovery, and the `Database` facade.
+- **Remaining, phase 2:** suggestions, brain memories, project index, semantic index,
+  engineering intelligence, backup and import, recovery, and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

@@ -140,6 +140,26 @@ function seed(LocalDatabase, directory) {
   db.changeSets.createHunk({ ...hunk, id: 'hk-g2', sequence: 2, startLine: 4, endLine: 6 })
   db.changeSets.updateHunk({ ...hunk, finalPatch: '@@ -1 +1,2 @@', status: 'edited', decisionAt: at(69) })
 
+  // Validation runs are written through their repository. Creating one also records its
+  // evidence, linked to the ready checkpoints of its execution; saving a stored run updates it.
+  db.validation.create({ id: 'val-g1', workspace: '/work/alpha', executionId: 'exec-g1', kind: 'typecheck', command: 'npm', args: ['run', 'typecheck'], status: 'running', exitCode: null, durationMs: null, outputSummary: '', artifacts: [], startedAt: at(70), completedAt: null, error: null })
+  db.validation.update({ id: 'val-g1', workspace: '/work/alpha', executionId: 'exec-g1', kind: 'typecheck', command: 'npm', args: ['run', 'typecheck'], status: 'passed', exitCode: 0, durationMs: 1200, outputSummary: 'Sem erros.', artifacts: [{ path: 'dist/report.json', kind: 'report', size: 42 }, { path: 'dist/empty.log', kind: 'log', size: null }], startedAt: at(70), completedAt: at(71), error: null })
+  db.validation.create({ id: 'val-g2', workspace: '/work/alpha', kind: 'test', command: 'npx', args: ['vitest', 'run', 'acentuação ✓'], status: 'failed', exitCode: 1, durationMs: 800, outputSummary: 'Um teste falhou.', artifacts: [], startedAt: at(72), completedAt: at(73), error: 'Falhou.' })
+  db.validation.save({ id: 'val-g3', workspace: '/work/beta', kind: 'lint', command: 'npm', args: ['run', 'lint'], status: 'queued', exitCode: null, durationMs: null, outputSummary: '', artifacts: [], startedAt: at(74), completedAt: null, error: null })
+  db.validation.save({ id: 'val-g3', workspace: '/work/beta', kind: 'lint', command: 'npm', args: ['run', 'lint'], status: 'cancelled', exitCode: null, durationMs: 4, outputSummary: 'Cancelado.', artifacts: [], startedAt: at(74), completedAt: at(75), error: null })
+
+  // Execution evidence is written through its repository: commands with bounded arguments,
+  // errors, and validation links, which are recorded once for each validation, change and phase.
+  db.executionEvidence.createCommand({ id: 'cmd-g1', executionId: 'exec-g1', command: 'npm', args: ['run', 'typecheck'], source: 'validation', status: 'running', exitCode: null, durationMs: null, outputSummary: '', startedAt: at(76), finishedAt: null })
+  db.executionEvidence.saveCommand({ id: 'cmd-g1', executionId: 'exec-g1', command: 'npm', args: ['run', 'typecheck'], source: 'validation', status: 'passed', exitCode: 0, durationMs: 1200, outputSummary: 'Sem erros.', startedAt: at(76), finishedAt: at(77) })
+  db.executionEvidence.createCommand({ id: 'cmd-g2', executionId: 'exec-g1', command: 'ls', args: Array.from({ length: 101 }, (_, index) => (index === 0 ? 'x'.repeat(4_100) : `arg-${index}`)), source: 'agent', status: 'cancelled', exitCode: null, durationMs: 5, outputSummary: 'Cancelado.', startedAt: at(78), finishedAt: at(79) })
+  db.executionEvidence.createError({ id: 'err-g1', executionId: 'exec-g1', stage: 'validation', message: 'Validação falhou: ✓', path: 'src/a.ts', createdAt: at(80) })
+  db.executionEvidence.createError({ id: 'err-g2', executionId: 'exec-g1', stage: 'persistence', message: 'Persistência interrompida.', path: null, createdAt: at(81) })
+  db.executionEvidence.linkValidation({ executionId: 'exec-g1', changeId: 'chg-g1', validationId: 'val-g1', phase: 'proposed' })
+  db.executionEvidence.linkValidation({ executionId: 'exec-g1', changeId: 'chg-g1', validationId: 'val-g1', phase: 'proposed' })
+  db.executionEvidence.linkValidation({ executionId: 'exec-g1', changeId: null, validationId: 'val-g2', phase: 'before' })
+  db.executionEvidence.linkValidation({ executionId: 'exec-g1', changeId: 'chg-g2', validationId: 'val-g1', phase: 'after-decision' })
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -163,7 +183,7 @@ function seed(LocalDatabase, directory) {
     // The TypeScript listFiles spreads its raw row, so the internal `existsFlag` alias reaches
     // callers. It is not part of CheckpointFileRecord, so Rust does not reproduce it: an
     // intentional difference, removed here before the comparison.
-    checkpointFiles: { 'ck-g1': db.checkpoints.listFiles('ck-g1').map(({ existsFlag, ...file }) => file) },
+    checkpointFiles: { 'ck-g1': db.checkpoints.listFiles('ck-g1').map((file) => Object.fromEntries(Object.entries(file).filter(([key]) => key !== 'existsFlag'))) },
     changeSets: db.changeSets.list('exec-g1'),
     changeSetLatest: db.changeSets.getByExecutionId('exec-g1'),
     changeSetById: { 'cs-g1': db.changeSets.getById('cs-g1', 'exec-g1') },
@@ -171,6 +191,14 @@ function seed(LocalDatabase, directory) {
     changeById: Object.fromEntries(['chg-g1', 'chg-g2'].map((id) => [id, db.changeSets.getChange(id)])),
     hunks: db.changeSets.listHunks('chg-g1'),
     hunkById: Object.fromEntries(['hk-g1', 'hk-g2'].map((id) => [id, db.changeSets.getHunk(id)])),
+    workspaceEvidence: db.workspaceEvidence.list('/work/alpha'),
+    validationRuns: db.validation.list('/work/alpha'),
+    validationRunLatest: db.validation.latest('/work/alpha'),
+    validationRunPage: db.validation.page('/work/alpha', 0, 1),
+    validationRunsBeta: db.validation.list('/work/beta'),
+    commands: { 'exec-g1': db.executionEvidence.listCommands('exec-g1') },
+    errors: { 'exec-g1': db.executionEvidence.listErrors('exec-g1') },
+    validationLinks: { 'exec-g1': db.executionEvidence.listValidationLinks('exec-g1') },
   }
   db.close()
   return expected

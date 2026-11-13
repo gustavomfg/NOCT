@@ -241,3 +241,76 @@ pub struct ChangeHunkRecord {
     pub end_line: i64,
     pub decision_at: Option<String>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionCommandSource {
+    Agent,
+    Validation,
+    System,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionCommandStatus {
+    Running,
+    Passed,
+    Failed,
+    Cancelled,
+}
+
+/// A command an execution ran. Its output is a bounded summary, never the raw log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionCommandRecord {
+    pub id: String,
+    pub execution_id: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub source: ExecutionCommandSource,
+    pub status: ExecutionCommandStatus,
+    pub exit_code: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub output_summary: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionErrorStage {
+    Planning,
+    Mutation,
+    Validation,
+    Decision,
+    Rollback,
+    Persistence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionErrorRecord {
+    pub id: String,
+    pub execution_id: String,
+    pub stage: ExecutionErrorStage,
+    pub message: String,
+    pub path: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionValidationPhase {
+    Before,
+    Proposed,
+    AfterDecision,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionValidationLink {
+    pub execution_id: String,
+    pub change_id: Option<String>,
+    pub validation_id: String,
+    pub phase: ExecutionValidationPhase,
+}

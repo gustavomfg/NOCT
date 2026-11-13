@@ -9,5 +9,6 @@ pub mod limits;
 pub mod operation_recovery;
 pub mod text;
 pub mod validation;
+pub mod validation_run;
 pub mod wire;
 pub mod workspace_evidence;
