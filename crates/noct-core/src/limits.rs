@@ -84,3 +84,12 @@ pub mod provider_configuration {
     pub const MINIMUM_TIMEOUT_MS: u64 = 1_000;
     pub const MAXIMUM_TIMEOUT_MS: u64 = 120_000;
 }
+
+/// Limits of model descriptors. Port of `MODEL_LIMITS` in `shared/ai/model.ts`.
+pub mod model {
+    pub const IDENTIFIER_CHARACTERS: u64 = 512;
+    pub const DISPLAY_NAME_CHARACTERS: u64 = 500;
+    pub const FAMILY_CHARACTERS: u64 = 500;
+    pub const VERSION_CHARACTERS: u64 = 200;
+    pub const PRICING_EFFECTIVE_AT_CHARACTERS: u64 = 100;
+}

@@ -2,7 +2,7 @@
 //! because the TypeScript application stored data with them.
 
 /// Replaces every run of JavaScript `\s` characters with one space.
-pub(crate) fn collapse_js_whitespace(text: &str) -> String {
+pub fn collapse_js_whitespace(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut in_run = false;
     for c in text.chars() {
@@ -21,7 +21,7 @@ pub(crate) fn collapse_js_whitespace(text: &str) -> String {
 
 /// JavaScript's `\s` and `String#trim` set. It differs from Rust's `char::is_whitespace`:
 /// it includes U+FEFF and omits U+0085.
-pub(crate) fn is_js_whitespace(c: char) -> bool {
+pub fn is_js_whitespace(c: char) -> bool {
     matches!(
         c,
         '\t' | '\n' | '\u{0b}' | '\u{0c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
@@ -37,7 +37,18 @@ pub(crate) fn is_js_whitespace(c: char) -> bool {
 
 /// The first `units` UTF-16 code units, as `String#slice(0, units)` returns them. A
 /// split surrogate pair cannot be represented in a Rust string and becomes U+FFFD.
-pub(crate) fn utf16_prefix(text: &str, units: usize) -> String {
+pub fn utf16_prefix(text: &str, units: usize) -> String {
     let prefix: Vec<u16> = text.encode_utf16().take(units).collect();
     String::from_utf16_lossy(&prefix)
+}
+
+/// `String#trim`: removes the JavaScript whitespace set from both ends.
+pub fn js_trim(text: &str) -> &str {
+    text.trim_matches(is_js_whitespace)
+}
+
+/// Length in UTF-16 code units, which is what `string.length` measures in JavaScript and
+/// what every persistence limit counts.
+pub fn utf16_len(text: &str) -> usize {
+    text.encode_utf16().count()
 }

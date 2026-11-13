@@ -220,3 +220,26 @@ fn provider_configuration_limits_match_typescript() {
     }
     assert_eq!(ts.len(), checks.len(), "every provider limit is covered");
 }
+
+const TS_MODEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/ai/model.ts");
+
+#[test]
+fn model_limits_match_typescript() {
+    let source = std::fs::read_to_string(TS_MODEL).expect("shared/ai/model.ts is readable");
+    let ts = typescript_values(&source);
+
+    let checks: &[(&str, u64)] = &[
+        ("identifierCharacters", l::model::IDENTIFIER_CHARACTERS),
+        ("displayNameCharacters", l::model::DISPLAY_NAME_CHARACTERS),
+        ("familyCharacters", l::model::FAMILY_CHARACTERS),
+        ("versionCharacters", l::model::VERSION_CHARACTERS),
+        (
+            "pricingEffectiveAtCharacters",
+            l::model::PRICING_EFFECTIVE_AT_CHARACTERS,
+        ),
+    ];
+    for (name, value) in checks {
+        assert_eq!(ts.get(*name), Some(value), "{name} in model.ts");
+    }
+    assert_eq!(ts.len(), checks.len(), "every model limit is covered");
+}

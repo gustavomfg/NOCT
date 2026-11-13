@@ -11,7 +11,7 @@ publish = false
 [workspace.dependencies]
 libc = "0.2.191"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_json = { version = "1.0.154", features = ["preserve_order", "raw_value"] }
 tauri = "2.12.5"
 tauri-build = "2.7.4"
 rusqlite = { version = "0.42.0", features = ["bundled", "backup"] }
