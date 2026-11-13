@@ -173,3 +173,50 @@ fn schema_version_matches_typescript() {
     let source = std::fs::read_to_string(TS_CONSTANTS).expect("shared/constants.ts is readable");
     assert_eq!(schema_version(&source), l::DATABASE_SCHEMA_VERSION);
 }
+
+const TS_PROVIDER_CONFIGURATION: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../shared/ai/providerConfiguration.ts"
+);
+
+#[test]
+fn provider_configuration_limits_match_typescript() {
+    let source = std::fs::read_to_string(TS_PROVIDER_CONFIGURATION)
+        .expect("shared/ai/providerConfiguration.ts is readable");
+    let ts = typescript_values(&source);
+
+    let checks: &[(&str, u64)] = &[
+        (
+            "identifierCharacters",
+            l::provider_configuration::IDENTIFIER_CHARACTERS,
+        ),
+        (
+            "displayNameCharacters",
+            l::provider_configuration::DISPLAY_NAME_CHARACTERS,
+        ),
+        (
+            "baseUrlCharacters",
+            l::provider_configuration::BASE_URL_CHARACTERS,
+        ),
+        (
+            "credentialCharacters",
+            l::provider_configuration::CREDENTIAL_CHARACTERS,
+        ),
+        (
+            "minimumTimeoutMs",
+            l::provider_configuration::MINIMUM_TIMEOUT_MS,
+        ),
+        (
+            "maximumTimeoutMs",
+            l::provider_configuration::MAXIMUM_TIMEOUT_MS,
+        ),
+    ];
+    for (name, value) in checks {
+        assert_eq!(
+            ts.get(*name),
+            Some(value),
+            "{name} in providerConfiguration.ts"
+        );
+    }
+    assert_eq!(ts.len(), checks.len(), "every provider limit is covered");
+}

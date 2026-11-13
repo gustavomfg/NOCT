@@ -73,3 +73,14 @@ pub mod collection_page {
     pub const BRAIN_MEMORIES: u64 = 50;
     pub const VALIDATION: u64 = 20;
 }
+
+/// Limits of provider definitions. Port of `PROVIDER_CONFIGURATION_LIMITS` in
+/// `shared/ai/providerConfiguration.ts`.
+pub mod provider_configuration {
+    pub const IDENTIFIER_CHARACTERS: u64 = 512;
+    pub const DISPLAY_NAME_CHARACTERS: u64 = 500;
+    pub const BASE_URL_CHARACTERS: u64 = 2_048;
+    pub const CREDENTIAL_CHARACTERS: u64 = 64_000;
+    pub const MINIMUM_TIMEOUT_MS: u64 = 1_000;
+    pub const MAXIMUM_TIMEOUT_MS: u64 = 120_000;
+}
