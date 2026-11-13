@@ -13,6 +13,7 @@ use noct_core::brain_memory::{
     BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, CreateBrainMemoryInput,
     UpdateBrainMemoryInput, is_safe_brain_memory_content,
 };
+use noct_core::code_intelligence::ProjectIndexFile;
 use noct_core::suggestions::{
     ReviewComparisonItem, SuggestionCategory, SuggestionInput, sanitize_suggestion_title,
     suggestion_identity,
@@ -30,6 +31,7 @@ use noct_db::repositories::execution_evidence::ExecutionEvidence;
 use noct_db::repositories::executions::Executions;
 use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::operation_recovery::OperationRecovery;
+use noct_db::repositories::project_index::ProjectIndex;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::settings::Settings;
 use noct_db::repositories::suggestions::Suggestions;
@@ -134,6 +136,8 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         })
         .collect();
 
+    let project = ProjectIndex::new(conn);
+    let project_file_paths = keys(&expected, "projectFileById");
     let brain = BrainMemories::new(conn);
     let brain_ids = keys(&expected, "brainMemoryById");
     let brain_history_ids = keys(&expected, "brainMemoryHistory");
@@ -213,11 +217,38 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         },
         "brainMemoryErrors": brain_errors,
         "brainSafety": brain_safety,
+        "projectRuns": project.list_runs("/work/alpha", None).expect("project runs"),
+        "projectRunsLimited": project.list_runs("/work/alpha", Some(1)).expect("limited runs"),
+        "projectRunLatest": project.latest_run("/work/alpha").expect("latest run"),
+        "projectFiles": project.list_files("/work/alpha", None).expect("project files"),
+        "projectFilesLimited": project.list_files("/work/alpha", Some(2)).expect("limited files"),
+        "projectFileById": keyed(&project_file_paths, |path| project.get_file("/work/alpha", path)),
+        "projectExclusions": project.list_exclusions("/work/alpha").expect("exclusions"),
+        "projectStackEvidence": project.list_stack_evidence("/work/alpha").expect("stack evidence"),
+        "projectSymbols": {
+            "all": project.list_symbols("/work/alpha", "", None).expect("symbols"),
+            "query": project.list_symbols("/work/alpha", "  RUN  ", None).expect("symbol query"),
+            "limited": project.list_symbols("/work/alpha", "", Some(2)).expect("limited symbols"),
+        },
+        "projectSymbolsForFile": {
+            "app": project.list_symbols_for_file("/work/alpha", "src/app.ts", None).expect("file symbols"),
+            "missing": project.list_symbols_for_file("/work/alpha", "src/missing.ts", None).expect("missing file symbols"),
+        },
+        "projectImports": {
+            "all": project.list_imports("/work/alpha", None).expect("imports"),
+            "app": project.list_imports("/work/alpha", Some("src/app.ts")).expect("file imports"),
+        },
+        "projectExports": {
+            "all": project.list_exports("/work/alpha", None).expect("exports"),
+            "util": project.list_exports("/work/alpha", Some("src/util.ts")).expect("file exports"),
+        },
+        "projectSummary": project.summary("/work/alpha").expect("summary"),
     });
 
     for key in expected.as_object().expect("object").keys() {
         assert_eq!(
-            actual[key], expected[key],
+            numbers_as_integers(&actual[key]),
+            numbers_as_integers(&expected[key]),
             "`{key}` differs from the TypeScript rows"
         );
     }
@@ -267,6 +298,24 @@ const RECONCILE_TABLES: [(&str, &str); 10] = [
 ];
 
 /// A stored value as JSON. Blobs are not used by the schema, so they read as null.
+/// JSON has one number type. A whole float is compared as an integer, because a REAL column
+/// serializes as `1000.0` in Rust and as `1000` in the TypeScript output of the same value.
+fn numbers_as_integers(value: &Value) -> Value {
+    match value {
+        Value::Number(number) if number.is_f64() => match number.as_f64() {
+            Some(float) if float.fract() == 0.0 && float.abs() < 9.0e15 => json!(float as i64),
+            _ => value.clone(),
+        },
+        Value::Array(items) => Value::Array(items.iter().map(numbers_as_integers).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, item)| (key.clone(), numbers_as_integers(item)))
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
 /// The error text a call returns, or null when it succeeds, as the TypeScript side records it.
 fn error_of<T>(result: Result<T>) -> Value {
     match result {
@@ -502,4 +551,46 @@ fn reconciles_suggestions_like_the_typescript_repository() {
         },
     });
     assert_eq!(actual, expected["snapshot"]);
+}
+
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn removes_changed_files_like_the_typescript_repository() {
+    let directory = scratch("row-gate-change");
+    fs::create_dir_all(&directory).expect("scratch directory");
+    fs::copy(
+        gate_directory().join("project-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before the change");
+    let db = Database::open(&directory).expect("open the copy");
+    let conn = db.connection();
+
+    let text = fs::read_to_string(gate_directory().join("change-expected.json"))
+        .expect("change-expected.json");
+    let expected: Value = serde_json::from_str(&text).expect("change-expected.json is JSON");
+    let project = ProjectIndex::new(conn);
+    for file in expected["files"].as_array().expect("files") {
+        let file: ProjectIndexFile = serde_json::from_value(file.clone()).expect("file record");
+        project
+            .upsert_file(&file)
+            .expect("upsert the scenario file");
+    }
+    let requested: Vec<String> =
+        serde_json::from_value(expected["requested"].clone()).expect("requested paths");
+    let present: Vec<String> =
+        serde_json::from_value(expected["present"].clone()).expect("present paths");
+    project
+        .remove_missing_for_change("/work/alpha", &requested, &present)
+        .expect("remove missing files");
+
+    let mut statement = conn
+        .prepare("SELECT relative_path FROM project_index_files WHERE workspace=?1 ORDER BY relative_path")
+        .expect("prepare");
+    let remaining: Vec<String> = statement
+        .query_map(["/work/alpha"], |row| row.get(0))
+        .expect("query")
+        .collect::<rusqlite::Result<_>>()
+        .expect("rows");
+    assert_eq!(json!(remaining), expected["remaining"]);
 }

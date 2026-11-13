@@ -126,6 +126,12 @@ const BRAIN_SAFETY_CASES = [
   'bearer token only',
 ]
 
+// The TypeScript symbol, import and export SELECTs also return their position columns next to the
+// `location` object. The contract has only `location`, so these aliases are removed on the
+// TypeScript side. They are an implementation detail that goes away with the TypeScript repository.
+const LOCATION_ALIASES = ['startLine', 'startColumn', 'endLine', 'endColumn']
+const contractOnly = (item) => Object.fromEntries(Object.entries(item).filter(([key]) => !LOCATION_ALIASES.includes(key)))
+
 function seed(LocalDatabase, directory) {
   const db = new LocalDatabase(directory)
   db.importData({
@@ -291,6 +297,85 @@ function seed(LocalDatabase, directory) {
   for (const [index, memory] of [workspaceBrain, conversationBrain, electronBrain, constraintBrain, betaBrain].entries()) stampUpdate.run(at(400 + index), memory.id)
   clock.close()
 
+  // The project index is written through its repository: runs that end and so become evidence,
+  // files with their analyses, a file that goes, a change under a directory, exclusions, stack
+  // evidence and relation hashes. Every timestamp is fixed, so the rows do not depend on the run.
+  const digest = (character) => character.repeat(64)
+  const indexFile = (relativePath, values) => ({
+    workspace: '/work/alpha', relativePath, classification: 'source', language: 'TypeScript', extension: '.ts',
+    size: 120, mtimeMs: 1000, ctimeMs: 1000, mode: 420, observedHash: digest('0'), analyzedHash: digest('0'),
+    state: 'indexed', excluded: false, exclusionReason: null, parserId: 'typescript', parserVersion: '5',
+    error: null, discoveredAt: at(500), analyzedAt: at(501), ...values,
+  })
+  const indexSymbol = (id, relativePath, values) => ({
+    id, workspace: '/work/alpha', relativePath, analyzedHash: digest('a'), kind: 'function', name: id, qualifiedName: null,
+    scope: null, signature: null, location: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 10 },
+    exported: false, parserId: 'typescript', parserVersion: '5', ...values,
+  })
+  const location = (startLine) => ({ startLine, startColumn: 1, endLine: startLine, endColumn: 20 })
+  const app = indexFile('src/app.ts', { analyzedHash: digest('a'), observedHash: digest('a') })
+  const util = indexFile('src/util.ts', { analyzedHash: digest('b'), observedHash: digest('b') })
+  const old = indexFile('src/old.ts', { analyzedHash: digest('c'), observedHash: digest('c') })
+  const gone = indexFile('src/gone.ts', { analyzedHash: digest('e'), observedHash: digest('e') })
+  const readme = indexFile('README.md', { classification: 'documentation', language: 'Markdown', extension: '.md', state: 'unsupported', analyzedHash: null, parserId: null, parserVersion: null })
+  const dist = indexFile('dist/bundle.js', { language: 'JavaScript', extension: '.js', state: 'excluded', excluded: true, exclusionReason: 'build-output', analyzedHash: null, parserId: null, parserVersion: null })
+  const broken = indexFile('src/broken.ts', { state: 'failed', error: 'Erro de sintaxe na linha 3.', analyzedHash: null, observedHash: digest('f') })
+  const run = { id: 'pix-g1', workspace: '/work/alpha', indexVersion: 2, kind: 'initial', status: 'running', phase: 'parsing', totalFiles: 7, processedFiles: 2, failedFiles: 0, unsupportedFiles: 1, pendingFiles: 4, startedAt: at(510), updatedAt: at(510), completedAt: null, error: null }
+  db.projectIndex.createRun(run)
+  db.projectIndex.saveFileAnalysis({
+    file: app,
+    symbols: [
+      indexSymbol('sym-main', 'src/app.ts', { analyzedHash: digest('a'), kind: 'function', name: 'main', signature: 'main(): void', location: { startLine: 3, startColumn: 1, endLine: 5, endColumn: 2 }, exported: true }),
+      indexSymbol('sym-app', 'src/app.ts', { analyzedHash: digest('a'), kind: 'class', name: 'App', qualifiedName: 'App', location: { startLine: 7, startColumn: 1, endLine: 20, endColumn: 2 } }),
+      indexSymbol('sym-run', 'src/app.ts', { analyzedHash: digest('a'), kind: 'method', name: 'run', qualifiedName: 'App.run', scope: 'App', location: { startLine: 9, startColumn: 3, endLine: 12, endColumn: 4 } }),
+    ],
+    imports: [
+      { id: 'imp-util', workspace: '/work/alpha', sourcePath: 'src/app.ts', sourceHash: digest('a'), specifier: './util', targetPath: 'src/util.ts', targetHash: null, kind: 'named', importedNames: ['helper'], location: location(1), resolution: 'local' },
+      { id: 'imp-react', workspace: '/work/alpha', sourcePath: 'src/app.ts', sourceHash: digest('a'), specifier: 'react', targetPath: null, targetHash: null, kind: 'default', importedNames: ['React'], location: location(2), resolution: 'external' },
+      { id: 'imp-missing', workspace: '/work/alpha', sourcePath: 'src/app.ts', sourceHash: digest('a'), specifier: './missing', targetPath: null, targetHash: null, kind: 'side-effect', importedNames: [], location: location(3), resolution: 'unresolved' },
+    ],
+    exports: [
+      { id: 'exp-main', workspace: '/work/alpha', sourcePath: 'src/app.ts', sourceHash: digest('a'), name: 'main', kind: 'named', targetPath: null, targetHash: null, location: location(3) },
+      { id: 'exp-default', workspace: '/work/alpha', sourcePath: 'src/app.ts', sourceHash: digest('a'), name: 'default', kind: 'default', targetPath: null, targetHash: null, location: location(14) },
+    ],
+  })
+  db.projectIndex.saveFileAnalysis({
+    file: util,
+    symbols: [indexSymbol('sym-helper', 'src/util.ts', { analyzedHash: digest('b'), kind: 'function', name: 'helper', exported: true, location: { startLine: 1, startColumn: 1, endLine: 4, endColumn: 2 } })],
+    imports: [],
+    exports: [{ id: 'exp-helper', workspace: '/work/alpha', sourcePath: 'src/util.ts', sourceHash: digest('b'), name: 'helper', kind: 'named', targetPath: null, targetHash: null, location: location(1) }],
+  })
+  db.projectIndex.saveFileAnalysis({
+    file: old,
+    symbols: [indexSymbol('sym-legacy', 'src/old.ts', { analyzedHash: digest('c'), kind: 'function', name: 'legacy' })],
+    imports: [{ id: 'imp-old', workspace: '/work/alpha', sourcePath: 'src/old.ts', sourceHash: digest('c'), specifier: './util', targetPath: 'src/util.ts', targetHash: null, kind: 'named', importedNames: ['helper'], location: location(1), resolution: 'local' }],
+    exports: [],
+  })
+  db.projectIndex.upsertFile(gone)
+  db.projectIndex.markFileState(broken)
+  db.projectIndex.upsertFile(readme)
+  db.projectIndex.upsertFile(dist)
+  db.projectIndex.updateRun({ ...run, status: 'completed', phase: 'completed', processedFiles: 6, pendingFiles: 0, updatedAt: at(520), completedAt: at(520) })
+  db.projectIndex.removeMissingFiles('/work/alpha', ['src/app.ts', 'src/util.ts', 'src/broken.ts', 'src/gone.ts', 'README.md', 'dist/bundle.js'])
+  db.projectIndex.removeMissingForChange('/work/alpha', ['./src/'], ['src/app.ts', 'src/util.ts', 'src/broken.ts'])
+  db.projectIndex.createRun({ id: 'pix-g2', workspace: '/work/alpha', indexVersion: 2, kind: 'incremental', status: 'queued', phase: 'discovering', totalFiles: 0, processedFiles: 0, failedFiles: 0, unsupportedFiles: 0, pendingFiles: 0, startedAt: at(530), updatedAt: at(530), completedAt: null, error: null })
+  db.projectIndex.updateRun({ id: 'pix-g2', workspace: '/work/alpha', indexVersion: 2, kind: 'incremental', status: 'failed', phase: 'persisting', totalFiles: 3, processedFiles: 2, failedFiles: 1, unsupportedFiles: 0, pendingFiles: 0, startedAt: at(530), updatedAt: at(531), completedAt: at(531), error: 'Falha de leitura.' })
+  db.projectIndex.createRun({ id: 'pix-b1', workspace: '/work/beta', indexVersion: 2, kind: 'manual', status: 'queued', phase: 'discovering', totalFiles: 0, processedFiles: 0, failedFiles: 0, unsupportedFiles: 0, pendingFiles: 0, startedAt: at(532), updatedAt: at(532), completedAt: null, error: null })
+  db.projectIndex.replaceStackEvidence('/work/alpha', [
+    { id: 'stk-lang', workspace: '/work/alpha', category: 'language', value: 'TypeScript', confidence: 90, sourcePath: 'package.json', sourceHash: digest('d'), sourceLine: null, reason: 'Dependências de tipos.', detectedAt: at(540) },
+    { id: 'stk-runtime', workspace: '/work/alpha', category: 'runtime', value: 'Node.js', confidence: 80, sourcePath: 'package.json', sourceHash: digest('d'), sourceLine: 3, reason: 'Campo engines.', detectedAt: at(541) },
+    { id: 'stk-framework', workspace: '/work/alpha', category: 'framework', value: 'React', confidence: 85, sourcePath: 'package.json', sourceHash: digest('d'), sourceLine: 8, reason: 'Dependência react.', detectedAt: at(542) },
+    { id: 'stk-test-script', workspace: '/work/alpha', category: 'script', value: 'test=vitest run', confidence: 100, sourcePath: 'package.json', sourceHash: digest('d'), sourceLine: 10, reason: 'Script de testes.', detectedAt: at(543) },
+    { id: 'stk-build-script', workspace: '/work/alpha', category: 'script', value: 'build=vite build', confidence: 100, sourcePath: 'package.json', sourceHash: digest('d'), sourceLine: 11, reason: 'Script de build.', detectedAt: at(544) },
+    { id: 'stk-bare-script', workspace: '/work/alpha', category: 'script', value: 'lint', confidence: 100, sourcePath: 'package.json', sourceHash: digest('d'), sourceLine: 12, reason: 'Script sem comando.', detectedAt: at(545) },
+    { id: 'stk-test', workspace: '/work/alpha', category: 'test', value: 'Vitest', confidence: 70, sourcePath: 'vitest.config.ts', sourceHash: digest('g'), sourceLine: null, reason: 'Configuração do teste.', detectedAt: at(546) },
+    { id: 'stk-pm', workspace: '/work/alpha', category: 'package-manager', value: 'npm', confidence: 95, sourcePath: 'package-lock.json', sourceHash: digest('h'), sourceLine: null, reason: 'Lockfile presente.', detectedAt: at(547) },
+    { id: 'stk-convention', workspace: '/work/alpha', category: 'convention', value: 'ESLint', confidence: 60, sourcePath: 'eslint.config.js', sourceHash: digest('i'), sourceLine: null, reason: 'Configuração de lint.', detectedAt: at(548) },
+  ])
+  db.projectIndex.replaceExclusions('/work/alpha', [{ relativePath: 'dist/bundle.js', reason: 'build-output' }, { relativePath: 'node_modules', reason: 'dependency' }], at(550))
+  db.projectIndex.upsertExclusions('/work/alpha', [{ relativePath: 'dist/bundle.js', reason: 'generated' }, { relativePath: 'coverage', reason: 'generated' }], at(551))
+  db.projectIndex.refreshRelationHashes('/work/alpha')
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -354,6 +439,32 @@ function seed(LocalDatabase, directory) {
       otherWorkspace: brainCaught(() => db.createBrainMemory('/work/beta', { kind: 'fact', scope: 'conversation', conversationId: 'conv-1', content: 'Conversa de outro workspace.' })),
     },
     brainSafety: BRAIN_SAFETY_CASES.map((input) => ({ input, safe: isSafeBrainMemoryContent(input) })),
+    projectRuns: db.projectIndex.listRuns('/work/alpha'),
+    projectRunsLimited: db.projectIndex.listRuns('/work/alpha', 1),
+    projectRunLatest: db.projectIndex.latestRun('/work/alpha'),
+    projectFiles: db.projectIndex.listFiles('/work/alpha'),
+    projectFilesLimited: db.projectIndex.listFiles('/work/alpha', 2),
+    projectFileById: Object.fromEntries(['src/app.ts', 'src/util.ts', 'src/broken.ts', 'src/old.ts', 'src/gone.ts', 'README.md', 'dist/bundle.js'].map((relativePath) => [relativePath, db.projectIndex.getFile('/work/alpha', relativePath)])),
+    projectExclusions: db.projectIndex.listExclusions('/work/alpha'),
+    projectStackEvidence: db.projectIndex.listStackEvidence('/work/alpha'),
+    projectSymbols: {
+      all: db.projectIndex.listSymbols('/work/alpha', '').map(contractOnly),
+      query: db.projectIndex.listSymbols('/work/alpha', '  RUN  ').map(contractOnly),
+      limited: db.projectIndex.listSymbols('/work/alpha', '', 2).map(contractOnly),
+    },
+    projectSymbolsForFile: {
+      app: db.projectIndex.listSymbolsForFile('/work/alpha', 'src/app.ts').map(contractOnly),
+      missing: db.projectIndex.listSymbolsForFile('/work/alpha', 'src/missing.ts').map(contractOnly),
+    },
+    projectImports: {
+      all: db.projectIndex.listImports('/work/alpha').map(contractOnly),
+      app: db.projectIndex.listImports('/work/alpha', 'src/app.ts').map(contractOnly),
+    },
+    projectExports: {
+      all: db.projectIndex.listExports('/work/alpha').map(contractOnly),
+      util: db.projectIndex.listExports('/work/alpha', 'src/util.ts').map(contractOnly),
+    },
+    projectSummary: db.projectIndex.summary('/work/alpha'),
   }
   db.close()
   return expected
@@ -452,6 +563,38 @@ function reconcileParity(BetterSqlite3, OperationRecoveryRepository, directory) 
 // parity scenario changes it. The TypeScript run and the Rust run read the same review input.
 // Identifiers and clock values are left out of the snapshot because each run makes its own;
 // titles, statuses, severities, results and the comparison are compared exactly.
+// A file record as the project index stores it. The change scenario needs only the paths.
+function scenarioFile(relativePath) {
+  return {
+    workspace: '/work/alpha', relativePath, classification: 'source', language: 'TypeScript', extension: '.ts',
+    size: 1, mtimeMs: 1, ctimeMs: 1, mode: 420, observedHash: null, analyzedHash: null, state: 'discovered',
+    excluded: false, exclusionReason: null, parserId: null, parserVersion: null, error: null,
+    discoveredAt: '2026-01-01T12:00:00.000Z', analyzedAt: null,
+  }
+}
+
+// Files a change no longer finds are removed on a copy of the database saved after the seed. The
+// requested paths are normalized, the stored paths are compared as they are: a stored path with a
+// backslash is not under a directory. Rust must keep and remove the same files.
+const CHANGE_FILES = ['src/a.ts', 'src/a/b.ts', 'src/abc.ts', 'src\\win.ts', 'src/sub/deep.ts', 'lib/x.ts', 'srcx.ts']
+const CHANGE_REQUESTED = ['./src/', 'src\\sub', 'lib/x.ts/', '']
+const CHANGE_PRESENT = ['src/a/b.ts']
+
+function changeParity(BetterSqlite3, ProjectIndexRepository, directory) {
+  const copy = path.join(directory, 'change-ts.db')
+  fs.copyFileSync(path.join(directory, 'project-before.db'), copy)
+  const database = new BetterSqlite3(copy)
+  database.pragma('foreign_keys = ON')
+  const repository = new ProjectIndexRepository(database, {
+    run: (_operation, callback) => database.transaction(callback)(),
+  })
+  for (const relativePath of CHANGE_FILES) repository.upsertFile(scenarioFile(relativePath))
+  repository.removeMissingForChange('/work/alpha', CHANGE_REQUESTED, CHANGE_PRESENT)
+  const remaining = database.prepare('SELECT relative_path AS path FROM project_index_files WHERE workspace=? ORDER BY relative_path').all('/work/alpha').map((row) => row.path)
+  database.close()
+  return { files: CHANGE_FILES.map(scenarioFile), requested: CHANGE_REQUESTED, present: CHANGE_PRESENT, remaining }
+}
+
 function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review) {
   const copy = path.join(directory, 'suggestions-ts.db')
   fs.copyFileSync(path.join(directory, 'suggestions-before.db'), copy)
@@ -484,6 +627,7 @@ const { WorkspaceEvidenceRepository } = createRequire(path.join(buildDirectory, 
 const { SuggestionRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/SuggestionRepository.js')
 const { suggestionIdentity, sanitizeSuggestionTitle } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/suggestions.js')
 const { isSafeBrainMemoryContent } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/brainMemory.js')
+const { ProjectIndexRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/ProjectIndexRepository.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
@@ -493,15 +637,18 @@ try {
   const copy = new BetterSqlite3(path.join(gateDirectory, 'nocturne.db'))
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'parity.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'suggestions-before.db')}'`)
+  copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'project-before.db')}'`)
   copy.close()
   const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
   const suggestionSnapshot = suggestionParity(BetterSqlite3, SuggestionRepository, gateDirectory, SUGGESTION_REVIEW)
+  const changeScenario = changeParity(BetterSqlite3, ProjectIndexRepository, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'evidence-expected.json'), `${JSON.stringify(evidence, null, 2)}\n`)
-  fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'), `${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'change-expected.json'), `${JSON.stringify(changeScenario, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'),`${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
   const run = spawnSync(
     'cargo',
     ['test', '-p', 'noct-db', '--test', 'row_gate', '--', '--ignored', '--nocapture'],

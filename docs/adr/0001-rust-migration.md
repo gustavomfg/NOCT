@@ -196,7 +196,14 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     retrieval for a conversation, usage counts, and a history entry for every change. The
     credential filter keeps JavaScript's semantics: `\s` is JavaScript whitespace, `\S{n}`
     counts UTF-16 units, and `/i` folds ASCII letters only. `regex` already resolves in the
-    lockfile, so `noct-core` adds one dependency edge and no package (this commit).
+    lockfile, so `noct-core` adds one dependency edge and no package (`96e0792`).
+  - Project index: files with their state and hashes, runs, symbols, imports, exports,
+    exclusions, stack evidence and the summary. A file's analysis is replaced as one unit.
+    A run that ends is recorded as project-index evidence in the same unit. The stack is
+    named after the last segment of the workspace path, whichever separator it uses. The
+    change scenario is replayed on a copy: the paths a change no longer finds are removed,
+    and a stored path with a backslash is not taken for a path under a directory, as in
+    TypeScript (this commit).
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
@@ -208,7 +215,10 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   messages match, and the credential filter answers the same for 29 inputs covering the
   thresholds, UTF-16 counting, JavaScript whitespace and ASCII-only case folding. The
   TypeScript side fixes the update times of its memories, because the repository stamps the
-  wall clock and the orders must not depend on the run. A review is
+  wall clock and the orders must not depend on the run. The project index is read through
+  the same gate. JSON has one number type, so a whole REAL timestamp compares as an integer;
+  the TypeScript position aliases on symbols, imports and exports are removed on the
+  TypeScript side, as the `existsFlag` alias was. A review is
   reconciled on a copy by both sides, and the results are compared without identifiers
   or clock values. The TypeScript `listFiles` leaks an
   internal `existsFlag` alias; Rust does not reproduce it, and the gate removes it on the
@@ -218,8 +228,8 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** project index, semantic index, engineering intelligence,
-  backup and import, recovery, and the `Database` facade.
+- **Remaining, phase 2:** semantic index, engineering intelligence, backup and import,
+  recovery, and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

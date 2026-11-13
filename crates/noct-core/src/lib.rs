@@ -4,6 +4,7 @@ pub mod agent;
 pub mod ai;
 pub mod brain_memory;
 pub mod change_control;
+pub mod code_intelligence;
 pub mod contracts;
 pub mod json;
 pub mod limits;
