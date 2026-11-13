@@ -3,11 +3,13 @@
 //! the AI configuration repositories.
 
 use rusqlite::{Connection, Row, params};
+use serde::Serialize;
 
 use crate::Result;
 use crate::clock::iso_now;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceRow {
     pub path: String,
     pub name: String,

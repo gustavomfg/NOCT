@@ -3,6 +3,7 @@
 use noct_core::json::serialize_within_limit;
 use noct_core::limits::persistence::METADATA_CHARACTERS;
 use rusqlite::{Connection, OptionalExtension, Params, Row, params};
+use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -21,7 +22,8 @@ const METADATA_LIMIT: usize = METADATA_CHARACTERS as usize;
 const CONVERSATION_COLUMNS: &str = "id, title, workspace, created_at, updated_at";
 const MESSAGE_COLUMNS: &str = "id, conversation_id, role, content, metadata, created_at";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationRow {
     pub id: String,
     pub title: String,
@@ -48,7 +50,8 @@ impl MessageRole {
 }
 
 /// A stored message. `metadata` is the JSON text written at insert time, if any.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageRow {
     pub id: String,
     pub conversation_id: String,
