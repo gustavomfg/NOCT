@@ -82,7 +82,7 @@ is a gap that must be closed before phase 6 (IPC and shell) is accepted.
 | Browser permissions denied by default | Webview grants nothing beyond `core:default` | Configured in phase 0; verify per platform |
 | External navigation restricted | `on_navigation` handler in the core | **Gap**: implement in phase 6 |
 | Content Security Policy | `app.security.csp` in `tauri.conf.json` | Configured in phase 0 |
-| Credentials never reach renderer | Keys held in the core (`keyring`) | Phase 5 |
+| Credentials never reach renderer | Secrets held in the OS credential store through `keyring-core` (`crates/noct-secrets`); SQLite and the renderer see opaque references only | Phase 5. Vault done; storage choice pending confirmation (see [Open decisions](#open-decisions)) |
 | Review Mode read-only | Logic port, unchanged | Phase 4 |
 | Restored workspaces unauthorized | Logic port, unchanged | Phase 4 |
 | Electron production fuses and ASAR integrity | **No equivalent.** Replaced by code signing and signed updater artifacts | **Gap**: needs an explicit decision |
@@ -95,7 +95,11 @@ These are not negotiable during the migration:
   and WAL with `synchronous=FULL` is preserved.
 - Backup envelopes keep their version and checksum format.
 - Workspace context files keep atomic writes.
-- Provider credential files keep their format and permissions.
+- Provider credentials are **not** migrated. Electron `safeStorage` ciphertext is
+  bound to the Electron application and cannot be read by Rust without
+  reimplementing that decryption, which is fragile. Proposed: users re-enter their
+  provider keys once after the migration. Pending confirmation (see
+  [Open decisions](#open-decisions)).
 - **User data location.** Electron derives its data directory from the product
   name and `appId`. Tauri derives its own. The identifier is kept as
   `com.nocturne.codex` so the updater identity continues, but the data directory
@@ -139,6 +143,18 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     TypeScript output (`85f538f`).
   - Settings, workspace history without `relocate`, conversations and messages,
     with transaction nesting as savepoints (`abbc412`).
+- **Done, phase 5 (credential vault, `crates/noct-secrets`):** provider secrets go
+  to the operating system credential store (Secret Service on Linux, Keychain on
+  macOS, Credential Manager on Windows). A non-secret index of UUID references,
+  written atomically with mode 0600, lets unused secrets be pruned. There is no
+  plaintext or application-encrypted fallback. Tests cover the index contract,
+  rollback after a failed index write, a locked store, length rules counted in
+  UTF-16 units, and symlink refusal. The OS round-trip is an ignored test
+  (`cargo test -p noct-secrets --test os_store -- --ignored`). On this machine it
+  reached KWallet's Secret Service in an isolated session and stopped at a locked
+  wallet, which the vault reports as unavailable. A full round-trip needs an
+  unlocked collection. The macOS and Windows backends are compiled only for their
+  targets and are not verified here.
 - **Remaining, phase 2:** `WorkspaceRepository.relocate` and
   `WorkspaceModelBindingRepository` (they need the AI binding schemas), artifacts,
   approvals, workspace memory, operation recovery, model catalog, provider
@@ -162,9 +178,19 @@ read by Rust, is still required before phase 2 closes.
 3. **Renderer test harness.** Tauri WebDriver or Playwright against the WASM build.
 4. **Minimum platform versions.** WebKitGTK on Linux (the spike ran on 2.54), WebView2
    on Windows, WKWebView on macOS. `docs/compatibility.md` must state them.
-5. **Dependency review.** Each new crate needs the justification `AGENTS.md`
+6. **Provider key storage.** Proposed: secrets live only in the operating system
+   credential store, with no plaintext or application-encrypted fallback. The
+   alternative is an application-encrypted file, which needs a master key the
+   app would have to store itself and so adds little protection. Confirm this, and
+   confirm that existing provider keys are re-entered after the migration.
+7. **Dependency review.** Each new crate needs the justification `AGENTS.md`
    requires. `libc` is required because `std` does not expose `openat2`,
-   `renameat2` or `O_TMPFILE`. Add `cargo audit` to `dependency-security.yml`.
+   `renameat2` or `O_TMPFILE`. Add `cargo audit` to `dependency-security.yml`. The vault adds `keyring-core`,
+   `secrecy`, and one platform store per target (`zbus-secret-service-keyring-store`,
+   `apple-native-keyring-store`, `windows-native-keyring-store`). The standard
+   library has no access to Secret Service, Keychain or Credential Manager, so
+   these are needed. Each store is passed to the vault explicitly; none is set as
+   the process-wide default.
 
 ## Consequences
 
