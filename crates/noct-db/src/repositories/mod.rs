@@ -7,6 +7,7 @@ pub mod approvals;
 pub mod artifacts;
 pub mod conversations;
 pub mod model_catalog;
+pub mod operation_recovery;
 pub mod provider_configurations;
 pub mod settings;
 pub mod workspace_memory;

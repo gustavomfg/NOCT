@@ -11,11 +11,14 @@ use noct_db::Result;
 use noct_db::repositories::artifacts::Artifacts;
 use noct_db::repositories::conversations::Conversations;
 use noct_db::repositories::model_catalog::ModelCatalog;
+use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::settings::Settings;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
 use noct_db::repositories::workspace_model_bindings::ModelBindings;
 use noct_db::repositories::workspaces::Workspaces;
+use rusqlite::Connection;
+use rusqlite::types::ValueRef;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
@@ -106,4 +109,98 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
             "`{key}` differs from the TypeScript rows"
         );
     }
+}
+
+/// The tables startup reconciliation writes, without timestamps. Mirrors
+/// `RECONCILE_TABLES` in `scripts/verify-row-gate.mjs`, which records the TypeScript result.
+const RECONCILE_TABLES: [(&str, &str); 10] = [
+    (
+        "executions",
+        "SELECT id, status, decision, error FROM executions ORDER BY id",
+    ),
+    (
+        "checkpoints",
+        "SELECT id, status, error FROM checkpoints ORDER BY id",
+    ),
+    ("changes", "SELECT id, status FROM changes ORDER BY id"),
+    (
+        "change_sets",
+        "SELECT id, status FROM change_sets ORDER BY id",
+    ),
+    (
+        "change_decision_operations",
+        "SELECT id, status, error FROM change_decision_operations ORDER BY id",
+    ),
+    (
+        "execution_commands",
+        "SELECT id, status, output_summary FROM execution_commands ORDER BY id",
+    ),
+    (
+        "semantic_units",
+        "SELECT id, status FROM semantic_units ORDER BY id",
+    ),
+    (
+        "project_index_runs",
+        "SELECT id, status, error FROM project_index_runs ORDER BY id",
+    ),
+    (
+        "semantic_index_runs",
+        "SELECT id, status, error FROM semantic_index_runs ORDER BY id",
+    ),
+    (
+        "interrupted_operations",
+        "SELECT id, workspace, execution_id, kind, source_id, original_status, message \
+         FROM interrupted_operations ORDER BY id",
+    ),
+];
+
+fn reconcile_snapshot(conn: &Connection) -> Value {
+    let mut tables = Map::new();
+    for (table, sql) in RECONCILE_TABLES {
+        let mut statement = conn.prepare(sql).expect("snapshot query");
+        let columns = statement.column_count();
+        let rows = statement
+            .query_map([], |row| {
+                let mut values = Vec::with_capacity(columns);
+                for index in 0..columns {
+                    values.push(match row.get_ref(index)? {
+                        ValueRef::Null => Value::Null,
+                        ValueRef::Integer(value) => json!(value),
+                        ValueRef::Real(value) => json!(value),
+                        ValueRef::Text(text) => {
+                            json!(std::str::from_utf8(text).expect("UTF-8 text"))
+                        }
+                        ValueRef::Blob(_) => Value::Null,
+                    });
+                }
+                Ok(Value::Array(values))
+            })
+            .expect("snapshot rows")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("snapshot rows");
+        tables.insert(table.to_string(), Value::Array(rows));
+    }
+    Value::Object(tables)
+}
+
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn reconciles_like_the_typescript_repository() {
+    let directory = scratch("row-gate-reconcile");
+    fs::create_dir_all(&directory).expect("scratch directory");
+    fs::copy(
+        gate_directory().join("reconcile-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before reconciliation");
+    let db = Database::open(&directory).expect("open the copy");
+
+    OperationRecovery::new(db.connection())
+        .reconcile()
+        .expect("reconcile");
+
+    let text = fs::read_to_string(gate_directory().join("reconcile-expected.json"))
+        .expect("reconcile-expected.json");
+    let expected: Value = serde_json::from_str(&text).expect("reconcile-expected.json is JSON");
+    assert_eq!(reconcile_snapshot(db.connection()), expected);
 }

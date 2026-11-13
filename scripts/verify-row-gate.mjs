@@ -135,15 +135,72 @@ function seed(LocalDatabase, directory) {
   return expected
 }
 
+// Startup reconciliation writes rows that no ported repository owns yet, so its fixture is
+// inserted with SQL. The TypeScript repository reconciles a copy of that database, and Rust
+// must reach the same state from the copy saved before reconciliation. Timestamps are left
+// out of the snapshot because each run records its own clock.
+const RECONCILE_TABLES = [
+  ['executions', 'SELECT id, status, decision, error FROM executions ORDER BY id'],
+  ['checkpoints', 'SELECT id, status, error FROM checkpoints ORDER BY id'],
+  ['changes', 'SELECT id, status FROM changes ORDER BY id'],
+  ['change_sets', 'SELECT id, status FROM change_sets ORDER BY id'],
+  ['change_decision_operations', 'SELECT id, status, error FROM change_decision_operations ORDER BY id'],
+  ['execution_commands', 'SELECT id, status, output_summary FROM execution_commands ORDER BY id'],
+  ['semantic_units', 'SELECT id, status FROM semantic_units ORDER BY id'],
+  ['project_index_runs', 'SELECT id, status, error FROM project_index_runs ORDER BY id'],
+  ['semantic_index_runs', 'SELECT id, status, error FROM semantic_index_runs ORDER BY id'],
+  ['interrupted_operations', 'SELECT id, workspace, execution_id, kind, source_id, original_status, message FROM interrupted_operations ORDER BY id'],
+]
+
+function reconcileParity(BetterSqlite3, OperationRecoveryRepository, directory) {
+  const database = new BetterSqlite3(path.join(directory, 'nocturne.db'))
+  database.pragma('foreign_keys = ON')
+  const at = '2026-01-01T00:00:00.000Z'
+  const insert = (sql, ...values) => database.prepare(sql).run(...values)
+  insert("INSERT INTO executions(id,workspace,conversation_id,prompt,mode,status,decision,started_at) VALUES('exec-1','/work/alpha','conv-1','Tarefa','build','running','pending',?)", at)
+  insert("INSERT INTO executions(id,workspace,conversation_id,prompt,mode,status,decision,started_at) VALUES('exec-2','/work/alpha','conv-1','Tarefa','build','completed','accepted',?)", at)
+  insert("INSERT INTO executions(id,workspace,conversation_id,prompt,mode,status,decision,started_at) VALUES('exec-3','/work/alpha','conv-1','Tarefa','build','completed','pending',?)", at)
+  insert("INSERT INTO executions(id,workspace,conversation_id,prompt,mode,status,decision,started_at) VALUES('exec-4','/work/alpha','conv-1','Tarefa','build','completed','pending',?)", at)
+  insert("INSERT INTO checkpoints(id,execution_id,workspace,phase,status,captured_at,root_path) VALUES('ck-capturing','exec-2','/work/alpha','before','capturing',?,'/work/alpha')", at)
+  for (const set of ['set-1', 'set-2']) {
+    const execution = set === 'set-1' ? 'exec-3' : 'exec-4'
+    insert(`INSERT INTO checkpoints(id,execution_id,workspace,phase,status,captured_at,root_path) VALUES('${set}-before','${execution}','/work/alpha','before','ready',?,'/work/alpha')`, at)
+    insert(`INSERT INTO checkpoints(id,execution_id,workspace,phase,status,captured_at,root_path) VALUES('${set}-after','${execution}','/work/alpha','after','ready',?,'/work/alpha')`, at)
+    insert(`INSERT INTO change_sets(id,execution_id,before_checkpoint_id,after_checkpoint_id,status,created_at,updated_at) VALUES('${set}','${execution}','${set}-before','${set}-after','pending',?,?)`, at, at)
+  }
+  insert("INSERT INTO changes(id,change_set_id,execution_id,relative_path,operation,origin,status,validation_status,created_at,updated_at) VALUES('chg-1','set-1','exec-3','src/a.ts','modify','agent-file-change','pending','unknown',?,?)", at, at)
+  insert("INSERT INTO change_decision_operations(id,execution_id,change_id,decision,status,started_at) VALUES('op-1','exec-3','chg-1','accepted','running',?)", at)
+  insert("INSERT INTO execution_commands(id,execution_id,command,args_json,source,status,output_summary,started_at) VALUES('cmd-1','exec-3','npm test','[]','validation','running','',?)", at)
+  insert("INSERT INTO project_index_runs(id,workspace,index_version,kind,status,phase,started_at,updated_at) VALUES('pix-1','/work/alpha',1,'initial','running','hashing',?,?)", at, at)
+  insert("INSERT INTO semantic_index_runs(id,workspace,index_version,kind,status,started_at,updated_at) VALUES('six-1','/work/alpha',1,'initial','running',?,?)", at, at)
+  insert("INSERT INTO project_index_files(workspace,relative_path,classification,language,extension,size,mtime_ms,ctime_ms,mode,state,excluded,discovered_at) VALUES('/work/alpha','src/a.ts','source','typescript','.ts',10,1,1,420,'indexed',0,?)", at)
+  insert("INSERT INTO semantic_units(id,workspace,relative_path,kind,start_line,start_column,end_line,end_column,source_hash,chunk_hash,normalized_text,chunk_strategy_version,status,created_at,updated_at) VALUES('unit-1','/work/alpha','src/a.ts','text',1,1,1,1,?,?,'texto','v1','processing',?,?)", 'a'.repeat(64), 'a'.repeat(64), at, at)
+
+  database.exec(`VACUUM INTO '${path.join(directory, 'reconcile-before.db')}'`)
+  const repository = new OperationRecoveryRepository(database, {
+    run: (_operation, callback) => database.transaction(callback)(),
+  })
+  repository.reconcile()
+  const snapshot = Object.fromEntries(
+    RECONCILE_TABLES.map(([table, sql]) => [table, database.prepare(sql).raw().all()]),
+  )
+  database.close()
+  return snapshot
+}
+
 compileTree(path.join(root, 'electron'))
 compileTree(path.join(root, 'shared'))
 const { LocalDatabase } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/Database.js')
+const { OperationRecoveryRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/OperationRecoveryRepository.js')
+const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
 try {
   const expected = seed(LocalDatabase, gateDirectory)
+  const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
   const run = spawnSync(
     'cargo',
     ['test', '-p', 'noct-db', '--test', 'row_gate', '--', '--ignored', '--nocapture'],
