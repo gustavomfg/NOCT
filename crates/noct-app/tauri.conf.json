@@ -4,7 +4,10 @@
   "version": "1.0.5",
   "identifier": "com.nocturne.codex",
   "build": {
-    "frontendDist": "dist"
+    "frontendDist": "../noct-ui/dist",
+    "devUrl": "http://localhost:8080",
+    "beforeDevCommand": "cd ../noct-ui && trunk serve --port 8080",
+    "beforeBuildCommand": "cd ../noct-ui && trunk build --release"
   },
   "app": {
     "withGlobalTauri": false,
