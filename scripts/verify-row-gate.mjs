@@ -126,6 +126,20 @@ function seed(LocalDatabase, directory) {
     { id: 'cf-g2', checkpointId: 'ck-g1', relativePath: 'src/gone.ts', exists: false, kind: 'missing', size: null, mode: null, hash: null, contentPath: null },
   ])
 
+  // Change sets, file changes and hunks are written through their repository, including a
+  // decision that records evidence and completes its operation.
+  db.checkpoints.save({ id: 'ck-g2', executionId: 'exec-g1', workspace: '/work/alpha', phase: 'after', status: 'ready', capturedAt: at(66), rootPath: '/work/alpha', error: null })
+  const changeSet = { id: 'cs-g1', executionId: 'exec-g1', beforeCheckpointId: 'ck-g1', afterCheckpointId: 'ck-g2', status: 'pending', createdAt: at(67), updatedAt: at(67) }
+  const modified = { id: 'chg-g1', executionId: 'exec-g1', changeSetId: 'cs-g1', checkpointId: 'ck-g2', relativePath: 'src/a.ts', originalPath: null, operation: 'modify', origin: 'agent-file-change', beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64), beforeSize: 12, afterSize: 14, status: 'pending', validationStatus: 'unknown', policy: 'allowed', policyReason: null, createdAt: at(67), updatedAt: at(67) }
+  const created = { id: 'chg-g2', executionId: 'exec-g1', changeSetId: 'cs-g1', checkpointId: 'ck-g2', relativePath: 'src/new.ts', originalPath: null, operation: 'create', origin: 'agent-file-change', beforeHash: null, afterHash: 'c'.repeat(64), beforeSize: null, afterSize: 3, status: 'pending', validationStatus: 'unknown', policy: 'requires-approval', policyReason: 'Arquivo novo.', createdAt: at(67), updatedAt: at(67) }
+  db.changeSets.save(changeSet, [modified, created])
+  const operation = db.changeSets.reserveDecision('exec-g1', 'chg-g1', 'accepted')
+  db.changeSets.saveDecision({ ...changeSet, status: 'partially-accepted', updatedAt: at(68) }, { ...modified, status: 'accepted', validationStatus: 'pending', afterSize: 14, updatedAt: at(68) }, operation)
+  const hunk = { id: 'hk-g1', changeId: 'chg-g1', sequence: 1, baseHash: 'a'.repeat(64), originalPatch: '@@ -1 +1 @@', finalPatch: '@@ -1 +1 @@', status: 'pending', startLine: 1, endLine: 1, decisionAt: null }
+  db.changeSets.createHunk(hunk)
+  db.changeSets.createHunk({ ...hunk, id: 'hk-g2', sequence: 2, startLine: 4, endLine: 6 })
+  db.changeSets.updateHunk({ ...hunk, finalPatch: '@@ -1 +1,2 @@', status: 'edited', decisionAt: at(69) })
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -150,6 +164,13 @@ function seed(LocalDatabase, directory) {
     // callers. It is not part of CheckpointFileRecord, so Rust does not reproduce it: an
     // intentional difference, removed here before the comparison.
     checkpointFiles: { 'ck-g1': db.checkpoints.listFiles('ck-g1').map(({ existsFlag, ...file }) => file) },
+    changeSets: db.changeSets.list('exec-g1'),
+    changeSetLatest: db.changeSets.getByExecutionId('exec-g1'),
+    changeSetById: { 'cs-g1': db.changeSets.getById('cs-g1', 'exec-g1') },
+    changes: db.changeSets.listChanges('cs-g1'),
+    changeById: Object.fromEntries(['chg-g1', 'chg-g2'].map((id) => [id, db.changeSets.getChange(id)])),
+    hunks: db.changeSets.listHunks('chg-g1'),
+    hunkById: Object.fromEntries(['hk-g1', 'hk-g2'].map((id) => [id, db.changeSets.getHunk(id)])),
   }
   db.close()
   return expected

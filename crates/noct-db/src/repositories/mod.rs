@@ -5,6 +5,7 @@
 
 pub mod approvals;
 pub mod artifacts;
+pub mod change_sets;
 pub mod checkpoints;
 pub mod conversations;
 pub mod executions;
