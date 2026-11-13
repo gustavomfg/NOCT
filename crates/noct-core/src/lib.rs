@@ -6,6 +6,7 @@ pub mod brain_memory;
 pub mod change_control;
 pub mod code_intelligence;
 pub mod contracts;
+pub mod engineering_intelligence;
 pub mod json;
 pub mod limits;
 pub mod operation_recovery;

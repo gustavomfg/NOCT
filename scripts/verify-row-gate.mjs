@@ -393,6 +393,48 @@ function seed(LocalDatabase, directory) {
   ])
   db.semanticIndex.updateRun(semanticRun({ id: 'sem-g1', kind: 'initial', status: 'completed', totalFiles: 3, processedFiles: 3, indexedUnits: 2, lexicalOnlyUnits: 1, failedFiles: 1, startedAt: at(600), updatedAt: at(601), completedAt: at(601) }))
 
+  // Engineering intelligence is written through the TypeScript repository. The first evaluation
+  // assesses architecture and testing. The second assesses architecture only, so the testing signal
+  // stays active and the architecture signal is resolved. The insights cover one active insight and
+  // one resolved through the repository.
+  db.engineeringIntelligence.saveEvaluation([
+    engineeringSignal({ id: 'eng-sig-architecture', fingerprint: 'a'.repeat(64), severity: 'high', confidence: 90, metric: { name: 'affectedFiles', value: 3, unit: 'files' } }),
+    engineeringSignal({ id: 'eng-sig-testing', category: 'testing', kind: 'validation-failure', title: 'Validação falhou', description: 'A validação de teste falhou no último passe.', fingerprint: 'b'.repeat(64), metric: { name: 'environmentAvailable', value: true }, detectedAt: at(621), firstSeenAt: at(621), lastSeenAt: at(621) }),
+  ], engineeringSnapshot({
+    id: 'eng-snap-1',
+    stateFingerprint: 'a'.repeat(64),
+    signalFingerprints: ['a'.repeat(64), 'b'.repeat(64)],
+    signalStates: [
+      { fingerprint: 'a'.repeat(64), category: 'architecture', severity: 'high', status: 'active' },
+      { fingerprint: 'b'.repeat(64), category: 'testing', severity: 'medium', status: 'active' },
+    ],
+  }, {
+    architecture: { score: 60, coverage: { available: 3, expected: 4, percent: 75 } },
+    testing: { score: 80, coverage: { available: 2, expected: null, percent: null } },
+  }))
+  db.engineeringIntelligence.saveEvaluation([], engineeringSnapshot({
+    id: 'eng-snap-2',
+    evaluatedAt: at(630),
+    stateFingerprint: 'c'.repeat(64),
+    previousSnapshotId: 'eng-snap-1',
+    signalStates: [{ fingerprint: 'b'.repeat(64), category: 'testing', severity: 'medium', status: 'active' }],
+  }, {
+    architecture: { score: 87.5, coverage: { available: 3, expected: 4, percent: 75 } },
+  }))
+  db.engineeringIntelligence.saveInsight({
+    id: 'eng-ins-1', workspace: '/work/alpha', fingerprint: 'c'.repeat(64), title: 'Acoplamento e validação',
+    explanation: 'Dois sinais independentes apontam o mesmo módulo.', relatedSignalIds: ['eng-sig-architecture', 'eng-sig-testing'],
+    evidence: [ENGINEERING_EVIDENCE], suggestedAction: 'Revisar a dependência de src/app.ts.', confidence: 80, status: 'active',
+    createdAt: at(640), updatedAt: at(640), lastSeenAt: at(640),
+  })
+  db.engineeringIntelligence.saveInsight({
+    id: 'eng-ins-2', workspace: '/work/alpha', fingerprint: 'd'.repeat(64), title: 'Documentação desatualizada',
+    explanation: 'O guia de instalação cita um comando removido.', relatedSignalIds: ['eng-sig-testing'],
+    evidence: [ENGINEERING_EVIDENCE], suggestedAction: null, confidence: 60, status: 'active',
+    createdAt: at(641), updatedAt: at(641), lastSeenAt: at(641),
+  })
+  db.engineeringIntelligence.resolveInsight('/work/alpha', 'eng-ins-2', at(645))
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -499,6 +541,16 @@ function seed(LocalDatabase, directory) {
       failed: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', 'texto')),
       blank: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', '   ')),
     },
+    engineeringSignals: db.engineeringIntelligence.listSignals('/work/alpha'),
+    engineeringActiveSignals: db.engineeringIntelligence.listSignals('/work/alpha', 'active'),
+    engineeringResolvedSignals: db.engineeringIntelligence.listSignals('/work/alpha', 'resolved', 1),
+    engineeringSignalByFingerprint: db.engineeringIntelligence.getSignal('/work/alpha', 'b'.repeat(64)),
+    engineeringMissingSignal: db.engineeringIntelligence.getSignal('/work/alpha', 'f'.repeat(64)),
+    engineeringSnapshots: db.engineeringIntelligence.listSnapshots('/work/alpha'),
+    engineeringSnapshotsLimited: db.engineeringIntelligence.listSnapshots('/work/alpha', 1),
+    engineeringLatestSnapshot: db.engineeringIntelligence.latestSnapshot('/work/alpha'),
+    engineeringInsights: db.engineeringIntelligence.listInsights('/work/alpha'),
+    engineeringResolvedInsights: db.engineeringIntelligence.listInsights('/work/alpha', 'resolved'),
   }
   db.close()
   return expected
@@ -709,6 +761,104 @@ function semanticWriteParity(BetterSqlite3, SemanticIndexRepository, directory) 
   return { ...state, errors }
 }
 
+// Engineering intelligence fixtures. A signal, snapshot or insight takes these defaults unless a
+// fixture overrides them. The categories are the eight of the health policy, in contract order.
+const ENGINEERING_CATEGORIES = ['architecture', 'testing', 'security', 'documentation', 'dependencies', 'performance', 'developer-experience', 'release']
+const ENGINEERING_EVIDENCE = { id: 'eng-ev-app', source: 'project-index-file', sourceId: 'project-file-app', relativePath: 'src/app.ts', sourceHash: 'a'.repeat(64), detail: 'Arquivo indexado pelo Project Index.', observedAt: at(620) }
+
+function engineeringSignal(overrides) {
+  return {
+    id: '', workspace: '/work/alpha', category: 'architecture', kind: 'coupling', title: 'Acoplamento alto',
+    description: 'O módulo depende de muitos arquivos.', severity: 'medium', confidence: 80, evidence: [ENGINEERING_EVIDENCE],
+    metric: null, source: 'deterministic', policyVersion: 2, detectedAt: at(620), fingerprint: '', status: 'active',
+    firstSeenAt: at(620), lastSeenAt: at(620), resolvedAt: null,
+    ...overrides,
+  }
+}
+
+// `assessed` maps each assessed category to its score and coverage. The other categories are not assessed.
+function engineeringSnapshot(overrides, assessed = {}) {
+  const evaluatedAt = overrides.evaluatedAt ?? at(620)
+  return {
+    id: '', workspace: '/work/alpha', policyVersion: 2, evaluatedAt, previousSnapshotId: null,
+    sources: { projectIndexRunId: 'project-run-1', semanticIndexRunId: 'sem-g1', validationRunIds: [], executionIds: [], changeSetIds: [] },
+    categories: ENGINEERING_CATEGORIES.map((category) => {
+      const result = assessed[category]
+      return {
+        category,
+        status: result ? 'assessed' : 'not-assessed',
+        score: result ? result.score : null,
+        coverage: result ? result.coverage : { available: 0, expected: null, percent: null },
+        signalIds: [],
+        evidence: [],
+        evaluatedAt,
+      }
+    }),
+    signalFingerprints: [],
+    signalStates: [],
+    stateFingerprint: '',
+    ...overrides,
+  }
+}
+
+// The write scenario runs on a copy of the seeded database, first through the TypeScript repository
+// and then through Rust, which applies the same steps to its own copy. It covers the update of a
+// signal, a resolution by category and by explicit fingerprint, a new snapshot with its evidence, a
+// duplicate state, a refused signal, and the update and resolution of an insight. Each state is read
+// through the repository, so both sides compare parsed values.
+function engineeringWriteParity(BetterSqlite3, EngineeringIntelligenceRepository, directory) {
+  const copy = path.join(directory, 'engineering-ts.db')
+  fs.copyFileSync(path.join(directory, 'engineering-before.db'), copy)
+  const database = new BetterSqlite3(copy)
+  database.pragma('foreign_keys = ON')
+  const repository = new EngineeringIntelligenceRepository(database, {
+    run: (_operation, callback) => database.transaction(callback)(),
+  })
+  const architecture = engineeringSignal({ id: 'eng-sig-w-architecture', kind: 'coupling', severity: 'low', confidence: 90, metric: { name: 'affectedFiles', value: 2, unit: 'files' }, fingerprint: 'a'.repeat(64), detectedAt: at(650), firstSeenAt: at(650), lastSeenAt: at(650) })
+  const security = engineeringSignal({ id: 'eng-sig-security', category: 'security', kind: 'dependency-audit', title: 'Dependência com alerta', description: 'Um alerta de segurança exige revisão.', severity: 'critical', confidence: 95, metric: { name: 'advisory', value: 'GHSA-exemplo' }, fingerprint: 'e'.repeat(64), detectedAt: at(650), firstSeenAt: at(650), lastSeenAt: at(651) })
+  const evaluation = {
+    signalFingerprints: ['a'.repeat(64), 'e'.repeat(64)],
+    signalStates: [
+      { fingerprint: 'a'.repeat(64), category: 'architecture', severity: 'low', status: 'active' },
+      { fingerprint: 'e'.repeat(64), category: 'security', severity: 'critical', status: 'active' },
+    ],
+    sources: { projectIndexRunId: 'project-run-2', semanticIndexRunId: null, validationRunIds: ['validation-1'], executionIds: ['execution-1'], changeSetIds: ['change-set-1'] },
+    assessed: {
+      architecture: { score: 70, coverage: { available: 3, expected: 4, percent: 75 } },
+      security: { score: 40, coverage: { available: 1, expected: 1, percent: 100 } },
+    },
+  }
+  const snapshotAt = (id, evaluatedAt) => engineeringSnapshot({
+    id, evaluatedAt, stateFingerprint: 'd'.repeat(64), previousSnapshotId: 'eng-snap-2', sources: evaluation.sources,
+    signalFingerprints: evaluation.signalFingerprints, signalStates: evaluation.signalStates,
+  }, evaluation.assessed)
+  const saved = repository.saveEvaluation([architecture, security], snapshotAt('eng-snap-3', at(650)), { skipCategoryResolution: ['testing'], resolveSignalFingerprints: ['b'.repeat(64)] })
+  const duplicate = repository.saveEvaluation([architecture, security], snapshotAt('eng-snap-4', at(660)), {})
+  let refusedSignal = false
+  try {
+    repository.saveEvaluation([{ ...architecture, confidence: 101 }], engineeringSnapshot({ id: 'eng-snap-5', evaluatedAt: at(670), stateFingerprint: 'e'.repeat(64) }), {})
+  } catch {
+    refusedSignal = true
+  }
+  const savedInsight = repository.saveInsight({
+    id: 'eng-ins-3', workspace: '/work/alpha', fingerprint: 'c'.repeat(64), title: 'Acoplamento revisado', explanation: 'Explicação revisada.',
+    relatedSignalIds: ['eng-sig-architecture'], evidence: [ENGINEERING_EVIDENCE], suggestedAction: 'Dividir o módulo.', confidence: 85,
+    status: 'active', createdAt: at(670), updatedAt: at(670), lastSeenAt: at(670),
+  })
+  const resolvedInsight = repository.resolveInsight('/work/alpha', 'eng-ins-1', at(675))
+  const resolvedAgain = repository.resolveInsight('/work/alpha', 'eng-ins-1', at(676))
+  const state = {
+    signals: repository.listSignals('/work/alpha'),
+    resolvedSignals: repository.listSignals('/work/alpha', 'resolved'),
+    snapshots: repository.listSnapshots('/work/alpha'),
+    latestSnapshot: repository.latestSnapshot('/work/alpha'),
+    insights: repository.listInsights('/work/alpha'),
+    evidence: database.prepare("SELECT source_id AS sourceId, json_extract(manifest_json, '$.references') AS refs FROM workspace_evidence WHERE workspace='/work/alpha' AND kind='engineering' ORDER BY source_id").all(),
+  }
+  database.close()
+  return { ...state, outcomes: { saved, duplicate, refusedSignal, savedInsight, resolvedInsight, resolvedAgain } }
+}
+
 function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review) {
   const copy = path.join(directory, 'suggestions-ts.db')
   fs.copyFileSync(path.join(directory, 'suggestions-before.db'), copy)
@@ -743,6 +893,7 @@ const { suggestionIdentity, sanitizeSuggestionTitle } = createRequire(path.join(
 const { isSafeBrainMemoryContent } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/brainMemory.js')
 const { ProjectIndexRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/ProjectIndexRepository.js')
 const { SemanticIndexRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/SemanticIndexRepository.js')
+const { EngineeringIntelligenceRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/EngineeringIntelligenceRepository.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
@@ -754,18 +905,21 @@ try {
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'suggestions-before.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'project-before.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'semantic-before.db')}'`)
+  copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'engineering-before.db')}'`)
   copy.close()
   const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
   const suggestionSnapshot = suggestionParity(BetterSqlite3, SuggestionRepository, gateDirectory, SUGGESTION_REVIEW)
   const changeScenario = changeParity(BetterSqlite3, ProjectIndexRepository, gateDirectory)
   const semanticWrite = semanticWriteParity(BetterSqlite3, SemanticIndexRepository, gateDirectory)
+  const engineeringWrite = engineeringWriteParity(BetterSqlite3, EngineeringIntelligenceRepository, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'evidence-expected.json'), `${JSON.stringify(evidence, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'change-expected.json'), `${JSON.stringify(changeScenario, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'semantic-write-expected.json'), `${JSON.stringify(semanticWrite, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'engineering-write-expected.json'), `${JSON.stringify(engineeringWrite, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'),`${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
   const run = spawnSync(
     'cargo',

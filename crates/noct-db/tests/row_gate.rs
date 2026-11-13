@@ -14,6 +14,13 @@ use noct_core::brain_memory::{
     UpdateBrainMemoryInput, is_safe_brain_memory_content,
 };
 use noct_core::code_intelligence::ProjectIndexFile;
+use noct_core::engineering_intelligence::{
+    ENGINEERING_HEALTH_CATEGORIES, EngineeringEvidence, EngineeringEvidenceSource,
+    EngineeringHealthCategory, EngineeringHealthSnapshot, EngineeringInsight, EngineeringMetric,
+    EngineeringMetricValue, EngineeringSignal, EngineeringSignalSeverity,
+    EngineeringSignalSnapshotState, EngineeringSignalSource, EngineeringSignalStatus,
+    EngineeringSourceRuns, HealthAssessmentStatus, HealthCategoryResult, HealthEvidenceCoverage,
+};
 use noct_core::semantic_index::{
     SemanticEmbeddingSpace, SemanticIndexRun, SemanticRunKind, SemanticRunStatus,
     SemanticSearchFilters, SemanticUnit, SemanticUnitKind, SemanticUnitLocation,
@@ -32,6 +39,7 @@ use noct_db::repositories::brain_memories::BrainMemories;
 use noct_db::repositories::change_sets::ChangeSets;
 use noct_db::repositories::checkpoints::Checkpoints;
 use noct_db::repositories::conversations::Conversations;
+use noct_db::repositories::engineering_intelligence::{EngineeringIntelligence, EvaluationOptions};
 use noct_db::repositories::execution_evidence::ExecutionEvidence;
 use noct_db::repositories::executions::Executions;
 use noct_db::repositories::model_catalog::ModelCatalog;
@@ -147,6 +155,7 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
     let project = ProjectIndex::new(conn);
     let project_file_paths = keys(&expected, "projectFileById");
     let semantic = SemanticIndex::new(conn);
+    let engineering = EngineeringIntelligence::new(conn);
     let semantic_ids = keys(&expected, "semanticUnitById");
     let brain = BrainMemories::new(conn);
     let brain_ids = keys(&expected, "brainMemoryById");
@@ -282,6 +291,16 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
             "failed": ranked(semantic.search_lexical("/work/alpha", "texto", &SemanticSearchFilters::default(), None)),
             "blank": ranked(semantic.search_lexical("/work/alpha", "   ", &SemanticSearchFilters::default(), None)),
         },
+        "engineeringSignals": engineering.list_signals(ENGINEERING_WORKSPACE, None, None).expect("engineering signals"),
+        "engineeringActiveSignals": engineering.list_signals(ENGINEERING_WORKSPACE, Some(EngineeringSignalStatus::Active), None).expect("active engineering signals"),
+        "engineeringResolvedSignals": engineering.list_signals(ENGINEERING_WORKSPACE, Some(EngineeringSignalStatus::Resolved), Some(1)).expect("resolved engineering signals"),
+        "engineeringSignalByFingerprint": engineering.get_signal(ENGINEERING_WORKSPACE, &fingerprint('b')).expect("engineering signal"),
+        "engineeringMissingSignal": engineering.get_signal(ENGINEERING_WORKSPACE, &fingerprint('f')).expect("missing engineering signal"),
+        "engineeringSnapshots": engineering.list_snapshots(ENGINEERING_WORKSPACE, None).expect("engineering snapshots"),
+        "engineeringSnapshotsLimited": engineering.list_snapshots(ENGINEERING_WORKSPACE, Some(1)).expect("limited engineering snapshots"),
+        "engineeringLatestSnapshot": engineering.latest_snapshot(ENGINEERING_WORKSPACE).expect("latest engineering snapshot"),
+        "engineeringInsights": engineering.list_insights(ENGINEERING_WORKSPACE, None, None).expect("engineering insights"),
+        "engineeringResolvedInsights": engineering.list_insights(ENGINEERING_WORKSPACE, Some(EngineeringSignalStatus::Resolved), None).expect("resolved engineering insights"),
     });
 
     for key in expected.as_object().expect("object").keys() {
@@ -875,4 +894,335 @@ fn applies_semantic_writes_like_the_typescript_repository() {
     let expected: Value =
         serde_json::from_str(&text).expect("semantic-write-expected.json is JSON");
     assert_eq!(Value::Object(actual), expected);
+}
+
+/// The workspace of the engineering fixtures in `scripts/verify-row-gate.mjs`.
+const ENGINEERING_WORKSPACE: &str = "/work/alpha";
+
+fn fingerprint(character: char) -> String {
+    character.to_string().repeat(64)
+}
+
+fn engineering_evidence() -> EngineeringEvidence {
+    EngineeringEvidence {
+        id: "eng-ev-app".to_string(),
+        source: EngineeringEvidenceSource::ProjectIndexFile,
+        source_id: "project-file-app".to_string(),
+        relative_path: Some("src/app.ts".to_string()),
+        source_hash: Some(fingerprint('a')),
+        run_id: None,
+        location: None,
+        validity: None,
+        detail: "Arquivo indexado pelo Project Index.".to_string(),
+        observed_at: at(620),
+    }
+}
+
+/// The architecture signal of the write scenario, after its severity and sighting changed.
+fn updated_architecture() -> EngineeringSignal {
+    EngineeringSignal {
+        id: "eng-sig-w-architecture".to_string(),
+        workspace: ENGINEERING_WORKSPACE.to_string(),
+        category: EngineeringHealthCategory::Architecture,
+        kind: "coupling".to_string(),
+        title: "Acoplamento alto".to_string(),
+        description: "O módulo depende de muitos arquivos.".to_string(),
+        severity: EngineeringSignalSeverity::Low,
+        confidence: 90,
+        evidence: vec![engineering_evidence()],
+        metric: Some(EngineeringMetric {
+            name: "affectedFiles".to_string(),
+            value: EngineeringMetricValue::Number(2.0),
+            unit: Some("files".to_string()),
+        }),
+        source: EngineeringSignalSource::Deterministic,
+        policy_version: 2,
+        detected_at: at(650),
+        fingerprint: fingerprint('a'),
+        status: EngineeringSignalStatus::Active,
+        first_seen_at: at(650),
+        last_seen_at: at(650),
+        resolved_at: None,
+    }
+}
+
+/// The security signal that the third evaluation adds.
+fn security_signal() -> EngineeringSignal {
+    EngineeringSignal {
+        id: "eng-sig-security".to_string(),
+        workspace: ENGINEERING_WORKSPACE.to_string(),
+        category: EngineeringHealthCategory::Security,
+        kind: "dependency-audit".to_string(),
+        title: "Dependência com alerta".to_string(),
+        description: "Um alerta de segurança exige revisão.".to_string(),
+        severity: EngineeringSignalSeverity::Critical,
+        confidence: 95,
+        evidence: vec![engineering_evidence()],
+        metric: Some(EngineeringMetric {
+            name: "advisory".to_string(),
+            value: EngineeringMetricValue::Text("GHSA-exemplo".to_string()),
+            unit: None,
+        }),
+        source: EngineeringSignalSource::Deterministic,
+        policy_version: 2,
+        detected_at: at(650),
+        fingerprint: fingerprint('e'),
+        status: EngineeringSignalStatus::Active,
+        first_seen_at: at(650),
+        last_seen_at: at(651),
+        resolved_at: None,
+    }
+}
+
+/// `engineeringSnapshot` of the gate script: every category not assessed, unless it is named.
+fn engineering_snapshot(id: &str, evaluated_at: &str, state: char) -> EngineeringHealthSnapshot {
+    EngineeringHealthSnapshot {
+        id: id.to_string(),
+        workspace: ENGINEERING_WORKSPACE.to_string(),
+        policy_version: 2,
+        evaluated_at: evaluated_at.to_string(),
+        previous_snapshot_id: None,
+        sources: EngineeringSourceRuns {
+            project_index_run_id: Some("project-run-1".to_string()),
+            semantic_index_run_id: Some("sem-g1".to_string()),
+            validation_run_ids: Vec::new(),
+            execution_ids: Vec::new(),
+            change_set_ids: Vec::new(),
+        },
+        categories: ENGINEERING_HEALTH_CATEGORIES
+            .into_iter()
+            .map(|category| HealthCategoryResult {
+                category,
+                status: HealthAssessmentStatus::NotAssessed,
+                score: None,
+                coverage: HealthEvidenceCoverage {
+                    available: 0,
+                    expected: None,
+                    percent: None,
+                },
+                signal_ids: Vec::new(),
+                evidence: Vec::new(),
+                evaluated_at: evaluated_at.to_string(),
+            })
+            .collect(),
+        signal_fingerprints: Vec::new(),
+        signal_states: Vec::new(),
+        state_fingerprint: fingerprint(state),
+    }
+}
+
+/// Marks a category as assessed with its score and coverage, as the gate script does.
+fn assess(
+    snapshot: &mut EngineeringHealthSnapshot,
+    category: EngineeringHealthCategory,
+    score: f64,
+    coverage: HealthEvidenceCoverage,
+) {
+    let result = snapshot
+        .categories
+        .iter_mut()
+        .find(|result| result.category == category)
+        .expect("category");
+    result.status = HealthAssessmentStatus::Assessed;
+    result.score = Some(score);
+    result.coverage = coverage;
+}
+
+/// The third evaluation of the write scenario: architecture and security assessed, with its sources.
+fn third_snapshot(id: &str, evaluated_at: &str) -> EngineeringHealthSnapshot {
+    let mut snapshot = engineering_snapshot(id, evaluated_at, 'd');
+    snapshot.previous_snapshot_id = Some("eng-snap-2".to_string());
+    snapshot.sources = EngineeringSourceRuns {
+        project_index_run_id: Some("project-run-2".to_string()),
+        semantic_index_run_id: None,
+        validation_run_ids: vec!["validation-1".to_string()],
+        execution_ids: vec!["execution-1".to_string()],
+        change_set_ids: vec!["change-set-1".to_string()],
+    };
+    assess(
+        &mut snapshot,
+        EngineeringHealthCategory::Architecture,
+        70.0,
+        HealthEvidenceCoverage {
+            available: 3,
+            expected: Some(4),
+            percent: Some(75.0),
+        },
+    );
+    assess(
+        &mut snapshot,
+        EngineeringHealthCategory::Security,
+        40.0,
+        HealthEvidenceCoverage {
+            available: 1,
+            expected: Some(1),
+            percent: Some(100.0),
+        },
+    );
+    snapshot.signal_fingerprints = vec![fingerprint('a'), fingerprint('e')];
+    snapshot.signal_states = vec![
+        EngineeringSignalSnapshotState {
+            fingerprint: fingerprint('a'),
+            category: EngineeringHealthCategory::Architecture,
+            severity: EngineeringSignalSeverity::Low,
+            status: EngineeringSignalStatus::Active,
+        },
+        EngineeringSignalSnapshotState {
+            fingerprint: fingerprint('e'),
+            category: EngineeringHealthCategory::Security,
+            severity: EngineeringSignalSeverity::Critical,
+            status: EngineeringSignalStatus::Active,
+        },
+    ];
+    snapshot
+}
+
+fn revised_insight() -> EngineeringInsight {
+    EngineeringInsight {
+        id: "eng-ins-3".to_string(),
+        workspace: ENGINEERING_WORKSPACE.to_string(),
+        fingerprint: fingerprint('c'),
+        title: "Acoplamento revisado".to_string(),
+        explanation: "Explicação revisada.".to_string(),
+        related_signal_ids: vec!["eng-sig-architecture".to_string()],
+        evidence: vec![engineering_evidence()],
+        suggested_action: Some("Dividir o módulo.".to_string()),
+        confidence: 85,
+        status: EngineeringSignalStatus::Active,
+        created_at: at(670),
+        updated_at: at(670),
+        last_seen_at: at(670),
+    }
+}
+
+/// The write scenario of the engineering intelligence. Mirrors `engineeringWriteParity` in
+/// `scripts/verify-row-gate.mjs`, which records the TypeScript state.
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn applies_engineering_writes_like_the_typescript_repository() {
+    let directory = scratch("row-gate-engineering");
+    fs::create_dir_all(&directory).expect("scratch directory");
+    fs::copy(
+        gate_directory().join("engineering-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before the writes");
+    let db = Database::open(&directory).expect("open the copy");
+    let conn = db.connection();
+    let store = EngineeringIntelligence::new(conn);
+
+    let saved = store
+        .save_evaluation(
+            &[updated_architecture(), security_signal()],
+            &third_snapshot("eng-snap-3", &at(650)),
+            &EvaluationOptions {
+                skip_category_resolution: vec![EngineeringHealthCategory::Testing],
+                resolve_signal_fingerprints: vec![fingerprint('b')],
+            },
+        )
+        .expect("third evaluation");
+    let duplicate = store
+        .save_evaluation(
+            &[updated_architecture(), security_signal()],
+            &third_snapshot("eng-snap-4", &at(660)),
+            &EvaluationOptions::default(),
+        )
+        .expect("duplicate evaluation");
+    let refused = store
+        .save_evaluation(
+            &[EngineeringSignal {
+                confidence: 101,
+                ..updated_architecture()
+            }],
+            &engineering_snapshot("eng-snap-5", &at(670), 'e'),
+            &EvaluationOptions::default(),
+        )
+        .is_err();
+    let saved_insight = store
+        .save_insight(&revised_insight())
+        .expect("revised insight");
+    let resolved_insight = store
+        .resolve_insight(ENGINEERING_WORKSPACE, "eng-ins-1", &at(675))
+        .expect("resolve insight");
+    let resolved_again = store
+        .resolve_insight(ENGINEERING_WORKSPACE, "eng-ins-1", &at(676))
+        .expect("resolve again");
+
+    let mut actual = Map::new();
+    actual.insert(
+        "signals".to_string(),
+        json!(
+            store
+                .list_signals(ENGINEERING_WORKSPACE, None, None)
+                .expect("signals")
+        ),
+    );
+    actual.insert(
+        "resolvedSignals".to_string(),
+        json!(
+            store
+                .list_signals(
+                    ENGINEERING_WORKSPACE,
+                    Some(EngineeringSignalStatus::Resolved),
+                    None
+                )
+                .expect("resolved signals")
+        ),
+    );
+    actual.insert(
+        "snapshots".to_string(),
+        json!(
+            store
+                .list_snapshots(ENGINEERING_WORKSPACE, None)
+                .expect("snapshots")
+        ),
+    );
+    actual.insert(
+        "latestSnapshot".to_string(),
+        json!(
+            store
+                .latest_snapshot(ENGINEERING_WORKSPACE)
+                .expect("latest snapshot")
+        ),
+    );
+    actual.insert(
+        "insights".to_string(),
+        json!(
+            store
+                .list_insights(ENGINEERING_WORKSPACE, None, None)
+                .expect("insights")
+        ),
+    );
+    actual.insert(
+        "evidence".to_string(),
+        rows_json(
+            conn,
+            "SELECT source_id AS sourceId, json_extract(manifest_json, '$.references') AS refs \
+             FROM workspace_evidence WHERE workspace='/work/alpha' AND kind='engineering' \
+             ORDER BY source_id",
+        ),
+    );
+    actual.insert(
+        "outcomes".to_string(),
+        json!({
+            "saved": saved,
+            "duplicate": duplicate,
+            "refusedSignal": refused,
+            "savedInsight": saved_insight,
+            "resolvedInsight": resolved_insight,
+            "resolvedAgain": resolved_again,
+        }),
+    );
+    let text = fs::read_to_string(gate_directory().join("engineering-write-expected.json"))
+        .expect("engineering-write-expected.json");
+    let expected: Value =
+        serde_json::from_str(&text).expect("engineering-write-expected.json is JSON");
+    let actual = numbers_as_integers(&Value::Object(actual));
+    let expected = numbers_as_integers(&expected);
+    for key in expected.as_object().expect("object").keys() {
+        assert_eq!(
+            actual[key], expected[key],
+            "`{key}` differs from the TypeScript state"
+        );
+    }
 }

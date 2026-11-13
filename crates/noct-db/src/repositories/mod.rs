@@ -9,6 +9,7 @@ pub mod brain_memories;
 pub mod change_sets;
 pub mod checkpoints;
 pub mod conversations;
+pub mod engineering_intelligence;
 pub mod execution_evidence;
 pub mod executions;
 pub mod model_catalog;

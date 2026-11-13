@@ -211,6 +211,16 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     in the same unit. Lexical search requires every token to match, and only indexed and
     lexical-only units are searchable. The run's index-version column is not part of the run
     contract, so the gate removes it on the TypeScript side.
+  - Engineering intelligence: signals, insights and health snapshots, under the same rules as
+    the TypeScript repository. Every value is checked before the transaction starts, and each
+    row is checked again when it is read. An evaluation upserts its signals, resolves the
+    active signals of the categories it assessed and of the explicit fingerprints it names, and
+    stores its snapshot unless one with the same state exists. A new snapshot records its
+    sources as engineering evidence in the same unit. A signal keeps its identity and first
+    sighting, and an insight keeps the identity and creation time of its fingerprint. Rust
+    reads a missing nullable key as null, where zod rejects it. The difference is recorded in
+    `crates/noct-core/src/engineering_intelligence.rs` and matters only for JSON that the
+    application did not write.
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
@@ -236,12 +246,16 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   must roll back, the removal of a file's units, stale marking, a deletion and the evidence
   of an ended run. The lexical rank is SQLite's bm25 value, and it keeps 12 significant
   digits on both sides, because better-sqlite3 ships SQLite 3.53.4 and the Rust build bundles
-  3.54.1, which differ in the last bit. Approvals are not in the gate yet.
+  3.54.1, which differ in the last bit. Engineering intelligence is read through the main
+  gate, and its evaluation is replayed on a copy: an updated signal keeps its identity and
+  first sighting, a category resolves only its missing signals, an explicit fingerprint
+  resolves a signal the evaluation does not find, a repeated state returns the stored
+  snapshot, a refused signal leaves nothing behind, and an insight keeps the identity of its
+  fingerprint. Approvals are not in the gate yet.
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** engineering intelligence, backup and import, recovery, and the
-  `Database` facade.
+- **Remaining, phase 2:** backup and import, recovery, and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 
