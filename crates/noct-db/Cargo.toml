@@ -9,9 +9,10 @@ publish.workspace = true
 [dependencies]
 noct-core = { path = "../noct-core" }
 rusqlite.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 time.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 sha2.workspace = true

@@ -182,7 +182,7 @@ impl Database {
         }
         self.connection.execute(
             "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (QUICK_CHECK_KEY, iso_timestamp(OffsetDateTime::now_utc())?),
+            (QUICK_CHECK_KEY, crate::clock::iso_now()?),
         )?;
         Ok(())
     }
@@ -324,12 +324,4 @@ fn restrict_if_present(path: &Path) -> io::Result<()> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         other => other,
     }
-}
-
-/// Same shape as `Date.prototype.toISOString()`: UTC with millisecond precision.
-fn iso_timestamp(at: OffsetDateTime) -> Result<String> {
-    at.format(&format_description!(
-        "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z"
-    ))
-    .map_err(|error| Error::Message(error.to_string()))
 }

@@ -1921,6 +1921,7 @@ version = "1.0.5"
 dependencies = [
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1933,6 +1934,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.21",
  "time",
+ "uuid",
 ]
 
 [[package]]

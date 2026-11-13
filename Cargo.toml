@@ -18,6 +18,7 @@ rusqlite = { version = "0.42.0", features = ["bundled", "backup"] }
 thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }
 sha2 = "0.10.9"
+uuid = { version = "1.29.2", features = ["v4"] }
 
 [profile.release]
 opt-level = 3

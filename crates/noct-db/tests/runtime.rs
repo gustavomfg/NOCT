@@ -3,7 +3,7 @@
 //! electron/database/DatabaseRuntime.ts.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -12,15 +12,10 @@ use noct_db::runtime::{DATABASE_FILE_NAME, Database, RECOVERY_RETENTION};
 use noct_db::schema;
 use rusqlite::Connection;
 
-const QUICK_CHECK_KEY: &str = "maintenance.lastQuickCheck";
+mod common;
+use common::scratch;
 
-/// A clean directory under the Cargo target dir, so tests need no extra dependency.
-fn scratch(name: &str) -> PathBuf {
-    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).expect("scratch directory");
-    dir
-}
+const QUICK_CHECK_KEY: &str = "maintenance.lastQuickCheck";
 
 /// Creates a database file the way the runtime does, stopped at `version`.
 fn create_database_at(dir: &Path, version: u32) {

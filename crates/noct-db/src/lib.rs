@@ -5,9 +5,12 @@
 //! databases written by the TypeScript application open here and the reverse stays
 //! possible until the TypeScript implementation is retired.
 
+mod clock;
 pub mod migrations;
+pub mod repositories;
 pub mod runtime;
 pub mod schema;
+pub mod transaction;
 
 pub use runtime::Database;
 
