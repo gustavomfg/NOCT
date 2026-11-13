@@ -10,7 +10,9 @@ use noct_core::workspace_evidence::{EvidenceKind, EvidenceReference};
 use noct_db::Database;
 use noct_db::Result;
 use noct_db::repositories::artifacts::Artifacts;
+use noct_db::repositories::checkpoints::Checkpoints;
 use noct_db::repositories::conversations::Conversations;
+use noct_db::repositories::executions::Executions;
 use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
@@ -78,6 +80,8 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
     let conversations_api = Conversations::new(conn);
     let artifacts_api = Artifacts::new(conn);
     let memory_api = WorkspaceMemory::new(conn);
+    let executions_api = Executions::new(conn);
+    let checkpoints_api = Checkpoints::new(conn);
     let providers_api = ProviderConfigurations::new(conn);
     let provider_ids: Vec<String> = providers_api
         .list()
@@ -103,6 +107,11 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         "providerConfigurations": providers_api.list().expect("providers"),
         "providerConfigurationById": keyed(&provider_ids, |id| providers_api.get(id)),
         "providerCredentialReferences": provider_references,
+        "executions": executions_api.list("/work/alpha", None, 50).expect("executions"),
+        "executionById": keyed(&["exec-g1".to_string(), "exec-g2".to_string()], |id| executions_api.get(id, None)),
+        "checkpoints": checkpoints_api.list("exec-g1").expect("checkpoints"),
+        "checkpointById": keyed(&["ck-g1".to_string()], |id| checkpoints_api.get(id, None)),
+        "checkpointFiles": keyed(&["ck-g1".to_string()], |id| checkpoints_api.list_files(id)),
     });
 
     for key in expected.as_object().expect("object").keys() {

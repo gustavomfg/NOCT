@@ -114,6 +114,18 @@ function seed(LocalDatabase, directory) {
   }, '6f9619ff-8b86-4d11-b42d-00c04fc964ff')
   db.providerConfigurations.setCredentialReference(localProvider.id, '0f3e5b8a-2c4d-4e6f-8a9b-1c2d3e4f5a6b')
 
+  // Executions and checkpoints are written through their repositories. A completed capture
+  // also records its evidence, so the rows Rust reads are the ones the application stores.
+  db.executions.create({ id: 'exec-g1', workspace: '/work/alpha', conversationId: 'conv-1', prompt: 'Corrigir o teste', mode: 'build', status: 'running', decision: 'pending', retryOf: null, startedAt: at(60), finishedAt: null, error: null })
+  db.executions.update({ id: 'exec-g1', workspace: '/work/alpha', conversationId: 'conv-1', prompt: 'Corrigir o teste', mode: 'build', status: 'completed', decision: 'pending', retryOf: null, startedAt: at(60), finishedAt: at(61), error: null })
+  db.executions.create({ id: 'exec-g2', workspace: '/work/alpha', conversationId: 'conv-1', prompt: 'Revisar', mode: 'review', status: 'failed', decision: 'pending', retryOf: 'exec-g1', startedAt: at(62), finishedAt: at(63), error: 'Falhou.' })
+  const capturing = { id: 'ck-g1', executionId: 'exec-g1', workspace: '/work/alpha', phase: 'before', status: 'capturing', capturedAt: at(64), rootPath: '/work/alpha', error: null }
+  db.checkpoints.save(capturing)
+  db.checkpoints.completeCapture({ ...capturing, status: 'ready' }, [
+    { id: 'cf-g1', checkpointId: 'ck-g1', relativePath: 'src/a.ts', exists: true, kind: 'file', size: 12, mode: 420, hash: 'a'.repeat(64), contentPath: null },
+    { id: 'cf-g2', checkpointId: 'ck-g1', relativePath: 'src/gone.ts', exists: false, kind: 'missing', size: null, mode: null, hash: null, contentPath: null },
+  ])
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const providers = db.providerConfigurations.list()
@@ -130,6 +142,14 @@ function seed(LocalDatabase, directory) {
     providerConfigurations: providers,
     providerConfigurationById: Object.fromEntries(providers.map((row) => [row.id, db.providerConfigurations.get(row.id)])),
     providerCredentialReferences: db.providerConfigurations.listCredentialReferences().sort(),
+    executions: db.executions.list('/work/alpha'),
+    executionById: Object.fromEntries(['exec-g1', 'exec-g2'].map((id) => [id, db.executions.get(id)])),
+    checkpoints: db.checkpoints.list('exec-g1'),
+    checkpointById: { 'ck-g1': db.checkpoints.get('ck-g1') },
+    // The TypeScript listFiles spreads its raw row, so the internal `existsFlag` alias reaches
+    // callers. It is not part of CheckpointFileRecord, so Rust does not reproduce it: an
+    // intentional difference, removed here before the comparison.
+    checkpointFiles: { 'ck-g1': db.checkpoints.listFiles('ck-g1').map(({ existsFlag, ...file }) => file) },
   }
   db.close()
   return expected
@@ -156,7 +176,7 @@ const RECONCILE_TABLES = [
 // before a parent manifest is marked stale, so Rust can repeat the same steps on the copy and
 // must read the same manifests, stale chain and verification.
 function evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, directory) {
-  const database = new BetterSqlite3(path.join(directory, 'nocturne.db'))
+  const database = new BetterSqlite3(path.join(directory, 'parity.db'))
   database.pragma('foreign_keys = ON')
   const evidence = new WorkspaceEvidenceRepository(database)
   const parent = evidence.record({
@@ -189,7 +209,7 @@ function evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, directory) {
 }
 
 function reconcileParity(BetterSqlite3, OperationRecoveryRepository, directory) {
-  const database = new BetterSqlite3(path.join(directory, 'nocturne.db'))
+  const database = new BetterSqlite3(path.join(directory, 'parity.db'))
   database.pragma('foreign_keys = ON')
   const at = '2026-01-01T00:00:00.000Z'
   const insert = (sql, ...values) => database.prepare(sql).run(...values)
@@ -234,6 +254,10 @@ const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sql
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
 try {
   const expected = seed(LocalDatabase, gateDirectory)
+  // The parity scenarios change rows the row gate does not expect, so they run on a copy.
+  const copy = new BetterSqlite3(path.join(gateDirectory, 'nocturne.db'))
+  copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'parity.db')}'`)
+  copy.close()
   const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })

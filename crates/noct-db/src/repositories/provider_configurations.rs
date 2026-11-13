@@ -9,12 +9,10 @@ use noct_core::ai::provider_configuration::{
     ProviderConfigurationInput, ProviderConfigurationSummary, identifier,
 };
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use serde_json::Value;
 use uuid::Uuid;
 
 use crate::clock::iso_now;
+use crate::codec::{enum_text, enum_value};
 use crate::{Error, Result};
 
 const NOT_FOUND: &str = "Configuração de Provider não encontrada.";
@@ -289,19 +287,6 @@ fn flag(value: i64) -> Option<bool> {
 
 fn timeout_value(timeout_ms: u64) -> Result<i64> {
     i64::try_from(timeout_ms).map_err(|_| Error::Message(INVALID_ROW.to_string()))
-}
-
-/// The text a unit enum is stored as, taken from its serde representation so that the
-/// stored value and the contract cannot diverge.
-fn enum_text<T: Serialize>(value: &T) -> Result<String> {
-    match serde_json::to_value(value).map_err(|error| Error::Message(error.to_string()))? {
-        Value::String(text) => Ok(text),
-        _ => Err(Error::Message(INVALID_ROW.to_string())),
-    }
-}
-
-fn enum_value<T: DeserializeOwned>(text: &str) -> Option<T> {
-    serde_json::from_value(Value::String(text.to_owned())).ok()
 }
 
 fn not_found() -> Error {

@@ -6,6 +6,7 @@
 //! possible until the TypeScript implementation is retired.
 
 mod clock;
+mod codec;
 pub mod migrations;
 pub mod repositories;
 pub mod runtime;

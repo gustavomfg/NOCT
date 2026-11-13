@@ -167,19 +167,25 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     contract in `noct-core`.
   - Workspace state evidence: immutable manifests, stale propagation along references,
     verification and index references. Its contract is in `noct-core`, and the gate
-    checks it against manifests the TypeScript repository wrote (this commit).
+    checks it against manifests the TypeScript repository wrote.
+  - Executions and checkpoints, with the agent mode and change-control records in
+    `noct-core`. A terminal execution outcome cannot change; a completed capture stores
+    its files and its evidence as one unit (this commit).
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
   conversations, messages, artifacts, workspace memory and provider configurations.
+  Executions and checkpoints are in the main gate. The TypeScript `listFiles` leaks an
+  internal `existsFlag` alias; Rust does not reproduce it, and the gate removes it on the
+  TypeScript side. It goes away with the TypeScript repository.
   Workspace evidence is checked by a third scenario, with its stale-clock values masked
   because each run records its own time. Approvals are not in the gate yet.
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** checkpoints, executions, execution evidence, change sets,
-  validation, suggestions, brain memories, project index, semantic index, engineering
-  intelligence, backup and import, recovery, and the `Database` facade.
+- **Remaining, phase 2:** execution evidence, change sets, validation, suggestions,
+  brain memories, project index, semantic index, engineering intelligence, backup and
+  import, recovery, and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 
