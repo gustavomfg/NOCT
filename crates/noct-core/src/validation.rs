@@ -56,3 +56,38 @@ pub fn optional_positive(field: &str, value: Option<u64>) -> Result<Option<u64>,
         other => Ok(other),
     }
 }
+
+/// `z.string().uuid()`: the canonical hyphenated form, with a version digit from 1 to 8,
+/// an RFC variant, or the nil and max UUIDs. Returns the value unchanged when it passes.
+pub fn uuid_text(field: &str, value: &str) -> Result<String, ContractError> {
+    if is_zod_uuid(value) {
+        Ok(value.to_string())
+    } else {
+        Err(ContractError::invalid(field))
+    }
+}
+
+fn is_zod_uuid(value: &str) -> bool {
+    if value == "00000000-0000-0000-0000-000000000000"
+        || value == "ffffffff-ffff-ffff-ffff-ffffffffffff"
+    {
+        return true;
+    }
+    let bytes = value.as_bytes();
+    if bytes.len() != 36 {
+        return false;
+    }
+    let hyphens = [8, 13, 18, 23];
+    for (index, byte) in bytes.iter().enumerate() {
+        if hyphens.contains(&index) {
+            if *byte != b'-' {
+                return false;
+            }
+        } else if !byte.is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    let version = bytes[14];
+    let variant = bytes[19];
+    matches!(version, b'1'..=b'8') && matches!(variant, b'8' | b'9' | b'a' | b'b' | b'A' | b'B')
+}

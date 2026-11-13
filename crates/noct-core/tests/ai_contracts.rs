@@ -149,3 +149,70 @@ fn a_binding_reference_must_name_a_provider_and_a_model() {
     };
     assert!(reference.validated().is_err());
 }
+
+#[test]
+fn identifiers_follow_zod_uuid_rules() {
+    use noct_core::validation::uuid_text;
+
+    for valid in [
+        "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        "6F9619FF-8B86-4D11-B42D-00C04FC964FF",
+        "00000000-0000-0000-0000-000000000000",
+        "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    ] {
+        assert!(uuid_text("id", valid).is_ok(), "{valid}");
+    }
+    for invalid in [
+        "6f9619ff-8b86-0d11-b42d-00c04fc964ff",
+        "6f9619ff-8b86-9d11-b42d-00c04fc964ff",
+        "6f9619ff-8b86-4d11-c42d-00c04fc964ff",
+        "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
+        "6f9619ff8b864d11b42d00c04fc964ff",
+        "{6f9619ff-8b86-4d11-b42d-00c04fc964ff}",
+        "",
+    ] {
+        assert!(uuid_text("id", invalid).is_err(), "{invalid}");
+    }
+}
+
+#[test]
+fn provider_configuration_input_is_trimmed_and_bounded() {
+    use noct_core::ai::provider_configuration::{
+        ProviderConfigurationInput, ProviderConfigurationType,
+    };
+
+    let parsed: ProviderConfigurationInput = serde_json::from_value(json!({
+        "providerType": "chat-completions",
+        "displayName": "  Local  ",
+        "source": "local",
+        "baseUrl": " http://127.0.0.1:11434 ",
+        "enabled": true,
+        "requiresAuthentication": false,
+        "timeoutMs": 30000
+    }))
+    .unwrap();
+    let validated = parsed.clone().validated().unwrap();
+    assert_eq!(validated.display_name, "Local");
+    assert_eq!(validated.base_url, "http://127.0.0.1:11434");
+    assert_eq!(
+        validated.provider_type,
+        ProviderConfigurationType::ChatCompletions
+    );
+
+    let mut too_fast = parsed.clone();
+    too_fast.timeout_ms = 999;
+    assert!(too_fast.validated().is_err());
+    let mut too_slow = parsed.clone();
+    too_slow.timeout_ms = 120_001;
+    assert!(too_slow.validated().is_err());
+    let mut no_name = parsed;
+    no_name.display_name = " ".to_string();
+    assert!(no_name.validated().is_err());
+
+    let unknown_type: Result<ProviderConfigurationInput, _> = serde_json::from_value(json!({
+        "providerType": "openai-compatible",
+        "displayName": "x", "source": "local", "baseUrl": "x",
+        "enabled": true, "requiresAuthentication": false, "timeoutMs": 1000
+    }));
+    assert!(unknown_type.is_err());
+}
