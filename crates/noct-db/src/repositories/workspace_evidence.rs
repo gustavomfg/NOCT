@@ -260,19 +260,11 @@ impl<'a> WorkspaceEvidence<'a> {
         source_id: &str,
         started_at: &str,
     ) -> Result<WorkspaceStateManifest> {
-        let mut statement = self.conn.prepare(
+        let paths = self.known_paths(
             "SELECT relative_path, analyzed_hash FROM project_index_files \
              WHERE workspace=?1 AND excluded=0 ORDER BY relative_path LIMIT 2001",
+            workspace,
         )?;
-        let paths = statement
-            .query_map([workspace], |row| {
-                Ok(KnownWorkspacePath {
-                    path: row.get(0)?,
-                    hash: row.get(1)?,
-                    exists: None,
-                })
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
         self.record(EvidenceInput {
             kind: EvidenceKind::ProjectIndex,
             workspace: workspace.to_string(),
@@ -282,6 +274,44 @@ impl<'a> WorkspaceEvidence<'a> {
             paths,
             references: Vec::new(),
         })
+    }
+
+    /// Records the distinct source hashes of the semantic units of a workspace as one observation.
+    pub fn record_semantic_index(
+        &self,
+        workspace: &str,
+        source_id: &str,
+        started_at: &str,
+    ) -> Result<WorkspaceStateManifest> {
+        let paths = self.known_paths(
+            "SELECT DISTINCT relative_path, source_hash FROM semantic_units \
+             WHERE workspace=?1 ORDER BY relative_path LIMIT 2001",
+            workspace,
+        )?;
+        self.record(EvidenceInput {
+            kind: EvidenceKind::SemanticIndex,
+            workspace: workspace.to_string(),
+            source_id: source_id.to_string(),
+            execution_id: None,
+            started_at: Some(started_at.to_string()),
+            paths,
+            references: Vec::new(),
+        })
+    }
+
+    /// The paths and hashes a query returns for one workspace. Each query selects them in that order.
+    fn known_paths(&self, sql: &str, workspace: &str) -> Result<Vec<KnownWorkspacePath>> {
+        let mut statement = self.conn.prepare(sql)?;
+        let paths = statement
+            .query_map([workspace], |row| {
+                Ok(KnownWorkspacePath {
+                    path: row.get(0)?,
+                    hash: row.get(1)?,
+                    exists: None,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(paths)
     }
 
     /// The most recent manifest of each index kind, as references for other evidence.

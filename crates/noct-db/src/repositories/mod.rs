@@ -15,6 +15,7 @@ pub mod model_catalog;
 pub mod operation_recovery;
 pub mod project_index;
 pub mod provider_configurations;
+pub mod semantic_index;
 pub mod settings;
 pub mod suggestions;
 pub mod validation_runs;

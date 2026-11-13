@@ -9,6 +9,7 @@ pub mod contracts;
 pub mod json;
 pub mod limits;
 pub mod operation_recovery;
+pub mod semantic_index;
 pub mod suggestions;
 pub mod text;
 pub mod validation;

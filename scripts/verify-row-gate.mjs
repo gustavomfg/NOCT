@@ -375,6 +375,23 @@ function seed(LocalDatabase, directory) {
   db.projectIndex.replaceExclusions('/work/alpha', [{ relativePath: 'dist/bundle.js', reason: 'build-output' }, { relativePath: 'node_modules', reason: 'dependency' }], at(550))
   db.projectIndex.upsertExclusions('/work/alpha', [{ relativePath: 'dist/bundle.js', reason: 'generated' }, { relativePath: 'coverage', reason: 'generated' }], at(551))
   db.projectIndex.refreshRelationHashes('/work/alpha')
+  // The semantic index is written through the TypeScript repository once the project files it
+  // belongs to exist. The units cover two embedding spaces and the statuses that search and
+  // summaries treat differently.
+  db.semanticIndex.createRun(semanticRun({ id: 'sem-g0', kind: 'rebuild', status: 'cancelled', startedAt: at(590), updatedAt: at(590), completedAt: at(590) }))
+  db.semanticIndex.createRun(semanticRun({ id: 'sem-g1', kind: 'initial', status: 'running', totalFiles: 3, processedFiles: 2, startedAt: at(600), updatedAt: at(600) }))
+  db.semanticIndex.replaceFileUnits('/work/alpha', 'src/app.ts', [
+    semanticUnit({ id: 'sem-app-main', symbolId: 'sym-main', symbolName: 'main', location: { startLine: 1, startColumn: 1, endLine: 4, endColumn: 2, startOffset: 0, endOffset: 40 }, normalizedText: 'export function main helper', status: 'indexed', indexedAt: at(611), embeddingSpace: SEMANTIC_SPACE, embedding: [0.5, -0.25, 1.5] }),
+    semanticUnit({ id: 'sem-app-version', symbolName: 'legacy', normalizedText: 'legacy helper', status: 'indexed', indexedAt: at(612), embeddingSpace: { providerId: 'local', modelId: 'mini', modelVersion: '2', dimensions: 2 }, embedding: [1, 2] }),
+    semanticUnit({ id: 'sem-app-doc', kind: 'markdown-section', language: null, location: { startLine: 6, startColumn: 1, endLine: 9, endColumn: 4 }, normalizedText: 'Introdução ao módulo principal', status: 'lexical-only', createdAt: at(613), updatedAt: at(613) }),
+  ])
+  db.semanticIndex.replaceFileUnits('/work/alpha', 'src/util.ts', [
+    semanticUnit({ id: 'sem-util-helper', relativePath: 'src/util.ts', symbolName: 'helper', normalizedText: 'helper utilitário para formatar datas', status: 'indexed', indexedAt: at(614), embeddingSpace: SEMANTIC_SPACE, embedding: [0.125, 0.75, -2] }),
+  ])
+  db.semanticIndex.replaceFileUnits('/work/alpha', 'src/broken.ts', [
+    semanticUnit({ id: 'sem-broken-unit', relativePath: 'src/broken.ts', kind: 'text', language: null, normalizedText: 'texto quebrado', status: 'failed', error: 'Falha ao extrair.' }),
+  ])
+  db.semanticIndex.updateRun(semanticRun({ id: 'sem-g1', kind: 'initial', status: 'completed', totalFiles: 3, processedFiles: 3, indexedUnits: 2, lexicalOnlyUnits: 1, failedFiles: 1, startedAt: at(600), updatedAt: at(601), completedAt: at(601) }))
 
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
@@ -465,6 +482,23 @@ function seed(LocalDatabase, directory) {
       util: db.projectIndex.listExports('/work/alpha', 'src/util.ts').map(contractOnly),
     },
     projectSummary: db.projectIndex.summary('/work/alpha'),
+    semanticRunLatest: runContract(db.semanticIndex.latestRun('/work/alpha')),
+    semanticSummary: summaryContract(db.semanticIndex.summary('/work/alpha')),
+    semanticUnitById: Object.fromEntries(['sem-app-main', 'sem-app-version', 'sem-app-doc', 'sem-util-helper', 'sem-broken-unit', 'sem-missing'].map((id) => [id, db.semanticIndex.getUnit('/work/alpha', id)])),
+    semanticUnits: db.semanticIndex.listUnits('/work/alpha'),
+    semanticUnitsFiltered: db.semanticIndex.listUnits('/work/alpha', { paths: ['src/app.ts'], kinds: ['symbol'], symbols: ['main', 'helper'] }),
+    semanticUnitsLimited: db.semanticIndex.listUnits('/work/alpha', {}, 2),
+    semanticFileUnits: db.semanticIndex.listFileUnits('/work/alpha', 'src/app.ts'),
+    semanticEmbeddings: db.semanticIndex.listIndexedEmbeddings('/work/alpha', SEMANTIC_SPACE, {}),
+    semanticEmbeddingsVersioned: db.semanticIndex.listIndexedEmbeddings('/work/alpha', { ...SEMANTIC_SPACE, modelVersion: '2', dimensions: 2 }, {}),
+    semanticLexical: {
+      helper: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', 'helper')),
+      phrase: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', '  módulo  principal ')),
+      filtered: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', 'helper', { paths: ['src/util.ts'] })),
+      limited: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', 'helper', {}, 1)),
+      failed: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', 'texto')),
+      blank: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', '   ')),
+    },
   }
   db.close()
   return expected
@@ -595,6 +629,86 @@ function changeParity(BetterSqlite3, ProjectIndexRepository, directory) {
   return { files: CHANGE_FILES.map(scenarioFile), requested: CHANGE_REQUESTED, present: CHANGE_PRESENT, remaining }
 }
 
+// Semantic index fixtures. A unit or run takes these defaults unless a fixture overrides them, so
+// each one states only what it tests.
+const SEMANTIC_SPACE = { providerId: 'local', modelId: 'mini', modelVersion: null, dimensions: 3 }
+
+function semanticUnit(overrides) {
+  return {
+    id: '', workspace: '/work/alpha', relativePath: 'src/app.ts', kind: 'symbol', language: 'TypeScript',
+    symbolId: null, symbolName: null, location: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 10 },
+    sourceHash: 'a'.repeat(64), chunkHash: 'b'.repeat(64), normalizedText: 'texto', chunkStrategyVersion: 'symbols-v2',
+    embeddingSpace: null, status: 'pending', error: null, createdAt: at(610), updatedAt: at(610), indexedAt: null,
+    ...overrides,
+  }
+}
+
+function semanticRun(overrides) {
+  return {
+    id: '', workspace: '/work/alpha', kind: 'initial', status: 'queued', totalFiles: 0, processedFiles: 0,
+    indexedUnits: 0, lexicalOnlyUnits: 0, failedFiles: 0, excludedFiles: 0, startedAt: at(600),
+    completedAt: null, updatedAt: at(600), error: null,
+    ...overrides,
+  }
+}
+
+// The TypeScript run row also carries the index version column, which no contract declares. The
+// Rust contract leaves it out, so it is removed before the comparison.
+const runContract = (run) => run && Object.fromEntries(Object.entries(run).filter(([key]) => key !== 'indexVersion'))
+const summaryContract = (summary) => ({ ...summary, latestRun: runContract(summary.latestRun) })
+// The bm25 rank is computed by SQLite, and the TypeScript and Rust builds differ in its last bit
+// (3.53.4 in better-sqlite3, 3.54.1 bundled by rusqlite). Both sides keep 12 significant digits.
+// The order and the members of the matches are compared exactly.
+const rankedMatches = (matches) => matches.map((match) => ({ ...match, rank: Number(match.rank.toExponential(11)) }))
+
+// What the write scenario must leave behind, read the same way on both sides. The marking of
+// stale units records the current time, so update times are not part of the state.
+const SEMANTIC_STATE = {
+  runs: 'SELECT id, workspace, kind, status, total_files, processed_files, indexed_units, lexical_only_units, failed_files, excluded_files, started_at, completed_at, error FROM semantic_index_runs ORDER BY id',
+  units: "SELECT id, relative_path, kind, language, symbol_name, status, error, start_line, end_line, start_offset, end_offset, normalized_text, created_at, indexed_at, embedding_provider_id, embedding_model_id, embedding_model_version, embedding_dimensions, hex(embedding) AS embedding FROM semantic_units WHERE workspace='/work/alpha' ORDER BY id",
+  searchable: "SELECT semantic_units.id FROM semantic_units_fts JOIN semantic_units ON semantic_units.rowid=semantic_units_fts.rowid WHERE semantic_units_fts MATCH 'changed OR gamma OR alpha' ORDER BY semantic_units.id",
+  evidence: "SELECT kind, source_id FROM workspace_evidence WHERE workspace='/work/alpha' AND kind='semantic-index' ORDER BY source_id",
+}
+
+// The write scenario runs on a copy of the seeded database, first through the TypeScript
+// repository and then through Rust, which applies the same steps to its own copy. It covers a
+// replacement that drops a unit, a replacement that fails and must roll back, the removal of a
+// file's units, the stale marking, a deletion and the evidence of an ended run.
+function semanticWriteParity(BetterSqlite3, SemanticIndexRepository, directory) {
+  const copy = path.join(directory, 'semantic-ts.db')
+  fs.copyFileSync(path.join(directory, 'semantic-before.db'), copy)
+  const database = new BetterSqlite3(copy)
+  database.pragma('foreign_keys = ON')
+  const repository = new SemanticIndexRepository(database, {
+    run: (_operation, callback) => database.transaction(callback)(),
+  })
+  const errors = {}
+  repository.createRun(semanticRun({ id: 'sem-w1', kind: 'incremental', status: 'running', startedAt: at(700), updatedAt: at(700) }))
+  repository.replaceFileUnits('/work/alpha', 'src/app.ts', [
+    semanticUnit({ id: 'w-a', status: 'indexed', normalizedText: 'alpha text', location: { startLine: 1, startColumn: 1, endLine: 2, endColumn: 4, startOffset: 0, endOffset: 20 }, createdAt: at(701), updatedAt: at(701), indexedAt: at(701), embeddingSpace: SEMANTIC_SPACE, embedding: [0.5, -0.25, 1.5] }),
+    semanticUnit({ id: 'w-b', kind: 'text', language: null, status: 'lexical-only', normalizedText: 'beta text', createdAt: at(701), updatedAt: at(701) }),
+  ])
+  repository.replaceFileUnits('/work/alpha', 'src/app.ts', [
+    semanticUnit({ id: 'w-b', kind: 'text', language: null, status: 'lexical-only', normalizedText: 'beta changed', createdAt: at(701), updatedAt: at(702) }),
+    semanticUnit({ id: 'w-c', status: 'pending', normalizedText: 'gamma', createdAt: at(702), updatedAt: at(702) }),
+  ])
+  try {
+    repository.replaceFileUnits('/work/alpha', 'src/app.ts', [
+      semanticUnit({ id: 'w-d', status: 'indexed', normalizedText: 'delta', createdAt: at(703), updatedAt: at(703), indexedAt: at(703), embeddingSpace: SEMANTIC_SPACE, embedding: [1, 2, 3] }),
+      semanticUnit({ id: 'w-e', status: 'indexed', normalizedText: 'epsilon', createdAt: at(703), updatedAt: at(703), embeddingSpace: SEMANTIC_SPACE, embedding: [] }),
+    ])
+  } catch (error) {
+    errors.invalidEmbedding = error.message
+  }
+  repository.replaceFileUnits('/work/alpha', 'src/util.ts', [])
+  repository.markFileStale('/work/alpha', 'src/app.ts')
+  repository.deleteFile('/work/alpha', 'src/broken.ts')
+  repository.updateRun(semanticRun({ id: 'sem-w1', kind: 'incremental', status: 'completed', totalFiles: 2, processedFiles: 2, lexicalOnlyUnits: 1, startedAt: at(700), updatedAt: at(702), completedAt: at(702) }))
+  const state = Object.fromEntries(Object.entries(SEMANTIC_STATE).map(([name, sql]) => [name, database.prepare(sql).all()]))
+  database.close()
+  return { ...state, errors }
+}
+
 function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review) {
   const copy = path.join(directory, 'suggestions-ts.db')
   fs.copyFileSync(path.join(directory, 'suggestions-before.db'), copy)
@@ -628,6 +742,7 @@ const { SuggestionRepository } = createRequire(path.join(buildDirectory, 'probe.
 const { suggestionIdentity, sanitizeSuggestionTitle } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/suggestions.js')
 const { isSafeBrainMemoryContent } = createRequire(path.join(buildDirectory, 'probe.js'))('./shared/brainMemory.js')
 const { ProjectIndexRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/ProjectIndexRepository.js')
+const { SemanticIndexRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/SemanticIndexRepository.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
 const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
@@ -638,16 +753,19 @@ try {
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'parity.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'suggestions-before.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'project-before.db')}'`)
+  copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'semantic-before.db')}'`)
   copy.close()
   const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
   const suggestionSnapshot = suggestionParity(BetterSqlite3, SuggestionRepository, gateDirectory, SUGGESTION_REVIEW)
   const changeScenario = changeParity(BetterSqlite3, ProjectIndexRepository, gateDirectory)
+  const semanticWrite = semanticWriteParity(BetterSqlite3, SemanticIndexRepository, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'evidence-expected.json'), `${JSON.stringify(evidence, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'change-expected.json'), `${JSON.stringify(changeScenario, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'semantic-write-expected.json'), `${JSON.stringify(semanticWrite, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'),`${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
   const run = spawnSync(
     'cargo',

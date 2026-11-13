@@ -203,7 +203,14 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     named after the last segment of the workspace path, whichever separator it uses. The
     change scenario is replayed on a copy: the paths a change no longer finds are removed,
     and a stored path with a backslash is not taken for a path under a directory, as in
-    TypeScript (this commit).
+    TypeScript (`6bf7710`).
+  - Semantic index: units with their embeddings, runs and the summary. A file's units are
+    replaced as one unit of work, and a refused embedding rolls the whole replacement back.
+    An embedding is stored as little-endian `f32`, and a stored vector whose length disagrees
+    with its space fails the read. Ending a run records its units as semantic-index evidence
+    in the same unit. Lexical search requires every token to match, and only indexed and
+    lexical-only units are searchable. The run's index-version column is not part of the run
+    contract, so the gate removes it on the TypeScript side.
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
@@ -224,12 +231,17 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   internal `existsFlag` alias; Rust does not reproduce it, and the gate removes it on the
   TypeScript side. It goes away with the TypeScript repository.
   Workspace evidence is checked by a third scenario, with its stale-clock values masked
-  because each run records its own time. Approvals are not in the gate yet.
+  because each run records its own time. The semantic index is read through the main gate
+  and its write scenario is replayed on a copy: two replacements, a refused replacement that
+  must roll back, the removal of a file's units, stale marking, a deletion and the evidence
+  of an ended run. The lexical rank is SQLite's bm25 value, and it keeps 12 significant
+  digits on both sides, because better-sqlite3 ships SQLite 3.53.4 and the Rust build bundles
+  3.54.1, which differ in the last bit. Approvals are not in the gate yet.
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** semantic index, engineering intelligence, backup and import,
-  recovery, and the `Database` facade.
+- **Remaining, phase 2:** engineering intelligence, backup and import, recovery, and the
+  `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

@@ -44,6 +44,14 @@ pub mod code_intelligence {
     pub const MAX_QUERY_RESULTS: u64 = 100;
 }
 
+pub mod semantic_index {
+    /// Units returned by a unit listing, when the caller asks for no limit or a larger one.
+    pub const MAX_UNITS: u64 = 50_000;
+    /// Lexical matches returned by one search, and the default when the caller gives no limit.
+    pub const MAX_LEXICAL_RESULTS: u64 = 100;
+    pub const DEFAULT_LEXICAL_RESULTS: u64 = 50;
+}
+
 pub mod engineering_intelligence {
     pub const MAX_SIGNALS: u64 = 500;
     pub const MAX_EVIDENCE_PER_SIGNAL: u64 = 20;

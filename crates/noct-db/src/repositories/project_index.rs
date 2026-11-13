@@ -16,10 +16,9 @@ use noct_core::limits::code_intelligence::{MAX_FILES, MAX_QUERY_RESULTS};
 use noct_core::text::js_trim;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::{Connection, Row, params, params_from_iter};
-use serde::de::DeserializeOwned;
 
 use crate::clock::iso_now;
-use crate::codec::{enum_text, enum_value};
+use crate::codec::{Stored, enum_text};
 use crate::repositories::workspace_evidence::WorkspaceEvidence;
 use crate::{Error, Result, transaction};
 
@@ -666,19 +665,6 @@ fn normalize_requested(value: &str) -> String {
     let slashes = value.replace('\\', "/");
     let relative = slashes.strip_prefix("./").unwrap_or(&slashes);
     relative.strip_suffix('/').unwrap_or(relative).to_string()
-}
-
-/// A stored enum column. Its text is the serde name of the variant. A text that names no variant
-/// is a corrupt row, and it fails the read.
-struct Stored<T>(T);
-
-impl<T: DeserializeOwned> FromSql for Stored<T> {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        let text = value.as_str()?;
-        enum_value(text)
-            .map(Stored)
-            .ok_or_else(|| FromSqlError::Other(format!("valor persistido inválido: {text}").into()))
-    }
 }
 
 /// The imported names, stored as a JSON array of strings.

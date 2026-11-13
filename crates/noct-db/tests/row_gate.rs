@@ -14,6 +14,11 @@ use noct_core::brain_memory::{
     UpdateBrainMemoryInput, is_safe_brain_memory_content,
 };
 use noct_core::code_intelligence::ProjectIndexFile;
+use noct_core::semantic_index::{
+    SemanticEmbeddingSpace, SemanticIndexRun, SemanticRunKind, SemanticRunStatus,
+    SemanticSearchFilters, SemanticUnit, SemanticUnitKind, SemanticUnitLocation,
+    SemanticUnitStatus,
+};
 use noct_core::suggestions::{
     ReviewComparisonItem, SuggestionCategory, SuggestionInput, sanitize_suggestion_title,
     suggestion_identity,
@@ -33,6 +38,9 @@ use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::project_index::ProjectIndex;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
+use noct_db::repositories::semantic_index::{
+    PersistedSemanticUnit, SemanticIndex, SemanticLexicalMatch,
+};
 use noct_db::repositories::settings::Settings;
 use noct_db::repositories::suggestions::Suggestions;
 use noct_db::repositories::validation_runs::ValidationRuns;
@@ -138,6 +146,8 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
 
     let project = ProjectIndex::new(conn);
     let project_file_paths = keys(&expected, "projectFileById");
+    let semantic = SemanticIndex::new(conn);
+    let semantic_ids = keys(&expected, "semanticUnitById");
     let brain = BrainMemories::new(conn);
     let brain_ids = keys(&expected, "brainMemoryById");
     let brain_history_ids = keys(&expected, "brainMemoryHistory");
@@ -243,6 +253,35 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
             "util": project.list_exports("/work/alpha", Some("src/util.ts")).expect("file exports"),
         },
         "projectSummary": project.summary("/work/alpha").expect("summary"),
+        "semanticRunLatest": semantic.latest_run("/work/alpha").expect("latest semantic run"),
+        "semanticSummary": semantic.summary("/work/alpha").expect("semantic summary"),
+        "semanticUnitById": keyed(&semantic_ids, |id| semantic.get_unit("/work/alpha", id)),
+        "semanticUnits": semantic.list_units("/work/alpha", &SemanticSearchFilters::default(), None).expect("semantic units"),
+        "semanticUnitsFiltered": semantic.list_units("/work/alpha", &SemanticSearchFilters {
+            paths: vec!["src/app.ts".to_string()],
+            kinds: vec![SemanticUnitKind::Symbol],
+            symbols: vec!["main".to_string(), "helper".to_string()],
+            ..Default::default()
+        }, None).expect("filtered semantic units"),
+        "semanticUnitsLimited": semantic.list_units("/work/alpha", &SemanticSearchFilters::default(), Some(2)).expect("limited semantic units"),
+        "semanticFileUnits": semantic.list_file_units("/work/alpha", "src/app.ts").expect("file semantic units"),
+        "semanticEmbeddings": semantic.list_indexed_embeddings("/work/alpha", &semantic_space(), &SemanticSearchFilters::default()).expect("embeddings"),
+        "semanticEmbeddingsVersioned": semantic.list_indexed_embeddings("/work/alpha", &SemanticEmbeddingSpace {
+            model_version: Some("2".to_string()),
+            dimensions: 2,
+            ..semantic_space()
+        }, &SemanticSearchFilters::default()).expect("versioned embeddings"),
+        "semanticLexical": {
+            "helper": ranked(semantic.search_lexical("/work/alpha", "helper", &SemanticSearchFilters::default(), None)),
+            "phrase": ranked(semantic.search_lexical("/work/alpha", "  módulo  principal ", &SemanticSearchFilters::default(), None)),
+            "filtered": ranked(semantic.search_lexical("/work/alpha", "helper", &SemanticSearchFilters {
+                paths: vec!["src/util.ts".to_string()],
+                ..Default::default()
+            }, None)),
+            "limited": ranked(semantic.search_lexical("/work/alpha", "helper", &SemanticSearchFilters::default(), Some(1))),
+            "failed": ranked(semantic.search_lexical("/work/alpha", "texto", &SemanticSearchFilters::default(), None)),
+            "blank": ranked(semantic.search_lexical("/work/alpha", "   ", &SemanticSearchFilters::default(), None)),
+        },
     });
 
     for key in expected.as_object().expect("object").keys() {
@@ -314,6 +353,23 @@ fn numbers_as_integers(value: &Value) -> Value {
         ),
         _ => value.clone(),
     }
+}
+
+/// Lexical matches as the gate compares them. The rank keeps 12 significant digits, as the
+/// TypeScript side does: SQLite computes it, and the two builds differ in its last bit.
+fn ranked(matches: Result<Vec<SemanticLexicalMatch>>) -> Value {
+    let matches = matches.expect("lexical search");
+    Value::Array(
+        matches
+            .into_iter()
+            .map(|found| {
+                json!({
+                    "unit": found.unit,
+                    "rank": format!("{:.11e}", found.rank).parse::<f64>().expect("rank"),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// The error text a call returns, or null when it succeeds, as the TypeScript side records it.
@@ -593,4 +649,230 @@ fn removes_changed_files_like_the_typescript_repository() {
         .collect::<rusqlite::Result<_>>()
         .expect("rows");
     assert_eq!(json!(remaining), expected["remaining"]);
+}
+
+/// The queries that read the state of the semantic write scenario. Mirrors `SEMANTIC_STATE` in
+/// `scripts/verify-row-gate.mjs`, which records the state the TypeScript repository leaves.
+const SEMANTIC_STATE: [(&str, &str); 4] = [
+    (
+        "runs",
+        "SELECT id, workspace, kind, status, total_files, processed_files, indexed_units, lexical_only_units, failed_files, excluded_files, started_at, completed_at, error FROM semantic_index_runs ORDER BY id",
+    ),
+    (
+        "units",
+        "SELECT id, relative_path, kind, language, symbol_name, status, error, start_line, end_line, start_offset, end_offset, normalized_text, created_at, indexed_at, embedding_provider_id, embedding_model_id, embedding_model_version, embedding_dimensions, hex(embedding) AS embedding FROM semantic_units WHERE workspace='/work/alpha' ORDER BY id",
+    ),
+    (
+        "searchable",
+        "SELECT semantic_units.id FROM semantic_units_fts JOIN semantic_units ON semantic_units.rowid=semantic_units_fts.rowid WHERE semantic_units_fts MATCH 'changed OR gamma OR alpha' ORDER BY semantic_units.id",
+    ),
+    (
+        "evidence",
+        "SELECT kind, source_id FROM workspace_evidence WHERE workspace='/work/alpha' AND kind='semantic-index' ORDER BY source_id",
+    ),
+];
+
+/// The timestamp `at(second)` gives in the gate script: 12:00:00 UTC plus the seconds, rolled over
+/// the way `Date.UTC` rolls them over.
+fn at(second: u64) -> String {
+    let total = 12 * 3600 + second;
+    format!(
+        "2026-01-01T{:02}:{:02}:{:02}.000Z",
+        (total / 3600) % 24,
+        (total / 60) % 60,
+        total % 60
+    )
+}
+
+/// The embedding space of the semantic fixtures in `scripts/verify-row-gate.mjs`.
+fn semantic_space() -> SemanticEmbeddingSpace {
+    SemanticEmbeddingSpace {
+        provider_id: "local".to_string(),
+        model_id: "mini".to_string(),
+        model_version: None,
+        dimensions: 3,
+    }
+}
+
+/// A unit with the defaults `semanticUnit` gives in the gate script, in `src/app.ts`.
+fn fixture_unit(id: &str, status: SemanticUnitStatus, text: &str, created: &str) -> SemanticUnit {
+    SemanticUnit {
+        id: id.to_string(),
+        workspace: "/work/alpha".to_string(),
+        relative_path: "src/app.ts".to_string(),
+        kind: SemanticUnitKind::Symbol,
+        language: Some("TypeScript".to_string()),
+        symbol_id: None,
+        symbol_name: None,
+        location: SemanticUnitLocation {
+            start_line: 1,
+            start_column: 1,
+            end_line: 1,
+            end_column: 10,
+            start_offset: None,
+            end_offset: None,
+        },
+        source_hash: "a".repeat(64),
+        chunk_hash: "b".repeat(64),
+        normalized_text: text.to_string(),
+        chunk_strategy_version: "symbols-v2".to_string(),
+        embedding_space: None,
+        status,
+        error: None,
+        created_at: created.to_string(),
+        updated_at: created.to_string(),
+        indexed_at: None,
+    }
+}
+
+fn persisted(unit: SemanticUnit, embedding: Option<Vec<f64>>) -> PersistedSemanticUnit {
+    PersistedSemanticUnit { unit, embedding }
+}
+
+/// The write scenario of `scripts/verify-row-gate.mjs`, replayed on the copy saved before it with
+/// the same steps and values. The state it leaves must equal the one the TypeScript repository
+/// left, and the refused replacement must have changed nothing.
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn applies_semantic_writes_like_the_typescript_repository() {
+    const ALPHA: &str = "/work/alpha";
+    const APP: &str = "src/app.ts";
+    let directory = scratch("row-gate-semantic");
+    fs::create_dir_all(&directory).expect("scratch directory");
+    fs::copy(
+        gate_directory().join("semantic-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before the writes");
+    let db = Database::open(&directory).expect("open the copy");
+    let conn = db.connection();
+    let index = SemanticIndex::new(conn);
+
+    index
+        .create_run(&SemanticIndexRun {
+            id: "sem-w1".to_string(),
+            workspace: ALPHA.to_string(),
+            kind: SemanticRunKind::Incremental,
+            status: SemanticRunStatus::Running,
+            total_files: 0,
+            processed_files: 0,
+            indexed_units: 0,
+            lexical_only_units: 0,
+            failed_files: 0,
+            excluded_files: 0,
+            started_at: at(700),
+            completed_at: None,
+            updated_at: at(700),
+            error: None,
+        })
+        .expect("create run");
+
+    let mut w_a = fixture_unit("w-a", SemanticUnitStatus::Indexed, "alpha text", &at(701));
+    w_a.location = SemanticUnitLocation {
+        start_line: 1,
+        start_column: 1,
+        end_line: 2,
+        end_column: 4,
+        start_offset: Some(0),
+        end_offset: Some(20),
+    };
+    w_a.indexed_at = Some(at(701));
+    w_a.embedding_space = Some(semantic_space());
+    let mut w_b = fixture_unit(
+        "w-b",
+        SemanticUnitStatus::LexicalOnly,
+        "beta text",
+        &at(701),
+    );
+    w_b.kind = SemanticUnitKind::Text;
+    w_b.language = None;
+    index
+        .replace_file_units(
+            ALPHA,
+            APP,
+            &[
+                persisted(w_a, Some(vec![0.5, -0.25, 1.5])),
+                persisted(w_b, None),
+            ],
+        )
+        .expect("first replacement");
+
+    let mut changed = fixture_unit(
+        "w-b",
+        SemanticUnitStatus::LexicalOnly,
+        "beta changed",
+        &at(701),
+    );
+    changed.kind = SemanticUnitKind::Text;
+    changed.language = None;
+    changed.updated_at = at(702);
+    index
+        .replace_file_units(
+            ALPHA,
+            APP,
+            &[
+                persisted(changed, None),
+                persisted(
+                    fixture_unit("w-c", SemanticUnitStatus::Pending, "gamma", &at(702)),
+                    None,
+                ),
+            ],
+        )
+        .expect("second replacement");
+
+    let mut w_d = fixture_unit("w-d", SemanticUnitStatus::Indexed, "delta", &at(703));
+    w_d.indexed_at = Some(at(703));
+    w_d.embedding_space = Some(semantic_space());
+    let mut w_e = fixture_unit("w-e", SemanticUnitStatus::Indexed, "epsilon", &at(703));
+    w_e.embedding_space = Some(semantic_space());
+    let refused = index.replace_file_units(
+        ALPHA,
+        APP,
+        &[
+            persisted(w_d, Some(vec![1.0, 2.0, 3.0])),
+            persisted(w_e, Some(Vec::new())),
+        ],
+    );
+
+    index
+        .replace_file_units(ALPHA, "src/util.ts", &[])
+        .expect("clear the units of the util file");
+    index
+        .mark_file_stale(ALPHA, APP, None)
+        .expect("mark the file stale");
+    index
+        .delete_file(ALPHA, "src/broken.ts")
+        .expect("delete the broken file");
+    index
+        .update_run(&SemanticIndexRun {
+            id: "sem-w1".to_string(),
+            workspace: ALPHA.to_string(),
+            kind: SemanticRunKind::Incremental,
+            status: SemanticRunStatus::Completed,
+            total_files: 2,
+            processed_files: 2,
+            indexed_units: 0,
+            lexical_only_units: 1,
+            failed_files: 0,
+            excluded_files: 0,
+            started_at: at(700),
+            completed_at: Some(at(702)),
+            updated_at: at(702),
+            error: None,
+        })
+        .expect("complete the run");
+
+    let mut actual = Map::new();
+    for (name, sql) in SEMANTIC_STATE {
+        actual.insert(name.to_string(), rows_json(conn, sql));
+    }
+    actual.insert(
+        "errors".to_string(),
+        json!({ "invalidEmbedding": error_of(refused) }),
+    );
+    let text = fs::read_to_string(gate_directory().join("semantic-write-expected.json"))
+        .expect("semantic-write-expected.json");
+    let expected: Value =
+        serde_json::from_str(&text).expect("semantic-write-expected.json is JSON");
+    assert_eq!(Value::Object(actual), expected);
 }
