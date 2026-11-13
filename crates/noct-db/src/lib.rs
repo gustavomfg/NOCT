@@ -10,6 +10,7 @@ pub mod migrations;
 pub mod repositories;
 pub mod runtime;
 pub mod schema;
+pub(crate) mod text;
 pub mod transaction;
 
 pub use runtime::Database;

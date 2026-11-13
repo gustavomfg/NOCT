@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use super::Page;
 use crate::clock::iso_now;
+use crate::text::{collapse_js_whitespace, utf16_prefix};
 use crate::{Error, Result, transaction};
 
 const NEW_CONVERSATION_TITLE: &str = "Nova conversa";
@@ -304,43 +305,4 @@ fn title_from_prompt(prompt: &str) -> String {
     } else {
         title
     }
-}
-
-/// Replaces every run of JavaScript `\s` characters with one space.
-fn collapse_js_whitespace(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut in_run = false;
-    for c in text.chars() {
-        if is_js_whitespace(c) {
-            if !in_run {
-                out.push(' ');
-                in_run = true;
-            }
-        } else {
-            out.push(c);
-            in_run = false;
-        }
-    }
-    out
-}
-
-/// JavaScript's `\s` and `String#trim` set. It differs from Rust's `char::is_whitespace`:
-/// it includes U+FEFF and omits U+0085.
-fn is_js_whitespace(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0b}' | '\u{0c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200a}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202f}'
-                | '\u{205f}'
-                | '\u{3000}'
-                | '\u{feff}'
-    )
-}
-
-fn utf16_prefix(text: &str, units: usize) -> String {
-    let prefix: Vec<u16> = text.encode_utf16().take(units).collect();
-    String::from_utf16_lossy(&prefix)
 }
