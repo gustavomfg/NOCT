@@ -114,7 +114,7 @@ against the Rust code, or the difference must be recorded as an intentional chan
 | --- | --- | --- |
 | 0. Foundation | Workspace; `noct-native` (Linux); `noct-core` limits and contracts; Tauri shell | **Done on branch**: see [Evidence](#evidence) |
 | 1. Contracts | `shared/` (3,100) to `noct-core` | Contract tests; JSON fixtures produced by the TypeScript code |
-| 2. Persistence | `electron/database` + `persistence` (about 5,000) to `noct-db` | Database, migration, durability and recovery tests; real schema-32 fixtures |
+| 2. Persistence | `electron/database` + `persistence` (about 5,000) to `noct-db` | Database, migration, durability and recovery tests; real schema-32 fixtures. **In progress**: see [Progress](#progress) |
 | 3. Native rollback | macOS (APFS clone, `renameatx_np`) and Windows (232-line header) backends | `native-rollback-validation.yml` on Linux, macOS and Windows |
 | 4. Workspace services | workspaces, change control, project index, semantic index, validation, engineering (about 6,000) | Their Vitest suites, ported |
 | 5. AI | `electron/ai` and `security` (about 4,100) | Provider adapter, tool loop and vault tests |
@@ -125,6 +125,32 @@ against the Rust code, or the difference must be recorded as an intentional chan
 
 Phases 1 to 4 can overlap once phase 2 lands. Phase 7 cannot start before phase
 6, because the UI calls the commands that phase 6 defines.
+
+### Progress
+
+Recorded on branch `migration/rust`. Each item names the commit that delivers it.
+
+- **Done, phase 2 (persistence):**
+  - Runtime: open order, pragmas, schema-newer refusal, pre-migration backup with
+    retention, transactional migrations, 7-day integrity check, orphan cleanup,
+    recovery snapshots, close (`85f538f`).
+  - Migrations 1 to 32, generated from `electron/database/migrations.ts`. Sixty-three
+    schema fingerprints (fresh, every legacy state, every upgrade path) match the
+    TypeScript output (`85f538f`).
+  - Settings, workspace history without `relocate`, conversations and messages,
+    with transaction nesting as savepoints (`abbc412`).
+- **Remaining, phase 2:** `WorkspaceRepository.relocate` and
+  `WorkspaceModelBindingRepository` (they need the AI binding schemas), artifacts,
+  approvals, workspace memory, operation recovery, model catalog, provider
+  configuration, checkpoints, executions and evidence, change sets, validation,
+  suggestions, brain memories, project index, semantic index, engineering
+  intelligence, backup and import, recovery, and the `Database` facade.
+- **Not started:** phases 3 to 9.
+
+The schema gate is stronger than the row gate. Identical schemas, plus repository
+tests written from the TypeScript rules, do not yet prove that existing rows read back
+identically. A fixture database produced by the TypeScript application at schema 32,
+read by Rust, is still required before phase 2 closes.
 
 ## Open decisions
 
