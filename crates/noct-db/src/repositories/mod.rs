@@ -7,6 +7,7 @@ pub mod approvals;
 pub mod artifacts;
 pub mod conversations;
 pub mod model_catalog;
+pub mod provider_configurations;
 pub mod settings;
 pub mod workspace_memory;
 pub mod workspace_model_bindings;

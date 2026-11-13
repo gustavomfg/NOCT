@@ -92,8 +92,31 @@ function seed(LocalDatabase, directory) {
     remoteEmbeddingAllowed: false,
   })
 
+  // Provider configurations keep only a credential reference. The secret itself lives in
+  // the operating system store, so the seed uses a fixed reference and no secret.
+  const localProvider = db.providerConfigurations.create({
+    providerType: 'chat-completions',
+    displayName: '  Local  ',
+    source: 'local',
+    baseUrl: ' http://127.0.0.1:11434 ',
+    enabled: true,
+    requiresAuthentication: false,
+    timeoutMs: 30000,
+  })
+  db.providerConfigurations.create({
+    providerType: 'chat-completions',
+    displayName: 'Remoto',
+    source: 'remote',
+    baseUrl: 'https://api.example.test/v1',
+    enabled: false,
+    requiresAuthentication: true,
+    timeoutMs: 120000,
+  }, '6f9619ff-8b86-4d11-b42d-00c04fc964ff')
+  db.providerConfigurations.setCredentialReference(localProvider.id, '0f3e5b8a-2c4d-4e6f-8a9b-1c2d3e4f5a6b')
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
+  const providers = db.providerConfigurations.list()
   const expected = {
     modelCatalog: db.modelCatalog.list(),
     workspaceModelBindings: db.workspaceModelBindings.list(),
@@ -104,6 +127,9 @@ function seed(LocalDatabase, directory) {
     recentMessages: Object.fromEntries(conversations.map((row) => [row.id, db.listRecentMessages(row.id, 200)])),
     artifacts: Object.fromEntries(conversations.map((row) => [row.id, db.listArtifacts(row.id)])),
     workspaceMemory: Object.fromEntries(workspaces.map((row) => [row.path, db.getWorkspaceMemory(row.path)])),
+    providerConfigurations: providers,
+    providerConfigurationById: Object.fromEntries(providers.map((row) => [row.id, db.providerConfigurations.get(row.id)])),
+    providerCredentialReferences: db.providerConfigurations.listCredentialReferences().sort(),
   }
   db.close()
   return expected

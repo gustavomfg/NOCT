@@ -155,18 +155,28 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   wallet, which the vault reports as unavailable. A full round-trip needs an
   unlocked collection. The macOS and Windows backends are compiled only for their
   targets and are not verified here.
-- **Remaining, phase 2:** `WorkspaceRepository.relocate` and
-  `WorkspaceModelBindingRepository` (they need the AI binding schemas), artifacts,
-  approvals, workspace memory, operation recovery, model catalog, provider
-  configuration, checkpoints, executions and evidence, change sets, validation,
-  suggestions, brain memories, project index, semantic index, engineering
-  intelligence, backup and import, recovery, and the `Database` facade.
+- **Done, phase 2 (repositories, continued):**
+  - Model descriptors and workspace bindings contracts, with Zod-identical
+    serialization of numbers and key order (`5941b7f`).
+  - Model catalog, workspace model bindings and `WorkspaceRepository.relocate`, in
+    one transaction (`e1082a1`).
+  - Artifacts, approvals and workspace memory (`33728e7`).
+  - Provider configurations. The table holds only a UUID credential reference; the
+    secret stays in the operating system store (this commit).
+- **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
+  schema-32 database in a temporary directory and record the rows they return. Rust
+  must return the same rows for model catalog, bindings, settings, workspaces,
+  conversations, messages, artifacts, workspace memory and provider configurations.
+  Approvals are not in the gate yet.
+- **Remaining, phase 2:** operation recovery, checkpoints, executions and evidence,
+  change sets, validation, suggestions, brain memories, project index, semantic index,
+  engineering intelligence, backup and import, recovery, and the `Database` facade.
+  Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 
-The schema gate is stronger than the row gate. Identical schemas, plus repository
-tests written from the TypeScript rules, do not yet prove that existing rows read back
-identically. A fixture database produced by the TypeScript application at schema 32,
-read by Rust, is still required before phase 2 closes.
+The row gate now reads rows that the TypeScript repositories wrote at schema 32. It
+does not yet read databases from earlier releases, which the migration fingerprints
+cover only for their schema. Phase 2 stays open until those are covered.
 
 ## Open decisions
 

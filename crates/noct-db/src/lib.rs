@@ -25,4 +25,10 @@ pub enum Error {
     Message(String),
 }
 
+impl From<noct_core::validation::ContractError> for Error {
+    fn from(error: noct_core::validation::ContractError) -> Self {
+        Self::Message(error.to_string())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

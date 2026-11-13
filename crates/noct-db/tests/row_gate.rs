@@ -11,6 +11,7 @@ use noct_db::Result;
 use noct_db::repositories::artifacts::Artifacts;
 use noct_db::repositories::conversations::Conversations;
 use noct_db::repositories::model_catalog::ModelCatalog;
+use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::settings::Settings;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
 use noct_db::repositories::workspace_model_bindings::ModelBindings;
@@ -72,6 +73,17 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
     let conversations_api = Conversations::new(conn);
     let artifacts_api = Artifacts::new(conn);
     let memory_api = WorkspaceMemory::new(conn);
+    let providers_api = ProviderConfigurations::new(conn);
+    let provider_ids: Vec<String> = providers_api
+        .list()
+        .expect("providers")
+        .iter()
+        .map(|row| row.id.clone())
+        .collect();
+    let mut provider_references = providers_api
+        .credential_references()
+        .expect("credential references");
+    provider_references.sort();
 
     let actual = json!({
         "modelCatalog": ModelCatalog::new(conn).list(None).expect("model catalog"),
@@ -83,6 +95,9 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         "recentMessages": keyed(&conversation_ids, |id| conversations_api.list_recent_messages(id, 200)),
         "artifacts": keyed(&conversation_ids, |id| artifacts_api.list(id)),
         "workspaceMemory": keyed(&workspace_paths, |path| memory_api.get(path)),
+        "providerConfigurations": providers_api.list().expect("providers"),
+        "providerConfigurationById": keyed(&provider_ids, |id| providers_api.get(id)),
+        "providerCredentialReferences": provider_references,
     });
 
     for key in expected.as_object().expect("object").keys() {
