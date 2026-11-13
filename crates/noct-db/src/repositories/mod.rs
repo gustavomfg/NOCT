@@ -6,8 +6,10 @@
 pub mod approvals;
 pub mod artifacts;
 pub mod conversations;
+pub mod model_catalog;
 pub mod settings;
 pub mod workspace_memory;
+pub mod workspace_model_bindings;
 pub mod workspaces;
 
 /// One page of a list, plus whether a further page exists.

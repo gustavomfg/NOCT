@@ -10,8 +10,10 @@ use noct_db::Database;
 use noct_db::Result;
 use noct_db::repositories::artifacts::Artifacts;
 use noct_db::repositories::conversations::Conversations;
+use noct_db::repositories::model_catalog::ModelCatalog;
 use noct_db::repositories::settings::Settings;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
+use noct_db::repositories::workspace_model_bindings::ModelBindings;
 use noct_db::repositories::workspaces::Workspaces;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -72,6 +74,8 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
     let memory_api = WorkspaceMemory::new(conn);
 
     let actual = json!({
+        "modelCatalog": ModelCatalog::new(conn).list(None).expect("model catalog"),
+        "workspaceModelBindings": ModelBindings::new(conn).list().expect("bindings"),
         "settings": Settings::new(conn).get().expect("settings"),
         "workspaces": workspaces,
         "conversations": conversations,

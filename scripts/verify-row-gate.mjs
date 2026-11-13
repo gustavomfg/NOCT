@@ -69,9 +69,34 @@ function seed(LocalDatabase, directory) {
     ],
     settings: { theme: 'light', language: 'en', approvalPolicy: 'untrusted' },
   })
+  // Catalog and bindings are written through the TypeScript repositories, so their stored
+  // text is what the application writes, including zod's trimming and key order.
+  db.modelCatalog.replaceProviderModels('provider-1', [
+    { providerId: ' provider-1 ', modelId: 'model-b', displayName: '  Modelo B  ', source: 'local', capabilities: ['chat', 'streaming'], contextWindow: 8192, availability: 'available' },
+    {
+      providerId: 'provider-1',
+      modelId: 'model-a',
+      displayName: 'Modelo A',
+      family: 'alpha',
+      source: 'remote',
+      capabilities: ['chat', 'tool-calling', 'vision'],
+      maxOutputTokens: 4096,
+      pricing: { currency: 'USD', inputPerMillionTokens: 2, outputPerMillionTokens: 0.000001, effectiveAt: ' 2026-01-01 ' },
+      availability: 'available',
+    },
+  ])
+  db.workspaceModelBindings.set({
+    workspaceId: '/work/alpha',
+    defaultBinding: { providerId: 'provider-1', modelId: 'model-a' },
+    embeddingBinding: { providerId: 'provider-1', modelId: 'model-b' },
+    remoteEmbeddingAllowed: false,
+  })
+
   const workspaces = db.listWorkspaces()
   const conversations = db.listConversations()
   const expected = {
+    modelCatalog: db.modelCatalog.list(),
+    workspaceModelBindings: db.workspaceModelBindings.list(),
     settings: db.getSettings(),
     workspaces,
     conversations,

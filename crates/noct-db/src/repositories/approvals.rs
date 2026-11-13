@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::Result;
 use crate::clock::iso_now;
-use crate::text::utf16_prefix;
+use noct_core::text::utf16_prefix;
 
 /// Commands are stored up to this many UTF-16 code units.
 const COMMAND_UTF16_UNITS: usize = 4_000;

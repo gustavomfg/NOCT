@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use super::Page;
 use crate::clock::iso_now;
-use crate::text::{collapse_js_whitespace, utf16_prefix};
 use crate::{Error, Result, transaction};
+use noct_core::text::{collapse_js_whitespace, utf16_prefix};
 
 const NEW_CONVERSATION_TITLE: &str = "Nova conversa";
 /// Titles derived from a prompt keep this many UTF-16 code units, as `String#slice` does.
