@@ -13,6 +13,7 @@ pub mod recovery;
 pub mod repositories;
 pub mod runtime;
 pub mod schema;
+pub mod store;
 pub mod transaction;
 
 pub use runtime::Database;

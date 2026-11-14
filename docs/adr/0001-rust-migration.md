@@ -283,9 +283,19 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** the `Database` facade, whose workflows (brain memory retrieval,
-  paged artifacts and suggestions, prompt renaming, conversation deletion) are not all ported.
-  Upgrade fixtures written by earlier application releases are also still needed.
+  - Facade: `noct_db::store::Store` is the `LocalDatabase` of the TypeScript application. Opening
+    it records the operations that the last run left running, as the constructor does. It
+    exposes every repository through an accessor, which is a view over the connection, and it
+    runs the two workflows that span repositories: a conversation opens its workspace first, and
+    an assistant turn (the message, its markdown copy and its artifacts) is one transaction, so
+    a refused artifact leaves nothing behind. The TypeScript convenience methods are not copied,
+    because callers use the accessors. The markdown title of a reply is passed in, since the
+    TypeScript title depends on the locale's date format and the interface knows the language.
+    The brain memory retrieval, the paged lists and the other methods that only delegate are
+    repository calls.
+- **Remaining, phase 2:** upgrade fixtures written by earlier application releases, which the
+  row gate has to read from each release's database, and the operation timing observer, which
+  goes with the diagnostics command.
 - **Not started:** phases 3 to 9.
 
 The row gate now reads rows that the TypeScript repositories wrote at schema 32. It
