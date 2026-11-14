@@ -236,6 +236,15 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     filesystem I/O and need the database closed, so the application runs them off the
     interactive path. A failed final rename is not tested, because the Rust tests cannot inject
     it; the other rollback steps are.
+  - Persistence helpers: an atomic file write (a temporary file in the same directory, synced
+    and renamed over the target, created with the mode the caller passes), a queue that serializes the writes
+    that share a key, and the choice of the product's data directory after a rename. The queue
+    keeps writes on one key in order, lets other keys run in parallel, and forgets a key once
+    nothing is pending on it, even after a panic. The migration keeps the rules of the
+    TypeScript version. Injected failures of the TypeScript tests (a denied rename, a disk that
+    fills up) are not reproducible here; the Rust tests use real failures for the rollback.
+    The suggestion decision log reads the workspace memory through the workspace read policy,
+    so it is ported with the workspace services.
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
@@ -274,7 +283,8 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** the `Database` facade.
+- **Remaining, phase 2:** the `Database` facade, whose workflows (brain memory retrieval,
+  paged artifacts and suggestions, prompt renaming, conversation deletion) are not all ported.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

@@ -8,6 +8,7 @@
 mod clock;
 mod codec;
 pub mod migrations;
+pub mod persistence;
 pub mod recovery;
 pub mod repositories;
 pub mod runtime;
