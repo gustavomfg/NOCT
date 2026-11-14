@@ -57,6 +57,7 @@ use noct_db::repositories::workspace_evidence::WorkspaceEvidence;
 use noct_db::repositories::workspace_memory::WorkspaceMemory;
 use noct_db::repositories::workspace_model_bindings::ModelBindings;
 use noct_db::repositories::workspaces::Workspaces;
+use noct_db::store::Store;
 use rusqlite::Connection;
 use rusqlite::types::ValueRef;
 use serde::Serialize;
@@ -1246,6 +1247,44 @@ fn backup_export(conn: &Connection) -> Value {
 fn backup_metrics(conn: &Connection) -> Value {
     let metrics = Backup::new(conn).export_metrics().expect("backup metrics");
     json!({ "records": metrics.records, "estimatedBytes": metrics.estimated_bytes })
+}
+
+/// A database that release 0.9.5-beta wrote is opened and upgraded by Rust. Its schema version
+/// and every collection of its export must match the TypeScript upgrade of the same file.
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn upgrades_legacy_databases_like_the_typescript_repository() {
+    let directory = scratch("row-gate-legacy");
+    fs::copy(
+        gate_directory().join("legacy-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the legacy database");
+    let store = Store::open(&directory).expect("open and upgrade the legacy copy");
+    let actual = numbers_as_integers(&json!({
+        "userVersion": noct_db::schema::user_version(store.connection()).expect("user version"),
+        "exported": backup_export(store.connection()),
+    }));
+    let expected = numbers_as_integers(&gate_json("legacy-expected.json"));
+    // The comparison is only meaningful when the legacy rows reached the reference.
+    for collection in ["conversations", "messages", "suggestions", "brainMemories"] {
+        assert!(
+            expected["exported"][collection]
+                .as_array()
+                .is_some_and(|rows| !rows.is_empty()),
+            "the legacy fixture has no `{collection}`"
+        );
+    }
+    assert_eq!(
+        actual["userVersion"], expected["userVersion"],
+        "user version differs"
+    );
+    for collection in expected["exported"].as_object().expect("export").keys() {
+        assert_eq!(
+            actual["exported"][collection], expected["exported"][collection],
+            "`{collection}` differs from the TypeScript upgrade"
+        );
+    }
 }
 
 fn gate_json(name: &str) -> Value {

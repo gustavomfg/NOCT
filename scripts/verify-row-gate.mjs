@@ -11,8 +11,10 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import vm from 'node:vm'
 
 const root = path.resolve(import.meta.dirname, '..')
 const ts = createRequire(path.join(root, 'package.json'))('typescript')
@@ -915,6 +917,115 @@ function backupImportParity(LocalDatabase, directory) {
   }
 }
 
+// The 0.9.5-beta release wrote the databases that the current application upgrades. Its migrations
+// are read from git and run as they ran then, and the rows are the ones the rehearsal test writes,
+// so the upgrade starts from a real legacy state. The TypeScript export of the upgraded copy is the
+// reference, and Rust must export the same from the same file.
+const LEGACY_BASELINE_COMMIT = 'f793b9cd2e3dd03d1df7ba79da56007400a60e8f'
+const LEGACY_MIGRATIONS_SHA256 = '8c1f02005533440f73b733a374c9d5faab05ae990378866b5a1534f6666e67f5'
+
+function legacyMigrationSource() {
+  let source
+  try {
+    source = execFileSync('git', ['show', `${LEGACY_BASELINE_COMMIT}:electron/database/migrations.ts`], { cwd: root, encoding: 'utf8' })
+  } catch {
+    // Without the commit, the working-tree file is the same file when its digest matches.
+    source = fs.readFileSync(path.join(root, 'electron/database/migrations.ts'), 'utf8')
+  }
+  if (createHash('sha256').update(source).digest('hex') !== LEGACY_MIGRATIONS_SHA256) {
+    throw new Error('As migrações de 0.9.5-beta não foram encontradas.')
+  }
+  return source
+}
+
+function legacyMigrations() {
+  const output = ts.transpileModule(legacyMigrationSource(), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText
+  const module = { exports: {} }
+  vm.runInNewContext(output, { module, exports: module.exports })
+  return module.exports.migrations
+}
+
+// The rows match `createHistoricalFixture` in tests/migrationRehearsal.test.ts.
+function createLegacyDatabase(BetterSqlite3, userDataPath) {
+  const workspace = path.join(userDataPath, 'legacy-project')
+  fs.mkdirSync(workspace)
+  const database = new BetterSqlite3(path.join(userDataPath, 'nocturne.db'))
+  database.pragma('foreign_keys = ON')
+  database.transaction(() => {
+    for (const migration of legacyMigrations()) {
+      migration.up(database)
+      database.pragma(`user_version = ${migration.version}`)
+    }
+  })()
+  const ids = {
+    conversation: '00000000-0000-4000-8000-000000000001',
+    message: '00000000-0000-4000-8000-000000000002',
+    artifact: '00000000-0000-4000-8000-000000000003',
+    suggestion: '00000000-0000-4000-8000-000000000004',
+    decision: '00000000-0000-4000-8000-000000000005',
+    memory: '00000000-0000-4000-8000-000000000006',
+    history: '00000000-0000-4000-8000-000000000007',
+    provider: '00000000-0000-4000-8000-000000000008',
+    credentialReference: '00000000-0000-4000-8000-000000000009',
+  }
+  const timestamp = '2026-07-31T16:00:00.000Z'
+  database.prepare(`INSERT INTO workspaces(path,name,favorite,authorized,created_at,last_opened_at)
+    VALUES(?,?,?,?,?,?)`).run(workspace, 'Fixture project', 1, 1, timestamp, timestamp)
+  database.prepare(`INSERT INTO conversations(id,title,workspace,codex_thread_id,created_at,updated_at)
+    VALUES(?,?,?,?,?,?)`).run(ids.conversation, 'Conversa histórica', workspace, 'thread-0-9-5', timestamp, timestamp)
+  database.prepare(`INSERT INTO messages(id,conversation_id,role,content,metadata,created_at)
+    VALUES(?,?,?,?,?,?)`).run(ids.message, ids.conversation, 'assistant', 'Resposta preservada', '{"source":"fixture"}', timestamp)
+  database.prepare(`INSERT INTO artifacts(id,conversation_id,workspace,type,title,file_path,content,metadata,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`).run(ids.artifact, ids.conversation, workspace, 'markdown', 'Documento preservado', 'docs/fixture.md', '# Conteúdo histórico', '{}', timestamp, timestamp)
+  database.prepare(`INSERT INTO workspace_memory(workspace,content,updated_at) VALUES(?,?,?)`)
+    .run(workspace, 'Memória histórica do workspace.', timestamp)
+  database.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,evidence,confidence,source,responsible,status,result,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    ids.suggestion, workspace, ids.conversation, 'Sugestão histórica', 'Descrição preservada', 'Justificativa preservada', 'testing', 'medium',
+    '["src/app.ts"]', 'Alteração proposta', '["Benefício preservado"]', 'medium', 'low', '[{"source":"fixture","detail":"Evidência preservada"}]', 85,
+    'Revisão 0.9.5', 'Equipe', 'deferred', null, timestamp, timestamp,
+  )
+  database.prepare(`INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)`)
+    .run(ids.decision, ids.suggestion, 'deferred', 'Adiada pelo usuário', timestamp)
+  database.prepare(`INSERT INTO brain_memories(id,workspace_id,conversation_id,kind,scope,status,content,confidence,source_type,source_id,created_at,updated_at,last_confirmed_at,last_used_at,use_count)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    ids.memory, workspace, null, 'decision', 'workspace', 'active', 'Decisão histórica preservada.', 90, 'manual', null, timestamp, timestamp, timestamp, null, 0,
+  )
+  database.prepare(`INSERT INTO brain_memory_history(id,memory_id,action,from_status,to_status,summary,created_at)
+    VALUES(?,?,?,?,?,?,?)`).run(ids.history, ids.memory, 'created', null, 'active', 'Histórico preservado.', timestamp)
+  database.prepare(`INSERT INTO provider_configs(id,provider_type,display_name,source,base_url,enabled,requires_authentication,credential_ref,timeout_ms,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(ids.provider, 'openai-compatible', 'Provider histórico', 'remote', 'https://example.invalid/v1', 1, 1, ids.credentialReference, 30_000, timestamp, timestamp)
+  const descriptor = JSON.stringify({ providerId: ids.provider, modelId: 'historical-model', displayName: 'Historical Model', source: 'remote', capabilities: ['chat'], availability: 'missing-credentials' })
+  database.prepare(`INSERT INTO model_catalog(provider_id,model_id,descriptor,updated_at) VALUES(?,?,?,?)`)
+    .run(ids.provider, 'historical-model', descriptor, timestamp)
+  database.prepare(`INSERT INTO workspace_model_bindings(workspace_id,bindings,updated_at) VALUES(?,?,?)`)
+    .run(workspace, JSON.stringify({ workspaceId: workspace, defaultBinding: { providerId: ids.provider, modelId: 'historical-model' } }), timestamp)
+  database.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('approvalPolicy', 'on-request')
+  database.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('fixtureSetting', 'preserved')
+  database.close()
+}
+
+// The legacy file is copied before anything upgrades it. TypeScript upgrades one copy, and the
+// export and schema version of that copy are the reference for the Rust upgrade of the other.
+function legacyUpgradeParity(BetterSqlite3, LocalDatabase, directory) {
+  const legacy = path.join(directory, 'legacy-source')
+  fs.mkdirSync(legacy)
+  createLegacyDatabase(BetterSqlite3, legacy)
+  fs.copyFileSync(path.join(legacy, 'nocturne.db'), path.join(directory, 'legacy-before.db'))
+  const upgraded = path.join(directory, 'legacy-ts')
+  fs.mkdirSync(upgraded)
+  fs.copyFileSync(path.join(directory, 'legacy-before.db'), path.join(upgraded, 'nocturne.db'))
+  const db = new LocalDatabase(upgraded)
+  const exported = withoutClock(db.backup.exportData())
+  db.close()
+  const file = new BetterSqlite3(path.join(upgraded, 'nocturne.db'), { readonly: true })
+  const userVersion = file.pragma('user_version', { simple: true })
+  file.close()
+  return { userVersion, exported }
+}
+
 function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review) {
   const copy = path.join(directory, 'suggestions-ts.db')
   fs.copyFileSync(path.join(directory, 'suggestions-before.db'), copy)
@@ -971,6 +1082,7 @@ try {
   const semanticWrite = semanticWriteParity(BetterSqlite3, SemanticIndexRepository, gateDirectory)
   const engineeringWrite = engineeringWriteParity(BetterSqlite3, EngineeringIntelligenceRepository, gateDirectory)
   const backupImport = backupImportParity(LocalDatabase, gateDirectory)
+  const legacyUpgrade = legacyUpgradeParity(BetterSqlite3, LocalDatabase, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
@@ -979,6 +1091,7 @@ try {
   fs.writeFileSync(path.join(gateDirectory, 'semantic-write-expected.json'), `${JSON.stringify(semanticWrite, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'engineering-write-expected.json'), `${JSON.stringify(engineeringWrite, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'backup-import-expected.json'), `${JSON.stringify(backupImport, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'legacy-expected.json'), `${JSON.stringify(legacyUpgrade, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'),`${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
   const run = spawnSync(
     'cargo',

@@ -293,14 +293,18 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     TypeScript title depends on the locale's date format and the interface knows the language.
     The brain memory retrieval, the paged lists and the other methods that only delegate are
     repository calls.
-- **Remaining, phase 2:** upgrade fixtures written by earlier application releases, which the
-  row gate has to read from each release's database, and the operation timing observer, which
-  goes with the diagnostics command.
+- **Remaining, phase 2:** upgrade fixtures from the other tagged releases (0.5.0-beta to
+  0.9.0-beta, and 1.0.0 to 1.0.2), and the operation timing observer, which goes with the
+  diagnostics command.
 - **Not started:** phases 3 to 9.
 
-The row gate now reads rows that the TypeScript repositories wrote at schema 32. It
-does not yet read databases from earlier releases, which the migration fingerprints
-cover only for their schema. Phase 2 stays open until those are covered.
+The row gate now reads rows that the TypeScript repositories wrote at schema 32, and it
+upgrades a database that release 0.9.5-beta wrote. The migrations of that release are read
+from git and run as they ran then. The TypeScript upgrade of a copy is the reference, and
+Rust's export of the same file must match it collection by collection, with the same user
+version. The fingerprints cover the other releases only for their schema. The releases from
+0.5.0-beta to 0.9.0-beta and from 1.0.0 to 1.0.2 still need fixtures, so phase 2 stays open
+until they are covered.
 
 ## Open decisions
 
