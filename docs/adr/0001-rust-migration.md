@@ -229,6 +229,13 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     `maintenance.*` settings, and a full import maps `openai-compatible` providers to
     `chat-completions`. The zod contract (`shared/ipc/backupSchemas.ts`) and the envelope limits
     (`shared/ipc/backupLimits.ts`) belong to the IPC layer and are not ported yet.
+  - Recovery: the copies that can replace a damaged database, their integrity check and the
+    restore. A restore moves `nocturne.db` and its sidecars to a quarantine directory, installs
+    a copy that passes `quick_check` and moves the originals back when any step fails. Only
+    intact copies with a supported schema are offered, newest first. The functions block on
+    filesystem I/O and need the database closed, so the application runs them off the
+    interactive path. A failed final rename is not tested, because the Rust tests cannot inject
+    it; the other rollback steps are.
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
@@ -267,7 +274,7 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** recovery and the `Database` facade.
+- **Remaining, phase 2:** the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

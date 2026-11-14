@@ -19,10 +19,10 @@ use time::{Duration, OffsetDateTime};
 use crate::{Error, Result, migrations, schema};
 
 pub const DATABASE_FILE_NAME: &str = "nocturne.db";
-const MIGRATION_BACKUP_PREFIX: &str = "nocturne.db.backup-";
+pub(crate) const MIGRATION_BACKUP_PREFIX: &str = "nocturne.db.backup-";
 const MIGRATION_BACKUP_RETENTION: usize = 3;
-const RECOVERY_DIRECTORY: &str = "backups";
-const RECOVERY_PREFIX: &str = "nocturne-before-restore-";
+pub(crate) const RECOVERY_DIRECTORY: &str = "backups";
+pub(crate) const RECOVERY_PREFIX: &str = "nocturne-before-restore-";
 /// Retention used by the recovery point taken before a restore.
 pub const RECOVERY_RETENTION: usize = 5;
 const QUICK_CHECK_KEY: &str = "maintenance.lastQuickCheck";
@@ -266,7 +266,7 @@ fn prune_matching(directory: &Path, prefix: &str, suffix: &str, keep: usize) -> 
     Ok(())
 }
 
-fn create_private_directory(path: &Path) -> io::Result<()> {
+pub(crate) fn create_private_directory(path: &Path) -> io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
@@ -297,7 +297,7 @@ fn remove_backup(path: &Path) {
     remove_sidecars(path);
 }
 
-fn sidecar(path: &Path, suffix: &str) -> PathBuf {
+pub(crate) fn sidecar(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(suffix);
     PathBuf::from(name)
