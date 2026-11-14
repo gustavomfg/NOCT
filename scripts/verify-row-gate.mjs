@@ -551,8 +551,15 @@ function seed(LocalDatabase, directory) {
     engineeringLatestSnapshot: db.engineeringIntelligence.latestSnapshot('/work/alpha'),
     engineeringInsights: db.engineeringIntelligence.listInsights('/work/alpha'),
     engineeringResolvedInsights: db.engineeringIntelligence.listInsights('/work/alpha', 'resolved'),
+    backupExport: withoutClock(db.backup.exportData()),
   }
   db.close()
+  // The runtime rewrites its quick-check row whenever it opens a database, and the import above
+  // removed that row. The Rust gate opens the copy before it reads the metrics, so the TypeScript
+  // side reopens the database for them too.
+  const reopened = new LocalDatabase(directory)
+  expected.backupMetrics = reopened.backup.getExportMetrics()
+  reopened.close()
   return expected
 }
 
@@ -859,6 +866,55 @@ function engineeringWriteParity(BetterSqlite3, EngineeringIntelligenceRepository
   return { ...state, outcomes: { saved, duplicate, refusedSignal, savedInsight, resolvedInsight, resolvedAgain } }
 }
 
+// The backup scenarios run through the TypeScript runtime on copies of the seeded database, so the
+// startup and the orphan cleanup run as they do in the application. The full import restores the
+// export of the seeded database and resets the authorization of its workspaces. The project-data
+// import names another theme, which must not replace the settings of the copy. The refused import
+// carries a NUL character in a title, so the copy must be unchanged afterwards.
+function withoutClock(document) {
+  const copy = { ...document }
+  delete copy.exportedAt
+  return copy
+}
+
+function openBackupCopy(LocalDatabase, directory, name) {
+  const copyDirectory = path.join(directory, name)
+  fs.mkdirSync(copyDirectory)
+  fs.copyFileSync(path.join(directory, 'backup-before.db'), path.join(copyDirectory, 'nocturne.db'))
+  return new LocalDatabase(copyDirectory)
+}
+
+function backupImportScenario(LocalDatabase, directory, name, document, scope) {
+  const db = openBackupCopy(LocalDatabase, directory, name)
+  const before = withoutClock(db.backup.exportData())
+  let refused = false
+  try {
+    db.backup.importData(document, scope)
+  } catch {
+    refused = true
+  }
+  const scenario = { refused, before, after: withoutClock(db.backup.exportData()), metrics: db.backup.getExportMetrics() }
+  db.close()
+  return scenario
+}
+
+function backupImportParity(LocalDatabase, directory) {
+  const source = openBackupCopy(LocalDatabase, directory, 'backup-source')
+  const exported = source.backup.exportData()
+  source.close()
+  const inputs = {
+    full: exported,
+    projectData: { ...exported, settings: { theme: 'dark' } },
+    refused: { ...exported, conversations: [{ ...exported.conversations[0], title: 'ruim\u0000' }] },
+  }
+  fs.writeFileSync(path.join(directory, 'backup-input.json'), `${JSON.stringify(inputs, null, 2)}\n`)
+  return {
+    full: backupImportScenario(LocalDatabase, directory, 'backup-full', inputs.full, 'full'),
+    projectData: backupImportScenario(LocalDatabase, directory, 'backup-project', inputs.projectData, 'project-data'),
+    refused: backupImportScenario(LocalDatabase, directory, 'backup-refused', inputs.refused, 'full'),
+  }
+}
+
 function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review) {
   const copy = path.join(directory, 'suggestions-ts.db')
   fs.copyFileSync(path.join(directory, 'suggestions-before.db'), copy)
@@ -906,6 +962,7 @@ try {
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'project-before.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'semantic-before.db')}'`)
   copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'engineering-before.db')}'`)
+  copy.exec(`VACUUM INTO '${path.join(gateDirectory, 'backup-before.db')}'`)
   copy.close()
   const evidence = evidenceParity(BetterSqlite3, WorkspaceEvidenceRepository, gateDirectory)
   const reconciled = reconcileParity(BetterSqlite3, OperationRecoveryRepository, gateDirectory)
@@ -913,6 +970,7 @@ try {
   const changeScenario = changeParity(BetterSqlite3, ProjectIndexRepository, gateDirectory)
   const semanticWrite = semanticWriteParity(BetterSqlite3, SemanticIndexRepository, gateDirectory)
   const engineeringWrite = engineeringWriteParity(BetterSqlite3, EngineeringIntelligenceRepository, gateDirectory)
+  const backupImport = backupImportParity(LocalDatabase, gateDirectory)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)
@@ -920,6 +978,7 @@ try {
   fs.writeFileSync(path.join(gateDirectory, 'change-expected.json'), `${JSON.stringify(changeScenario, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'semantic-write-expected.json'), `${JSON.stringify(semanticWrite, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'engineering-write-expected.json'), `${JSON.stringify(engineeringWrite, null, 2)}\n`)
+  fs.writeFileSync(path.join(gateDirectory, 'backup-import-expected.json'), `${JSON.stringify(backupImport, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'suggestion-expected.json'),`${JSON.stringify({ review: SUGGESTION_REVIEW, snapshot: suggestionSnapshot }, null, 2)}\n`)
   const run = spawnSync(
     'cargo',

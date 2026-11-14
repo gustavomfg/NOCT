@@ -5,6 +5,7 @@
 
 pub mod approvals;
 pub mod artifacts;
+pub mod backup;
 pub mod brain_memories;
 pub mod change_sets;
 pub mod checkpoints;

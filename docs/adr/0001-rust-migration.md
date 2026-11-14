@@ -221,6 +221,14 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     reads a missing nullable key as null, where zod rejects it. The difference is recorded in
     `crates/noct-core/src/engineering_intelligence.rs` and matters only for JSON that the
     application did not write.
+  - Backup: the export, its metrics and the import, under the rules of `BackupRepository.ts`.
+    An import runs in one transaction that ends with the orphan cleanup. A full import replaces
+    every collection and the settings, and it resets the authorization of restored workspaces;
+    a project-data import keeps the settings. Text is limited to 10,000,000 UTF-16 units and may
+    not contain NUL, and a refused value rolls the whole import back. The export hides
+    `maintenance.*` settings, and a full import maps `openai-compatible` providers to
+    `chat-completions`. The zod contract (`shared/ipc/backupSchemas.ts`) and the envelope limits
+    (`shared/ipc/backupLimits.ts`) belong to the IPC layer and are not ported yet.
 - **Row gate:** `scripts/verify-row-gate.mjs` has the TypeScript repositories write a
   schema-32 database in a temporary directory and record the rows they return. Rust
   must return the same rows for model catalog, bindings, settings, workspaces,
@@ -252,10 +260,14 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   resolves a signal the evaluation does not find, a repeated state returns the stored
   snapshot, a refused signal leaves nothing behind, and an insight keeps the identity of its
   fingerprint. Approvals are not in the gate yet.
+  Backup is read through the main gate, with its export and metrics. Three imports run on
+  copies through the TypeScript runtime: a full import, a project-data import that must keep
+  the settings, and a refused import with a NUL character, which must leave the copy as it
+  was. The export's clock is removed on both sides.
   Reconciliation is checked differently: the
   TypeScript repository reconciles a copy of a database that has interrupted rows, and
   Rust must reach the same state from the copy saved before it ran.
-- **Remaining, phase 2:** backup and import, recovery, and the `Database` facade.
+- **Remaining, phase 2:** recovery and the `Database` facade.
   Upgrade fixtures written by earlier application releases are also still needed.
 - **Not started:** phases 3 to 9.
 

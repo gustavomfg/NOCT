@@ -138,8 +138,7 @@ impl Database {
 
     /// Removes rows whose parent no longer exists. Runs on every open.
     pub fn cleanup_orphans(&self) -> Result<()> {
-        self.connection.execute_batch(ORPHAN_CLEANUP_SQL)?;
-        Ok(())
+        remove_orphans(&self.connection)
     }
 
     /// Checkpoints and closes the connection, then restricts the database files again.
@@ -186,6 +185,13 @@ impl Database {
         )?;
         Ok(())
     }
+}
+
+/// Removes rows whose parent no longer exists. A backup import runs it inside its transaction,
+/// so it takes the connection rather than the runtime.
+pub(crate) fn remove_orphans(connection: &Connection) -> Result<()> {
+    connection.execute_batch(ORPHAN_CLEANUP_SQL)?;
+    Ok(())
 }
 
 /// Copies the database before a schema upgrade and verifies the copy. The copy is kept

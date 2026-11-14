@@ -35,6 +35,7 @@ use noct_db::Database;
 use noct_db::Result;
 use noct_db::repositories::Page;
 use noct_db::repositories::artifacts::Artifacts;
+use noct_db::repositories::backup::{Backup, ImportData, ImportScope};
 use noct_db::repositories::brain_memories::BrainMemories;
 use noct_db::repositories::change_sets::ChangeSets;
 use noct_db::repositories::checkpoints::Checkpoints;
@@ -301,6 +302,8 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         "engineeringLatestSnapshot": engineering.latest_snapshot(ENGINEERING_WORKSPACE).expect("latest engineering snapshot"),
         "engineeringInsights": engineering.list_insights(ENGINEERING_WORKSPACE, None, None).expect("engineering insights"),
         "engineeringResolvedInsights": engineering.list_insights(ENGINEERING_WORKSPACE, Some(EngineeringSignalStatus::Resolved), None).expect("resolved engineering insights"),
+        "backupExport": backup_export(conn),
+        "backupMetrics": backup_metrics(conn),
     });
 
     for key in expected.as_object().expect("object").keys() {
@@ -1218,6 +1221,75 @@ fn applies_engineering_writes_like_the_typescript_repository() {
     let expected: Value =
         serde_json::from_str(&text).expect("engineering-write-expected.json is JSON");
     let actual = numbers_as_integers(&Value::Object(actual));
+    let expected = numbers_as_integers(&expected);
+    for key in expected.as_object().expect("object").keys() {
+        assert_eq!(
+            actual[key], expected[key],
+            "`{key}` differs from the TypeScript state"
+        );
+    }
+}
+
+/// The export without its clock, which the TypeScript gate removes as well.
+fn without_clock(mut document: Value) -> Value {
+    document
+        .as_object_mut()
+        .expect("object")
+        .remove("exportedAt");
+    document
+}
+
+fn backup_export(conn: &Connection) -> Value {
+    without_clock(Backup::new(conn).export().expect("backup export"))
+}
+
+fn backup_metrics(conn: &Connection) -> Value {
+    let metrics = Backup::new(conn).export_metrics().expect("backup metrics");
+    json!({ "records": metrics.records, "estimatedBytes": metrics.estimated_bytes })
+}
+
+fn gate_json(name: &str) -> Value {
+    let text = fs::read_to_string(gate_directory().join(name)).expect(name);
+    serde_json::from_str(&text).expect(name)
+}
+
+/// Copies the database saved before the backup scenarios and imports one document into the copy.
+/// The result holds what the TypeScript gate reads: whether the import was refused, the state
+/// before and after it, and the metrics after it.
+fn backup_scenario(name: &str, document: &Value, scope: ImportScope) -> Value {
+    let directory = scratch(name);
+    fs::copy(
+        gate_directory().join("backup-before.db"),
+        directory.join("nocturne.db"),
+    )
+    .expect("copy the database saved before the imports");
+    let db = Database::open(&directory).expect("open the copy");
+    let before = backup_export(db.connection());
+    let data: ImportData = serde_json::from_value(document.clone()).expect("import document");
+    let refused = Backup::new(db.connection()).import(&data, scope).is_err();
+    json!({
+        "refused": refused,
+        "before": before,
+        "after": backup_export(db.connection()),
+        "metrics": backup_metrics(db.connection()),
+    })
+}
+
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn applies_backup_imports_like_the_typescript_repository() {
+    let inputs = gate_json("backup-input.json");
+    let actual = json!({
+        "full": backup_scenario("row-gate-backup-full", &inputs["full"], ImportScope::Full),
+        "projectData": backup_scenario(
+            "row-gate-backup-project",
+            &inputs["projectData"],
+            ImportScope::ProjectData,
+        ),
+        "refused": backup_scenario("row-gate-backup-refused", &inputs["refused"], ImportScope::Full),
+    });
+    let expected = gate_json("backup-import-expected.json");
+    let actual = numbers_as_integers(&actual);
     let expected = numbers_as_integers(&expected);
     for key in expected.as_object().expect("object").keys() {
         assert_eq!(
