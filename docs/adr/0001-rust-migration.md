@@ -1,8 +1,10 @@
 # ADR 0001: Migrate NOCT to Rust (Tauri 2 + Leptos)
 
-- **Status:** Proposed. Direction approved by the maintainer; the decisions in
-  [Open decisions](#open-decisions) still need review before phase 2 lands on the
-  migration branch.
+- **Status:** Proposed. **Partly superseded by
+  [ADR 0002](0002-envelope-provider-credentials.md):** decision 6 (provider key storage)
+  and the storage design of the phase 5 vault. Direction approved by the maintainer; the
+  decisions in [Open decisions](#open-decisions) still need review before phase 2 lands
+  on the migration branch.
 - **Branch:** `migration/rust`. `main` stays on Electron and TypeScript until the
   Rust build passes the same parity gates (see [Phases](#phases)).
 - **Supersedes:** the stack list in `AGENTS.md` (Electron, React, TypeScript,
@@ -82,7 +84,7 @@ is a gap that must be closed before phase 6 (IPC and shell) is accepted.
 | Browser permissions denied by default | Webview grants nothing beyond `core:default` | Configured in phase 0; verify per platform |
 | External navigation restricted | `on_navigation` handler in the core | **Gap**: implement in phase 6 |
 | Content Security Policy | `app.security.csp` in `tauri.conf.json` | Configured in phase 0 |
-| Credentials never reach renderer | Secrets held in the OS credential store through `keyring-core` (`crates/noct-secrets`); SQLite and the renderer see opaque references only | Phase 5. Vault done; storage choice pending confirmation (see [Open decisions](#open-decisions)) |
+| Credentials never reach renderer | Secrets held in the OS credential store through `keyring-core` (`crates/noct-secrets`); SQLite and the renderer see opaque references only | Phase 5. Vault done; storage choice pending confirmation (see [Open decisions](#open-decisions)). **Superseded in part by [ADR 0002](0002-envelope-provider-credentials.md):** one master key in the store, secrets in an encrypted file |
 | Review Mode read-only | Logic port, unchanged | Phase 4 |
 | Restored workspaces unauthorized | Logic port, unchanged | Phase 4 |
 | Electron production fuses and ASAR integrity | **No equivalent.** Replaced by code signing and signed updater artifacts | **Gap**: needs an explicit decision |
@@ -143,8 +145,11 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     TypeScript output (`85f538f`).
   - Settings, workspace history without `relocate`, conversations and messages,
     with transaction nesting as savepoints (`abbc412`).
-- **Done, phase 5 (credential vault, `crates/noct-secrets`):** provider secrets go
-  to the operating system credential store (Secret Service on Linux, Keychain on
+- **Done, phase 5 (credential vault, `crates/noct-secrets`):** *Partly superseded by
+  [ADR 0002](0002-envelope-provider-credentials.md). The storage described here, one store
+  entry per secret, is replaced by one master key in the store and an encrypted document.
+  The index, the locked-store rules and the symlink refusal carry over; the write order
+  changed.* Provider secrets go to the operating system credential store (Secret Service on Linux, Keychain on
   macOS, Credential Manager on Windows). A non-secret index of UUID references,
   written atomically with mode 0600, lets unused secrets be pruned. There is no
   plaintext or application-encrypted fallback. Tests cover the index contract,
@@ -316,11 +321,15 @@ until they are covered.
 3. **Renderer test harness.** Tauri WebDriver or Playwright against the WASM build.
 4. **Minimum platform versions.** WebKitGTK on Linux (the spike ran on 2.54), WebView2
    on Windows, WKWebView on macOS. `docs/compatibility.md` must state them.
-6. **Provider key storage.** Proposed: secrets live only in the operating system
+6. **Provider key storage.** *Partly superseded by
+   [ADR 0002](0002-envelope-provider-credentials.md).* Proposed: secrets live only in the operating system
    credential store, with no plaintext or application-encrypted fallback. The
    alternative is an application-encrypted file, which needs a master key the
    app would have to store itself and so adds little protection. Confirm this, and
    confirm that existing provider keys are re-entered after the migration.
+   Decided in ADR 0002: the operating system store holds one 32-byte master key, and
+   the secrets sit in an encrypted file. Still in force: no plaintext fallback, and
+   existing provider keys are re-entered once after the migration.
 7. **Dependency review.** Each new crate needs the justification `AGENTS.md`
    requires. `libc` is required because `std` does not expose `openat2`,
    `renameat2` or `O_TMPFILE`. Add `cargo audit` to `dependency-security.yml`. The vault adds `keyring-core`,
