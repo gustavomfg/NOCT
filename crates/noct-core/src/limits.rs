@@ -84,11 +84,16 @@ pub mod collection_page {
 
 /// Limits of provider definitions. Port of `PROVIDER_CONFIGURATION_LIMITS` in
 /// `shared/ai/providerConfiguration.ts`.
+///
+/// `credentialCharacters` (64,000) is deliberately not ported. It was sized for the Windows
+/// Credential Manager, whose 2,560-byte blob limit a UTF-16 secret of that length exceeds. The
+/// Rust vault keeps secrets in an encrypted file and bounds the file instead (see `noct-secrets`).
+/// The TypeScript constant stays until the TypeScript application is retired, and the difference
+/// is recorded in the migration ADR.
 pub mod provider_configuration {
     pub const IDENTIFIER_CHARACTERS: u64 = 512;
     pub const DISPLAY_NAME_CHARACTERS: u64 = 500;
     pub const BASE_URL_CHARACTERS: u64 = 2_048;
-    pub const CREDENTIAL_CHARACTERS: u64 = 64_000;
     pub const MINIMUM_TIMEOUT_MS: u64 = 1_000;
     pub const MAXIMUM_TIMEOUT_MS: u64 = 120_000;
 }

@@ -199,10 +199,6 @@ fn provider_configuration_limits_match_typescript() {
             l::provider_configuration::BASE_URL_CHARACTERS,
         ),
         (
-            "credentialCharacters",
-            l::provider_configuration::CREDENTIAL_CHARACTERS,
-        ),
-        (
             "minimumTimeoutMs",
             l::provider_configuration::MINIMUM_TIMEOUT_MS,
         ),
@@ -218,7 +214,18 @@ fn provider_configuration_limits_match_typescript() {
             "{name} in providerConfiguration.ts"
         );
     }
-    assert_eq!(ts.len(), checks.len(), "every provider limit is covered");
+    // The TypeScript application still defines credentialCharacters. Rust does not port it on
+    // purpose, so the count is one more than the checks, and the difference is pinned here.
+    assert_eq!(
+        ts.get("credentialCharacters"),
+        Some(&64_000),
+        "the TypeScript constant stays until the TypeScript application is retired"
+    );
+    assert_eq!(
+        ts.len(),
+        checks.len() + 1,
+        "every provider limit is covered, except the one that is not ported"
+    );
 }
 
 const TS_MODEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/ai/model.ts");

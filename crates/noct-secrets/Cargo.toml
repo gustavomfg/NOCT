@@ -7,12 +7,15 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+chacha20poly1305.workspace = true
+getrandom.workspace = true
 keyring-core = "1.0.1"
 noct-core = { path = "../noct-core" }
 secrecy = "0.10.3"
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

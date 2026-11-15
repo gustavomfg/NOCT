@@ -25,6 +25,11 @@ icu_normalizer = { version = "2.4.0", default-features = false, features = ["com
 icu_properties = "2.4.0"
 # Brain memory credential filter and search tokens. The lockfile already resolves this version.
 regex = "1.13.1"
+# Provider credential vault: XChaCha20-Poly1305 envelope for the secrets file, the OS random source
+# for keys and nonces, and zeroing of key material. getrandom and zeroize are already in the lockfile.
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc", "zeroize"] }
+getrandom = "0.3.4"
+zeroize = "1.9.1"
 
 [profile.release]
 opt-level = 3

@@ -12,11 +12,15 @@ pub enum VaultError {
     SecureStorageUnavailable,
     /// The reference is malformed, or it is not in the index.
     InvalidReference,
-    /// The secret is empty or longer than the canonical limit.
+    /// The secret is empty, or it is too large for the encrypted document.
     InvalidSecret,
-    /// The index file is invalid, inaccessible or not a regular file.
+    /// The index or the encrypted document is invalid, inaccessible, or cannot be opened with
+    /// the master key.
     CorruptStore,
-    /// The operating system store rejected a write.
+    /// Secrets exist, but the master key is no longer in the operating system store. The vault
+    /// does not create a new key in that case, because the stored secrets could not be read.
+    MasterKeyMissing,
+    /// The operating system store or a file rejected a write.
     WriteFailed,
     /// The operating system store could not return a value it should hold.
     ReadFailed,
@@ -30,6 +34,7 @@ impl VaultError {
             Self::InvalidReference => "invalid-reference",
             Self::InvalidSecret => "invalid-secret",
             Self::CorruptStore => "corrupt-store",
+            Self::MasterKeyMissing => "master-key-missing",
             Self::WriteFailed => "write-failed",
             Self::ReadFailed => "read-failed",
         }
@@ -41,8 +46,11 @@ impl VaultError {
                 "O sistema operacional não oferece armazenamento seguro de credenciais."
             }
             Self::InvalidReference => "A referência de credencial é inválida ou não existe.",
-            Self::InvalidSecret => "A credencial possui tamanho inválido.",
+            Self::InvalidSecret => "A credencial está vazia ou é grande demais.",
             Self::CorruptStore => "O cofre de credenciais está inválido ou inacessível.",
+            Self::MasterKeyMissing => {
+                "A chave do cofre não está no armazenamento seguro. As credenciais salvas não podem ser lidas; cadastre-as novamente."
+            }
             Self::WriteFailed => "Não foi possível salvar a credencial no armazenamento seguro.",
             Self::ReadFailed => "Não foi possível acessar a credencial armazenada.",
         }
