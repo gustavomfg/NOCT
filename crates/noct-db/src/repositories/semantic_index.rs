@@ -5,7 +5,9 @@
 //! stored as little-endian `f32` values, the layout the TypeScript repository writes. Ending a run
 //! records its units as workspace evidence in the same unit of work.
 
-use noct_core::limits::semantic_index::{DEFAULT_LEXICAL_RESULTS, MAX_LEXICAL_RESULTS, MAX_UNITS};
+use noct_core::limits::semantic_index::{
+    DEFAULT_LEXICAL_RESULTS, MAX_LEXICAL_RESULTS, MAX_UNITS, PAGE_LIMIT_MAX,
+};
 use noct_core::semantic_index::{
     SEMANTIC_INDEX_VERSION, SemanticEmbeddingSpace, SemanticIndexRun, SemanticIndexSummary,
     SemanticRunKind, SemanticRunStatus, SemanticSearchFilters, SemanticUnit, SemanticUnitKind,
@@ -97,11 +99,32 @@ pub struct SemanticLexicalMatch {
     pub rank: f64,
 }
 
-/// An indexed unit with the embedding stored for it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// An indexed unit with the embedding stored for it. The vector is for ranking inside the backend.
+/// It does not implement `Serialize`, so it cannot reach a response by accident. An IPC response
+/// maps it to a type without the vector.
+#[derive(Debug, Clone, PartialEq)]
 pub struct StoredSemanticEmbedding {
     pub unit: SemanticUnit,
     pub embedding: Vec<f64>,
+}
+
+/// One page of a keyset listing. `has_more` says whether rows follow the page. It is learned from
+/// one row more than the limit, so no further query is needed to know it. `next` is the cursor
+/// after the last row of the page, and is `Some` exactly when `has_more` is set.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Page<T, C> {
+    pub items: Vec<T>,
+    pub has_more: bool,
+    pub next: Option<C>,
+}
+
+/// A unit's place in source order. It is the sort key of a file's units, and the cursor that
+/// resumes a listing of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitPosition {
+    pub start_line: i64,
+    pub start_column: i64,
+    pub id: String,
 }
 
 pub struct SemanticIndex<'a> {
@@ -222,71 +245,101 @@ impl<'a> SemanticIndex<'a> {
             .map_err(Error::from)
     }
 
-    /// The units of one file, in source order.
+    /// One page of the units of a file, in source order. `after` is the position of the last unit
+    /// of the previous page, or `None` for the first page. `limit` is kept between 1 and 500.
+    /// The order is part of the contract, so the cursor is the whole sort key, not the identifier
+    /// alone.
     pub fn list_file_units(
         &self,
         workspace: &str,
         relative_path: &str,
-    ) -> Result<Vec<SemanticUnit>> {
-        let mut statement = self.conn.prepare(&format!(
-            "SELECT {} FROM semantic_units WHERE workspace=?1 AND relative_path=?2 \
-             ORDER BY start_line,start_column,id",
-            unit_columns("")
-        ))?;
-        let rows = statement.query_map(params![workspace, relative_path], unit_row)?;
-        rows.collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(Error::from)
+        after: Option<&UnitPosition>,
+        limit: usize,
+    ) -> Result<Page<SemanticUnit, UnitPosition>> {
+        let limit = clamp_page(limit);
+        let (sql, parameters) = file_units_query(workspace, relative_path, after, limit + 1);
+        let mut statement = self.conn.prepare(&sql)?;
+        let rows = statement.query_map(params_from_iter(parameters), unit_row)?;
+        let units = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(page(units, limit, |unit| UnitPosition {
+            start_line: unit.location.start_line,
+            start_column: unit.location.start_column,
+            id: unit.id.clone(),
+        }))
     }
 
-    /// The indexed units embedded in the given space. A space with no dimensions does not restrict
-    /// the dimensions. A stored vector whose length disagrees with its space fails the read.
+    /// Every unit of one file, in source order, read one page at a time. Internal routines use it
+    /// instead of loading a whole file into memory.
+    pub fn file_units<'s>(
+        &'s self,
+        workspace: &'s str,
+        relative_path: &'s str,
+    ) -> impl Iterator<Item = Result<SemanticUnit>> + 's {
+        paged(move |after: Option<&UnitPosition>| {
+            self.list_file_units(workspace, relative_path, after, PAGE_LIMIT_MAX as usize)
+        })
+    }
+
+    /// One page of the indexed units embedded in the given space, in identifier order. `after` is
+    /// the identifier of the last unit of the previous page, or `None` for the first page. `limit`
+    /// is kept between 1 and 500. A space with no dimensions does not restrict the dimensions. A
+    /// stored vector whose length disagrees with its space fails the read.
     pub fn list_indexed_embeddings(
         &self,
         workspace: &str,
         space: &SemanticEmbeddingSpace,
         filters: &SemanticSearchFilters,
-    ) -> Result<Vec<StoredSemanticEmbedding>> {
-        let mut clauses = vec![
-            "workspace=?".to_string(),
-            "status='indexed'".to_string(),
-            "embedding_provider_id=?".to_string(),
-            "embedding_model_id=?".to_string(),
-            "embedding_model_version IS ?".to_string(),
-        ];
-        let mut parameters = vec![
-            Value::Text(workspace.to_string()),
-            Value::Text(space.provider_id.clone()),
-            Value::Text(space.model_id.clone()),
-            Value::from(space.model_version.clone()),
-        ];
-        if space.dimensions > 0 {
-            clauses.push("embedding_dimensions=?".to_string());
-            parameters.push(Value::Integer(space.dimensions));
-        }
-        clauses.push("embedding IS NOT NULL".to_string());
-        push_filters(&mut clauses, &mut parameters, filters, "")?;
-        let mut statement = self.conn.prepare(&format!(
-            "SELECT {}, embedding FROM semantic_units WHERE {}",
-            unit_columns(""),
-            clauses.join(" AND ")
-        ))?;
+        after: Option<&str>,
+        limit: usize,
+    ) -> Result<Page<StoredSemanticEmbedding, String>> {
+        let limit = clamp_page(limit);
+        let (sql, parameters) = embeddings_query(workspace, space, filters, after, limit + 1)?;
+        let mut statement = self.conn.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(parameters), |row| {
             Ok((
                 unit_row(row)?,
-                row.get::<_, Option<Vec<u8>>>(UNIT_COLUMNS.len())?,
+                row.get::<_, Vec<u8>>(UNIT_COLUMNS.len())?,
                 row.get::<_, Option<i64>>(20)?,
             ))
         })?;
-        let mut embeddings = Vec::new();
-        for row in rows {
-            let (unit, bytes, dimensions) = row?;
-            let Some(bytes) = bytes else { continue };
-            embeddings.push(StoredSemanticEmbedding {
-                unit,
-                embedding: deserialize_embedding(&bytes, dimensions)?,
-            });
-        }
-        Ok(embeddings)
+        // The page is cut before the vectors are decoded, so a page never decodes rows it drops.
+        let page = page(rows.collect::<rusqlite::Result<Vec<_>>>()?, limit, |row| {
+            row.0.id.clone()
+        });
+        let items = page
+            .items
+            .into_iter()
+            .map(|(unit, bytes, dimensions)| {
+                Ok(StoredSemanticEmbedding {
+                    unit,
+                    embedding: deserialize_embedding(&bytes, dimensions)?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Page {
+            items,
+            has_more: page.has_more,
+            next: page.next,
+        })
+    }
+
+    /// Every indexed embedding in the space, in identifier order, read one page at a time. Internal
+    /// routines use it, for example to rank by similarity without holding the whole space.
+    pub fn indexed_embeddings<'s>(
+        &'s self,
+        workspace: &'s str,
+        space: &'s SemanticEmbeddingSpace,
+        filters: &'s SemanticSearchFilters,
+    ) -> impl Iterator<Item = Result<StoredSemanticEmbedding>> + 's {
+        paged(move |after: Option<&String>| {
+            self.list_indexed_embeddings(
+                workspace,
+                space,
+                filters,
+                after.map(String::as_str),
+                PAGE_LIMIT_MAX as usize,
+            )
+        })
     }
 
     /// The units whose text matches every token of the query, best matches first. The limit is
@@ -439,6 +492,152 @@ impl<'a> SemanticIndex<'a> {
             failed_units,
             excluded_units,
         })
+    }
+}
+
+/// A page limit, kept between 1 and the canonical ceiling.
+fn clamp_page(limit: usize) -> usize {
+    limit.clamp(1, PAGE_LIMIT_MAX as usize)
+}
+
+/// The page of a listing, from rows fetched with one row more than the limit. The extra row only
+/// shows that rows follow, and it is dropped. The cursor is the last row kept, and exists exactly
+/// when rows follow.
+fn page<T, C>(mut rows: Vec<T>, limit: usize, cursor: impl Fn(&T) -> C) -> Page<T, C> {
+    let has_more = rows.len() > limit;
+    rows.truncate(limit);
+    let next = if has_more {
+        rows.last().map(cursor)
+    } else {
+        None
+    };
+    Page {
+        items: rows,
+        has_more,
+        next,
+    }
+}
+
+/// The query of one page of a file's units, and its parameters. `fetch` rows are requested. The
+/// keyset compares the whole sort key, so the order is total and the cursor resumes exactly after
+/// the last unit of the previous page.
+fn file_units_query(
+    workspace: &str,
+    relative_path: &str,
+    after: Option<&UnitPosition>,
+    fetch: usize,
+) -> (String, Vec<Value>) {
+    let mut parameters = vec![
+        Value::Text(workspace.to_string()),
+        Value::Text(relative_path.to_string()),
+    ];
+    let keyset = match after {
+        Some(position) => {
+            parameters.push(Value::Integer(position.start_line));
+            parameters.push(Value::Integer(position.start_column));
+            parameters.push(Value::Text(position.id.clone()));
+            " AND (start_line,start_column,id) > (?,?,?)"
+        }
+        None => "",
+    };
+    parameters.push(Value::Integer(fetch as i64));
+    let sql = format!(
+        "SELECT {} FROM semantic_units WHERE workspace=? AND relative_path=?{keyset} \
+         ORDER BY start_line,start_column,id LIMIT ?",
+        unit_columns("")
+    );
+    (sql, parameters)
+}
+
+/// The query of one page of indexed embeddings in a space, and its parameters. `fetch` rows are
+/// requested. Rows with a vector are the only ones read, so the vector is never null.
+fn embeddings_query(
+    workspace: &str,
+    space: &SemanticEmbeddingSpace,
+    filters: &SemanticSearchFilters,
+    after: Option<&str>,
+    fetch: usize,
+) -> Result<(String, Vec<Value>)> {
+    let mut clauses = vec![
+        "workspace=?".to_string(),
+        "status='indexed'".to_string(),
+        "embedding_provider_id=?".to_string(),
+        "embedding_model_id=?".to_string(),
+        "embedding_model_version IS ?".to_string(),
+    ];
+    let mut parameters = vec![
+        Value::Text(workspace.to_string()),
+        Value::Text(space.provider_id.clone()),
+        Value::Text(space.model_id.clone()),
+        Value::from(space.model_version.clone()),
+    ];
+    if space.dimensions > 0 {
+        clauses.push("embedding_dimensions=?".to_string());
+        parameters.push(Value::Integer(space.dimensions));
+    }
+    clauses.push("embedding IS NOT NULL".to_string());
+    push_filters(&mut clauses, &mut parameters, filters, "")?;
+    if let Some(after) = after {
+        clauses.push("id > ?".to_string());
+        parameters.push(Value::Text(after.to_string()));
+    }
+    parameters.push(Value::Integer(fetch as i64));
+    let sql = format!(
+        "SELECT {}, embedding FROM semantic_units WHERE {} ORDER BY id LIMIT ?",
+        unit_columns(""),
+        clauses.join(" AND ")
+    );
+    Ok((sql, parameters))
+}
+
+/// Streams the rows of a keyset listing one page at a time, so an internal routine never holds a
+/// whole listing in memory. The first error ends the stream.
+struct Paged<T, C, F> {
+    fetch: F,
+    after: Option<C>,
+    buffered: std::vec::IntoIter<T>,
+    finished: bool,
+}
+
+fn paged<T, C, F>(fetch: F) -> Paged<T, C, F>
+where
+    F: FnMut(Option<&C>) -> Result<Page<T, C>>,
+{
+    Paged {
+        fetch,
+        after: None,
+        buffered: Vec::new().into_iter(),
+        finished: false,
+    }
+}
+
+impl<T, C, F> Iterator for Paged<T, C, F>
+where
+    F: FnMut(Option<&C>) -> Result<Page<T, C>>,
+{
+    type Item = Result<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(item) = self.buffered.next() {
+                return Some(Ok(item));
+            }
+            if self.finished {
+                return None;
+            }
+            match (self.fetch)(self.after.as_ref()) {
+                Ok(page) => {
+                    // A page without a cursor cannot resume, so it ends the stream as well.
+                    self.finished = !page.has_more || page.next.is_none();
+                    self.after = page.next;
+                    self.buffered = page.items.into_iter();
+                }
+                Err(error) => {
+                    self.finished = true;
+                    return Some(Err(error));
+                }
+            }
+        }
     }
 }
 
@@ -656,4 +855,121 @@ fn deserialize_embedding(bytes: &[u8], dimensions: Option<i64>) -> Result<Vec<f6
             Ok(f64::from(f32::from_le_bytes(array)))
         })
         .collect()
+}
+
+/// The query plans of the keyset listings, as SQLite chooses them. The plans are read from the same
+/// query builders the listings run, so they cannot drift apart. The database is empty, so the plans
+/// reflect the schema's indexes, not the statistics of a large history.
+#[cfg(test)]
+mod plan_tests {
+    use super::*;
+
+    fn database() -> Connection {
+        let mut connection = Connection::open_in_memory().expect("memory database");
+        crate::migrations::migrate_latest(&mut connection, 0).expect("schema");
+        connection
+    }
+
+    /// The `detail` column of EXPLAIN QUERY PLAN, one line per step.
+    fn plan(connection: &Connection, (sql, parameters): (String, Vec<Value>)) -> Vec<String> {
+        let mut statement = connection
+            .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+            .expect("the page query prepares");
+        statement
+            .query_map(params_from_iter(parameters), |row| row.get::<_, String>(3))
+            .expect("the plan runs")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("plan rows")
+    }
+
+    fn space() -> SemanticEmbeddingSpace {
+        SemanticEmbeddingSpace {
+            provider_id: "local".to_string(),
+            model_id: "mini".to_string(),
+            model_version: None,
+            dimensions: 2,
+        }
+    }
+
+    fn resume_after_unit() -> UnitPosition {
+        UnitPosition {
+            start_line: 10,
+            start_column: 2,
+            id: "unit".to_string(),
+        }
+    }
+
+    fn assert_file_index_search(details: &[String]) {
+        assert!(
+            details
+                .iter()
+                .any(|detail| detail.starts_with("SEARCH semantic_units")
+                    && detail.contains("idx_semantic_units_workspace_path")),
+            "the file's units are found through their index: {details:?}"
+        );
+        assert!(
+            details
+                .iter()
+                .all(|detail| !detail.starts_with("SCAN semantic_units")),
+            "no step scans the whole table: {details:?}"
+        );
+    }
+
+    #[test]
+    fn the_first_page_of_a_file_is_an_index_search() {
+        let connection = database();
+        let details = plan(
+            &connection,
+            file_units_query("/work/alpha", "src/app.ts", None, 501),
+        );
+        assert_file_index_search(&details);
+    }
+
+    /// The keyset resumes with a seek on the first column of the sort key, so the page does not
+    /// read the rows before the cursor. The rest of the key is checked within that range.
+    #[test]
+    fn a_keyset_page_of_a_file_seeks_past_the_cursor_line() {
+        let connection = database();
+        let details = plan(
+            &connection,
+            file_units_query("/work/alpha", "src/app.ts", Some(&resume_after_unit()), 501),
+        );
+        assert_file_index_search(&details);
+        assert!(
+            details.iter().any(|detail| detail.contains("start_line>?")),
+            "the cursor is a seek, not a filter over the whole file: {details:?}"
+        );
+    }
+
+    /// The identifier keyset is not a seek yet: the planner reads the workspace's indexed units
+    /// through the status index and sorts them. The test keeps the guarantee that holds today, that
+    /// the page never scans the table. ADR 0002 records the temporary sort and the index that would
+    /// remove it.
+    #[test]
+    fn a_keyset_page_of_embeddings_never_scans_the_table() {
+        let connection = database();
+        let details = plan(
+            &connection,
+            embeddings_query(
+                "/work/alpha",
+                &space(),
+                &SemanticSearchFilters::default(),
+                Some("unit"),
+                501,
+            )
+            .expect("embeddings query"),
+        );
+        assert!(
+            details
+                .iter()
+                .any(|detail| detail.starts_with("SEARCH semantic_units")),
+            "the page is found through an index: {details:?}"
+        );
+        assert!(
+            details
+                .iter()
+                .all(|detail| !detail.starts_with("SCAN semantic_units")),
+            "no step scans the whole table: {details:?}"
+        );
+    }
 }

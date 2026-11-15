@@ -50,6 +50,9 @@ pub mod semantic_index {
     /// Lexical matches returned by one search, and the default when the caller gives no limit.
     pub const MAX_LEXICAL_RESULTS: u64 = 100;
     pub const DEFAULT_LEXICAL_RESULTS: u64 = 50;
+    /// Rows returned by one page of a keyset listing (file units, indexed embeddings). A page
+    /// request above this value is clamped to it.
+    pub const PAGE_LIMIT_MAX: u64 = 500;
 }
 
 pub mod engineering_intelligence {

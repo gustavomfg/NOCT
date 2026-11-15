@@ -13,7 +13,9 @@ use noct_core::semantic_index::{
 use noct_core::workspace_evidence::EvidenceKind;
 use noct_db::Database;
 use noct_db::repositories::project_index::ProjectIndex;
-use noct_db::repositories::semantic_index::{PersistedSemanticUnit, SemanticIndex};
+use noct_db::repositories::semantic_index::{
+    PersistedSemanticUnit, SemanticIndex, StoredSemanticEmbedding,
+};
 use noct_db::repositories::workspace_evidence::WorkspaceEvidence;
 
 mod common;
@@ -24,6 +26,27 @@ const ALPHA: &str = "/work/alpha";
 const BETA: &str = "/work/beta";
 const APP: &str = "src/app.ts";
 const UTIL: &str = "src/util.ts";
+
+/// Every unit of a file, read through the streaming iterator.
+fn file_units(index: &SemanticIndex, workspace: &str, path: &str) -> Vec<SemanticUnit> {
+    index
+        .file_units(workspace, path)
+        .collect::<noct_db::Result<Vec<_>>>()
+        .expect("file units")
+}
+
+/// Every embedding of a space, read through the streaming iterator.
+fn embeddings(
+    index: &SemanticIndex,
+    workspace: &str,
+    space: &SemanticEmbeddingSpace,
+    filters: &SemanticSearchFilters,
+) -> Vec<StoredSemanticEmbedding> {
+    index
+        .indexed_embeddings(workspace, space, filters)
+        .collect::<noct_db::Result<Vec<_>>>()
+        .expect("embeddings")
+}
 
 fn open(name: &str) -> Database {
     let db = Database::open(&scratch(name)).expect("open database");
@@ -239,7 +262,7 @@ fn replaces_a_file_and_removes_the_units_it_no_longer_has() {
         )
         .expect("second replacement");
 
-    let units = index.list_file_units(ALPHA, APP).expect("file units");
+    let units = file_units(&index, ALPHA, APP);
     assert_eq!(
         units
             .iter()
@@ -271,12 +294,7 @@ fn an_empty_replacement_removes_every_unit_of_the_file() {
         )
         .expect("insert");
     index.replace_file_units(ALPHA, UTIL, &[]).expect("clear");
-    assert!(
-        index
-            .list_file_units(ALPHA, UTIL)
-            .expect("units")
-            .is_empty()
-    );
+    assert!(file_units(&index, ALPHA, UTIL).is_empty());
 }
 
 #[test]
@@ -315,9 +333,7 @@ fn an_invalid_embedding_rolls_back_the_whole_replacement() {
         assert_eq!(error.to_string(), "Vetor de embedding inválido.");
     }
 
-    let ids: Vec<String> = index
-        .list_file_units(ALPHA, APP)
-        .expect("units")
+    let ids: Vec<String> = file_units(&index, ALPHA, APP)
         .into_iter()
         .map(|unit| unit.id)
         .collect();
@@ -340,9 +356,7 @@ fn stores_embeddings_as_single_precision_values() {
         )
         .expect("insert");
 
-    let stored = index
-        .list_indexed_embeddings(ALPHA, &space(3), &filters())
-        .expect("embeddings");
+    let stored = embeddings(&index, ALPHA, &space(3), &filters());
     assert_eq!(stored.len(), 1);
     assert_eq!(stored[0].embedding, vec![f64::from(0.1f32), -0.25, 1.5]);
     assert_eq!(stored[0].unit.embedding_space, Some(space(3)));
@@ -384,32 +398,27 @@ fn reads_an_embedding_only_in_its_own_space_and_when_indexed() {
         )
         .expect("stale unit");
 
-    let unversioned: Vec<String> = index
-        .list_indexed_embeddings(ALPHA, &space(2), &filters())
-        .expect("unversioned")
+    let unversioned: Vec<String> = embeddings(&index, ALPHA, &space(2), &filters())
         .into_iter()
         .map(|stored| stored.unit.id)
         .collect();
     assert_eq!(unversioned, ["u1"]);
 
-    let versioned_ids: Vec<String> = index
-        .list_indexed_embeddings(ALPHA, &versioned, &filters())
-        .expect("versioned")
+    let versioned_ids: Vec<String> = embeddings(&index, ALPHA, &versioned, &filters())
         .into_iter()
         .map(|stored| stored.unit.id)
         .collect();
     assert_eq!(versioned_ids, ["u2"]);
 
-    let any_dimensions = index
-        .list_indexed_embeddings(
-            ALPHA,
-            &SemanticEmbeddingSpace {
-                dimensions: 0,
-                ..space(2)
-            },
-            &filters(),
-        )
-        .expect("any dimensions");
+    let any_dimensions = embeddings(
+        &index,
+        ALPHA,
+        &SemanticEmbeddingSpace {
+            dimensions: 0,
+            ..space(2)
+        },
+        &filters(),
+    );
     assert_eq!(any_dimensions.len(), 1);
 }
 
@@ -429,7 +438,7 @@ fn a_stored_vector_that_disagrees_with_its_dimensions_fails_the_read() {
         )
         .expect("insert");
     let error = index
-        .list_indexed_embeddings(ALPHA, &space(2), &filters())
+        .list_indexed_embeddings(ALPHA, &space(2), &filters(), None, 10)
         .expect_err("dimensions disagree");
     assert_eq!(
         error.to_string(),
@@ -670,7 +679,7 @@ fn marks_a_file_stale_and_deletes_it() {
     );
 
     index.delete_file(ALPHA, APP).expect("delete");
-    assert!(index.list_file_units(ALPHA, APP).expect("units").is_empty());
+    assert!(file_units(&index, ALPHA, APP).is_empty());
 }
 
 #[test]

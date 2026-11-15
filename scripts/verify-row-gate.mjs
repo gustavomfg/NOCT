@@ -533,8 +533,8 @@ function seed(LocalDatabase, directory) {
     semanticUnitsFiltered: db.semanticIndex.listUnits('/work/alpha', { paths: ['src/app.ts'], kinds: ['symbol'], symbols: ['main', 'helper'] }),
     semanticUnitsLimited: db.semanticIndex.listUnits('/work/alpha', {}, 2),
     semanticFileUnits: db.semanticIndex.listFileUnits('/work/alpha', 'src/app.ts'),
-    semanticEmbeddings: db.semanticIndex.listIndexedEmbeddings('/work/alpha', SEMANTIC_SPACE, {}),
-    semanticEmbeddingsVersioned: db.semanticIndex.listIndexedEmbeddings('/work/alpha', { ...SEMANTIC_SPACE, modelVersion: '2', dimensions: 2 }, {}),
+    semanticEmbeddings: byUnitId(db.semanticIndex.listIndexedEmbeddings('/work/alpha', SEMANTIC_SPACE, {})),
+    semanticEmbeddingsVersioned: byUnitId(db.semanticIndex.listIndexedEmbeddings('/work/alpha', { ...SEMANTIC_SPACE, modelVersion: '2', dimensions: 2 }, {})),
     semanticLexical: {
       helper: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', 'helper')),
       phrase: rankedMatches(db.semanticIndex.searchLexical('/work/alpha', '  módulo  principal ')),
@@ -688,6 +688,12 @@ function changeParity(BetterSqlite3, ProjectIndexRepository, directory) {
   const remaining = database.prepare('SELECT relative_path AS path FROM project_index_files WHERE workspace=? ORDER BY relative_path').all('/work/alpha').map((row) => row.path)
   database.close()
   return { files: CHANGE_FILES.map(scenarioFile), requested: CHANGE_REQUESTED, present: CHANGE_PRESENT, remaining }
+}
+
+// Indexed embeddings are compared in identifier order. The TypeScript query has no ORDER BY, so its
+// order is not part of the contract; the Rust listing is paged in identifier order.
+function byUnitId(embeddings) {
+  return [...embeddings].sort((left, right) => (left.unit.id < right.unit.id ? -1 : left.unit.id > right.unit.id ? 1 : 0))
 }
 
 // Semantic index fixtures. A unit or run takes these defaults unless a fixture overrides them, so

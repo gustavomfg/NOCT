@@ -48,7 +48,7 @@ use noct_db::repositories::operation_recovery::OperationRecovery;
 use noct_db::repositories::project_index::ProjectIndex;
 use noct_db::repositories::provider_configurations::ProviderConfigurations;
 use noct_db::repositories::semantic_index::{
-    PersistedSemanticUnit, SemanticIndex, SemanticLexicalMatch,
+    PersistedSemanticUnit, SemanticIndex, SemanticLexicalMatch, StoredSemanticEmbedding,
 };
 use noct_db::repositories::settings::Settings;
 use noct_db::repositories::suggestions::Suggestions;
@@ -275,13 +275,13 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
             ..Default::default()
         }, None).expect("filtered semantic units"),
         "semanticUnitsLimited": semantic.list_units("/work/alpha", &SemanticSearchFilters::default(), Some(2)).expect("limited semantic units"),
-        "semanticFileUnits": semantic.list_file_units("/work/alpha", "src/app.ts").expect("file semantic units"),
-        "semanticEmbeddings": semantic.list_indexed_embeddings("/work/alpha", &semantic_space(), &SemanticSearchFilters::default()).expect("embeddings"),
-        "semanticEmbeddingsVersioned": semantic.list_indexed_embeddings("/work/alpha", &SemanticEmbeddingSpace {
+        "semanticFileUnits": semantic.file_units("/work/alpha", "src/app.ts").collect::<Result<Vec<_>>>().expect("file semantic units"),
+        "semanticEmbeddings": embeddings_json(semantic.indexed_embeddings("/work/alpha", &semantic_space(), &SemanticSearchFilters::default()).collect::<Result<Vec<_>>>().expect("embeddings")),
+        "semanticEmbeddingsVersioned": embeddings_json(semantic.indexed_embeddings("/work/alpha", &SemanticEmbeddingSpace {
             model_version: Some("2".to_string()),
             dimensions: 2,
             ..semantic_space()
-        }, &SemanticSearchFilters::default()).expect("versioned embeddings"),
+        }, &SemanticSearchFilters::default()).collect::<Result<Vec<_>>>().expect("versioned embeddings")),
         "semanticLexical": {
             "helper": ranked(semantic.search_lexical("/work/alpha", "helper", &SemanticSearchFilters::default(), None)),
             "phrase": ranked(semantic.search_lexical("/work/alpha", "  módulo  principal ", &SemanticSearchFilters::default(), None)),
@@ -376,6 +376,17 @@ fn numbers_as_integers(value: &Value) -> Value {
         ),
         _ => value.clone(),
     }
+}
+
+/// Indexed embeddings as the gate compares them: each unit with its vector, in identifier order.
+/// The vector is serialized here, in the test, and nowhere else.
+fn embeddings_json(stored: Vec<StoredSemanticEmbedding>) -> Value {
+    Value::Array(
+        stored
+            .into_iter()
+            .map(|item| json!({ "unit": item.unit, "embedding": item.embedding }))
+            .collect(),
+    )
 }
 
 /// Lexical matches as the gate compares them. The rank keeps 12 significant digits, as the
