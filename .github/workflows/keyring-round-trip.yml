@@ -53,9 +53,12 @@ jobs:
         shell: bash
         run: |
           # A private session bus, with an unlocked login collection that holds no real secret.
+          # The daemon reads the login password from stdin. A line feed is an empty password. Without
+          # it, the daemon asks for a password through a prompt that a headless runner cannot show,
+          # and the first write fails with SecureStorageUnavailable.
           dbus-run-session -- bash -c '
             set -euo pipefail
-            eval "$(printf "" | gnome-keyring-daemon --daemonize --login --components=secrets)"
+            eval "$(printf '\''\n'\'' | gnome-keyring-daemon --daemonize --login --components=secrets)"
             cargo test -p noct-secrets --test os_store -- --ignored --nocapture
           '
 
