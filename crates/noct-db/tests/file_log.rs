@@ -64,7 +64,7 @@ fn each_record_is_one_json_line_with_the_typescript_fields() {
     assert_eq!(entry["message"], "falhou");
     assert_eq!(entry["data"], json!({ "count": 2 }));
     assert_eq!(entry["sessionId"], session.as_str());
-    assert!(Uuid::parse_str(&session).is_ok(), "{session}");
+    assert!(Uuid::parse_str(&session).is_ok(), "invalid session UUID");
     // `toISOString` form: milliseconds and a `Z`, as in `2026-11-16T12:34:56.789Z`.
     let timestamp = entry["timestamp"].as_str().expect("a timestamp");
     assert_eq!(timestamp.len(), 24, "{timestamp}");
