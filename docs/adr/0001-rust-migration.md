@@ -321,7 +321,11 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   types, and the workspace inspection follows `WorkspaceTrust.ts`. Tests run through Tauri's
   mock runtime with the real capability: a granted command runs, an unlisted command and a
   second window are refused by the access control list, and a refused update writes nothing.
-  Not verified: the webview on each platform, and the output differential (see below).
+  The outputs of the four commands are compared with the TypeScript application for the database
+  of each of the nine release lines (`scripts/generate-output-differential.mjs` and
+  `crates/noct-app/tests/output_differential.rs`, run by the workflow). The reference is written on
+  each run and not committed, because the conversation identifiers and timestamps change between
+  runs. Not verified: the webview on each platform.
 - **Not started:** phases 3 to 9.
 
 The row gate now reads rows that the TypeScript repositories wrote at schema 32, and it

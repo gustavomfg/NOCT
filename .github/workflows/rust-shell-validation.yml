@@ -24,8 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Check out the repository
+      - name: Check out the repository with its tags
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # The release-line bases are compiled from the sources of each tag.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install the Linux packages that Tauri needs
         shell: bash
@@ -49,6 +53,9 @@ jobs:
       - name: Install the Node dependencies
         run: npm ci
 
+      - name: Write the release-line bases and the TypeScript outputs for the differential
+        run: node scripts/generate-output-differential.mjs
+
       - name: Add the WebAssembly target and check the pinned toolchain
         run: |
           rustup target add wasm32-unknown-unknown
@@ -67,6 +74,9 @@ jobs:
 
       - name: Run the workspace tests
         run: cargo test --workspace
+
+      - name: Compare the four first-slice outputs with TypeScript over the nine release lines
+        run: cargo test -p noct-app --test output_differential -- --ignored
 
       - name: Install the Chromium of Playwright
         run: npx playwright install --with-deps chromium
