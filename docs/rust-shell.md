@@ -169,7 +169,8 @@ so no change is made here. Removing the decoration would change the title bar, w
 The workflow `.github/workflows/rust-shell-validation.yml` runs on pushes to `migration/rust`. Its `shell` job is a
 matrix over `ubuntu-latest`, `windows-latest` and `macos-latest`, with `fail-fast: false`.
 
-**Covered on all three systems:**
+**Covered on all three systems.** The matrix run of `226d8fd` (run 43951649685) passed on Ubuntu, Windows and macOS.
+On Windows and macOS nine steps ran and eleven Linux-only steps were skipped, as designed.
 
 - The interface builds with Trunk in release mode.
 - `cargo test --workspace --no-fail-fast` runs every test binary, without the ignored tests. The integration test
@@ -177,6 +178,8 @@ matrix over `ubuntu-latest`, `windows-latest` and `macos-latest`, with `fail-fas
   with `tauri::test`, which reaches `comctl32` exports, and tauri-build embeds the manifest only in binaries. The
   manifest is `crates/noct-app/windows/common-controls.manifest`, a copy of tauri-build's, linked by
   `crates/noct-app/build.rs`. Without it the Windows test executables stopped with STATUS_ENTRYPOINT_NOT_FOUND.
+- The command access tests send their requests from the window's own page, so each platform's origin is the one the
+  access control list checks: `tauri://localhost`, or `http://tauri.localhost` on Windows.
 - The release shell builds with `--features custom-protocol`, and the step checks that the wasm file name trunk wrote
   is in the binary. The debug binary, built without the feature, is the control of that check.
 
@@ -209,6 +212,10 @@ matrix over `ubuntu-latest`, `windows-latest` and `macos-latest`, with `fail-fas
 ## Known approximations
 
 These are recorded in code and in the ADR as well. The workspace folder rules follow `WorkspaceTrust.ts`.
+
+- **Test output on Windows.** Each mock window prints "failed to load the default window icon": the test executables
+  carry no icon resource, which only the application binary gets from tauri-build. The message does not fail a test,
+  and the tests do not check the icon.
 
 - **Access check.** `WorkspaceTrust.ts` asks the operating system with `access(R_OK | X_OK)`. The standard
   library has no such call and the shell adds no native dependency for it, so the Rust check lists the
