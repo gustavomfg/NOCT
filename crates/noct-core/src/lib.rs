@@ -9,6 +9,7 @@ pub mod contracts;
 pub mod engineering_intelligence;
 pub mod json;
 pub mod limits;
+pub mod log_redaction;
 pub mod operation_recovery;
 pub mod semantic_index;
 pub mod suggestions;
