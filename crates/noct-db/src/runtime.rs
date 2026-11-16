@@ -8,6 +8,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use noct_core::limits::DATABASE_SCHEMA_VERSION;
 use rusqlite::backup::Progress;
@@ -16,6 +17,7 @@ use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::{Duration, OffsetDateTime};
 
+use crate::diagnostics::{DiagnosticSink, StandardErrorSink};
 use crate::{Error, Result, migrations, schema};
 
 pub const DATABASE_FILE_NAME: &str = "nocturne.db";
@@ -41,11 +43,27 @@ const CONNECTION_PRAGMAS: &str = "
 
 const ORPHAN_CLEANUP_SQL: &str = "DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions); DELETE FROM brain_memories WHERE workspace_id NOT IN (SELECT path FROM workspaces) OR (conversation_id IS NOT NULL AND conversation_id NOT IN (SELECT id FROM conversations)); DELETE FROM workspace_model_bindings WHERE workspace_id NOT IN (SELECT path FROM workspaces);";
 
+/// Options of [`Database::open_with`]. The defaults are the application's.
+#[derive(Debug, Clone)]
+pub struct OpenOptions {
+    /// Receives the warnings of the persistence layer.
+    pub diagnostics: Arc<dyn DiagnosticSink>,
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self {
+            diagnostics: Arc::new(StandardErrorSink),
+        }
+    }
+}
+
 /// An open, migrated NOCT database.
 pub struct Database {
     data_directory: PathBuf,
     path: PathBuf,
     connection: Connection,
+    diagnostics: Arc<dyn DiagnosticSink>,
 }
 
 impl Database {
@@ -53,6 +71,11 @@ impl Database {
     /// and runs the startup maintenance. Fails without modifying the schema when the
     /// file was written by a newer application version.
     pub fn open(data_directory: &Path) -> Result<Self> {
+        Self::open_with(data_directory, OpenOptions::default())
+    }
+
+    /// Opens the database with the given options. See [`Database::open`].
+    pub fn open_with(data_directory: &Path, options: OpenOptions) -> Result<Self> {
         let path = data_directory.join(DATABASE_FILE_NAME);
         restrict_if_present(&path)?;
         let mut connection = Connection::open(&path)?;
@@ -83,6 +106,7 @@ impl Database {
             data_directory: data_directory.to_path_buf(),
             path,
             connection,
+            diagnostics: options.diagnostics,
         };
         database.run_scheduled_integrity_check()?;
         database.cleanup_orphans()?;
@@ -91,6 +115,11 @@ impl Database {
 
     pub fn data_directory(&self) -> &Path {
         &self.data_directory
+    }
+
+    /// The sink that receives the warnings of this database.
+    pub fn diagnostics(&self) -> &dyn DiagnosticSink {
+        self.diagnostics.as_ref()
     }
 
     pub fn path(&self) -> &Path {

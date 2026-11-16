@@ -7,6 +7,7 @@
 
 mod clock;
 mod codec;
+pub mod diagnostics;
 pub mod migrations;
 pub mod persistence;
 pub mod recovery;
@@ -16,7 +17,7 @@ pub mod schema;
 pub mod store;
 pub mod transaction;
 
-pub use runtime::Database;
+pub use runtime::{Database, OpenOptions};
 
 /// Persistence error. `Message` carries the user-facing text the application shows.
 #[derive(Debug, thiserror::Error)]
