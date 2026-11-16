@@ -40,6 +40,26 @@ identifier (`com.nocturne.codex`), for example `~/.local/share/com.nocturne.code
 is not the one the Electron application uses (`Nocturne Studio`), so the shell does not open an existing
 installation's database by default.
 
+**`--from-fixture <release tag>`** starts the shell from the synthetic database of a pinned release line, for example
+`v1.0.2`, which is the line of `scripts/fixtures/release-lines.json`. The database is the one that `scripts/release-lines.mjs`
+writes for the row gate: the TypeScript sources of that tag are compiled and seed one workspace, `fixture-project`, marked
+as a favourite, with a conversation. The launcher copies the database into a new folder under `target/shell-fixtures/`,
+and the shell opens the copy. The fixture and every real data folder are left untouched. The launcher prints the folder:
+
+```sh
+node scripts/run-rust-shell.mjs release --from-fixture v1.0.2
+# fixture: v1.0.2; the shell opens a copy in /…/noct-rust-spike/target/shell-fixtures/v1.0.2-XXXXXX
+```
+
+- Each run makes a new folder, which stays until it is deleted. `target/shell-fixtures/` is the place to clear.
+- The fixture is built from the tags of the repository, so the clone needs them (`git fetch --tags`), and from the
+  Node dependencies (`npm ci`). `--check` builds and copies it too, and then starts nothing.
+- `--from-fixture` and `--data-dir` cannot be used together.
+- The workspace of the fixture points into `target/shell-fixtures/<tag>/source/`. If that folder is deleted, the
+  workspace is listed as missing.
+- The workspace is listed as authorized, as the release database marks it. A workspace restored from a backup is not
+  authorized until it is chosen again; a fixture is not a backup.
+
 ## What has been verified
 
 | Check | Status |
@@ -67,6 +87,8 @@ installation's database by default.
 | Commands other than `settings_get` and `workspaces_list` called from a window | **Not verified** |
 | WebView2 (Windows) | **Not verified** |
 | WKWebView (macOS) | **Not verified** |
+| The release-line fixture (`--from-fixture v1.0.2`) opens in the shell's store and lists its workspace | Verified on Linux with a probe that was not committed: the shell opened a copy and `workspaces_list` returned `fixture-project`, favourite and available. The copy is made by `scripts/run-rust-shell.test.mjs`. **Not verified** in a window |
+| A data folder outside the user's profile is warned in the log on Windows | Verified by tests (`crates/noct-app/tests/bootstrap.rs`) on Linux, and the Windows job runs them. **Not verified** with a real profile on a Windows machine |
 
 ## Manual check, Linux (WebKitGTK)
 
@@ -233,24 +255,29 @@ On Windows and macOS nine steps ran and eleven Linux-only steps were skipped, as
 - The output differential against TypeScript, which needs the release-line bases.
 - The Chromium checks: the Content-Security-Policy, the settings and the interface, the redaction fixture and the
   IPC samples. Node and Chromium run on Linux only in this workflow.
+- The launcher tests (`node --test scripts/run-rust-shell.test.mjs`), which build the v1.0.2 fixture from its tag.
 
 **Covered by other workflows:**
 
 - The operating system keyring round trip, on the three systems (`.github/workflows/keyring-round-trip.yml`).
+- The row gate (`node scripts/verify-row-gate.mjs`), on Ubuntu, in `.github/workflows/row-gate.yml`. It is not a required
+  check: making it required on `main` is a setting of the repository, and the owner makes it.
 
 **Not covered:**
 
 - No window is opened on any system. The window is checked by hand on Linux, and not on Windows or macOS.
 - WebView2 (Windows) and WKWebView (macOS) are not exercised by any job.
 - The release shell is compiled on Windows and macOS, but it is not run there.
-- The row gate (`node scripts/verify-row-gate.mjs`) is not run by any workflow. A proposal to run it before the merge
-  to `main` is in [the row gate proposal](rust-row-gate-workflow.md). No workflow is changed by it.
+- The row gate is run on Ubuntu only, by `row-gate.yml`, and the shell matrix does not run it on Windows or macOS. The
+  design of the job is in [the row gate workflow](rust-row-gate-workflow.md).
 - The Windows restrictive file permissions: the POSIX modes of the database, the logs and the atomic writes apply on
   Linux and macOS only, as the tests in `crates/noct-db` gate them. On Windows the Rust code applies no ACL, so
   Windows gives new files the access rules of their folder. The TypeScript application has the same limit: its
   `chmod` calls (`electron/persistence/AtomicFile.ts`, `electron/security/ProviderCredentialVault.ts`) only change the
-  read-only flag on Windows. Closing this needs an ACL decision, which is not part of this slice. The analysis and the proposal are in
-  [the Windows file permissions analysis](rust-windows-file-permissions.md), which implements nothing.
+  read-only flag on Windows. On Windows, a data folder outside the user's profile is reported in `nocturne.log` (category
+  `bootstrap.data-directory`), and the shell still opens it. The folder's ACL is not set: that needs the `windows-sys`
+  dependency, which the owner has not approved yet. The analysis and the decisions are in
+  [the Windows file permissions analysis](rust-windows-file-permissions.md).
 - Caching: each run builds the workspace from scratch, so the Windows and macOS jobs take most of their time to
   compile. A cache action would be a third-party action, which needs approval first.
 
