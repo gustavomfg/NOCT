@@ -139,31 +139,39 @@ The two listings that feed internal routines are paged. The rules are the same f
 
 ### Query plans
 
-The plans are read from the same query builders that the listings run, in an in-memory database
-with the schema of this build. The database was empty, so the plans reflect the indexes, not the
-statistics of a large history.
+The planner's choice for the embeddings listing depends on statistics. This section is a summary. The
+measurements, the method and their limits are in [`docs/perf/semantic-index-query-plans.md`](../perf/semantic-index-query-plans.md).
 
-- **File units, first page.** `SEARCH semantic_units USING INDEX idx_semantic_units_workspace_path
-  (workspace=? AND relative_path=?)`, then `USE TEMP B-TREE FOR LAST 2 TERMS OF ORDER BY`.
-- **File units, keyset page.** The same index, with `start_line>?` as a seek, then the same temporary
-  tree for the last two terms of the order. The cursor is a seek on the first column, and the rest
-  of the key is checked within that range. The test asserts the seek.
-- **Embeddings, keyset page.** `SEARCH semantic_units USING INDEX idx_semantic_units_workspace_status
-  (workspace=? AND status=?)`, then `USE TEMP B-TREE FOR ORDER BY`. **The cursor `id > ?` is not used
-  as a seek.** Each page reads the indexed units of the workspace and sorts them by identifier, so the
-  work per page grows with the number of indexed units, not with the page. The test asserts that the
-  page is an index search and never a table scan.
+- Without statistics, the embeddings page uses `idx_semantic_units_workspace_status` and a temporary sort. The
+  identifier cursor `id > ?` is a filter, not a seek. For one workspace, the page walk grew 13.5 times from 50,000
+  to 200,000 rows (2.1 s to 27.8 s).
+- With exact statistics (`ANALYZE`), the plan depends on the workspace's share of the table. A workspace that is
+  the whole table is read in identifier order, and its page walk grew 4.0 times (164 ms to 662 ms).
+- Among ten workspaces, the other workspaces cost nothing measurable without statistics. With statistics, the
+  planner switches plan for a workspace that is a tenth of the table, and the listing costs 5.2 times more than
+  the same rows alone. This is a plan switch, not a scan of the other workspaces. The measurements cover one
+  layout per table size.
+- `PRAGMA optimize` on a database without statistics stores sampled estimates, not exact counts, and does not
+  refresh them when the table grows. It does not replace `ANALYZE`.
+- The `plan_tests` assert plans on an empty database, which has no statistics. The `benchmark_tests` measure the
+  populated plans. They are ignored by default and run in release mode.
 
-Proposed, not implemented, because each needs a schema change with parity in the TypeScript
-migrations (schema version 33 in both):
+### Decision
 
-- an index on `semantic_units(workspace, status, id)` would let the planner seek on `id > ?`, and
-  would remove the temporary tree of the embeddings page;
-- an index on `semantic_units(workspace, relative_path, start_line, start_column, id)` would remove
-  the last temporary tree of the file page.
+Option C: no schema change. `ANALYZE semantic_units` refreshes the statistics in two cases:
 
-The maintainer decides whether to add them. Until then, the cost of a large workspace's embeddings
-listing is not measured here, and it must not be claimed as bounded per page.
+1. At the end of a large indexing round, when the round wrote at least 10,000 units.
+2. When a database is opened and `sqlite_stat1` has no rows for `semantic_units`. The analysis runs in the
+   background and is not on the open path.
+
+`PRAGMA optimize` stays at close. It does not replace these refreshes.
+
+### Deferred
+
+The index `(workspace, status, id)` is evaluated and is not in the schema. It goes into a versioned migration,
+in Rust and in TypeScript with fingerprints, only after the Electron build no longer reads the database. A
+versioned migration before that would make Electron refuse the database
+(`electron/database/DatabaseRuntime.ts`, `DATABASE_SCHEMA_VERSION`). The measured effect is in the performance note.
 
 ## Fuses and ASAR
 
@@ -205,7 +213,7 @@ reason is the packaging model, not the signing decision. The signing and updater
   reached only through the GTK 0.18 bindings that Tauri 2 requires on Linux, and cargo-deny does not
   report unsound advisories by default.
 - **Query plans:** the tests in `crates/noct-db/src/repositories/semantic_index.rs` (`plan_tests`)
-  assert the plans above.
+  assert the plans on an empty database. `benchmark_tests` measures the populated ones.
 
 ## References
 
