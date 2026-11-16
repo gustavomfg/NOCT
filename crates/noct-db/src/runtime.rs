@@ -19,6 +19,7 @@ use time::macros::format_description;
 use time::{Duration, OffsetDateTime};
 
 use crate::diagnostics::{DiagnosticSink, StandardErrorSink};
+use crate::observer::{Measurement, OperationObserver};
 use crate::statistics::{self, StatisticsOutcome};
 use crate::{Error, Result, migrations, schema};
 
@@ -55,6 +56,8 @@ pub struct OpenOptions {
     pub statistics_busy_timeout: std::time::Duration,
     /// Receives the warnings of the persistence layer, such as a failed statistics analysis.
     pub diagnostics: Arc<dyn DiagnosticSink>,
+    /// Receives every operation measured with [`Database::measure`]. Empty by default.
+    pub operation_observer: Option<Arc<dyn OperationObserver>>,
 }
 
 impl Default for OpenOptions {
@@ -62,6 +65,7 @@ impl Default for OpenOptions {
         Self {
             statistics_busy_timeout: DEFAULT_STATISTICS_BUSY_TIMEOUT,
             diagnostics: Arc::new(StandardErrorSink),
+            operation_observer: None,
         }
     }
 }
@@ -72,6 +76,7 @@ pub struct Database {
     path: PathBuf,
     connection: Connection,
     diagnostics: Arc<dyn DiagnosticSink>,
+    operation_observer: Option<Arc<dyn OperationObserver>>,
     /// The statistics analysis that `open` started, until it is waited for.
     statistics: Option<JoinHandle<StatisticsOutcome>>,
 }
@@ -118,6 +123,7 @@ impl Database {
             path,
             connection,
             diagnostics: options.diagnostics,
+            operation_observer: options.operation_observer,
             statistics: None,
         };
         database.run_scheduled_integrity_check()?;
@@ -155,6 +161,26 @@ impl Database {
     /// The sink that receives the warnings of this database.
     pub fn diagnostics(&self) -> &dyn DiagnosticSink {
         self.diagnostics.as_ref()
+    }
+
+    /// Runs `callback` as the named operation. When it ends, the operation is reported to the
+    /// observer and the warning policy (a failure, or at least [`crate::observer::SLOW_OPERATION_MS`]
+    /// milliseconds). The result of `callback` is returned unchanged; a panic in `callback` is
+    /// reported as a failure and then propagates. Neither the observer nor the sink can change the
+    /// result. The names are those of [`crate::observer::CATALOG`].
+    pub fn measure<T>(
+        &self,
+        operation: &'static str,
+        callback: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        let mut measurement = Measurement::start(
+            operation,
+            self.operation_observer.as_deref(),
+            self.diagnostics.as_ref(),
+        );
+        let result = callback();
+        measurement.failed = result.is_err();
+        result
     }
 
     pub fn path(&self) -> &Path {
