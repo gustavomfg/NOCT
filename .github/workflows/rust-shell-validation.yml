@@ -49,11 +49,14 @@ jobs:
       - name: Install the Node dependencies
         run: npm ci
 
-      - name: Add the WebAssembly target and show the toolchain
+      - name: Add the WebAssembly target and check the pinned toolchain
         run: |
           rustup target add wasm32-unknown-unknown
           rustc --version
           cargo --version
+          pinned="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          test -n "$pinned"
+          test "$(rustc --version | cut -d' ' -f2)" = "$pinned"
 
       - name: Install trunk at a pinned version
         run: cargo install --locked trunk@0.22.1
