@@ -23,6 +23,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(path.join(root, 'package.json'))
 const { chromium } = require('playwright')
 
+// The version of Tauri whose `__TAURI_INTERNALS__.invoke` the mock follows (tauri-2.12.5/scripts/core.js).
+// `crates/noct-app/tests/shell_ui_mock.rs` fails when Cargo.lock names another version, so a Tauri update is
+// not taken until the mock has been checked against it.
+const MOCKED_TAURI_VERSION = '2.12.5'
+
 const dist = path.join(root, 'crates', 'noct-ui', 'dist')
 const config = JSON.parse(fs.readFileSync(path.join(root, 'crates', 'noct-app', 'tauri.conf.json'), 'utf8'))
 const policy = config.app.security.csp
@@ -212,5 +217,5 @@ try {
 }
 
 const passed = results.every((result) => result.passed)
-console.log(JSON.stringify({ policy, passed, results }, null, 2))
+console.log(JSON.stringify({ mockedTauriVersion: MOCKED_TAURI_VERSION, policy, passed, results }, null, 2))
 process.exitCode = passed ? 0 : 1
