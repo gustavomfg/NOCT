@@ -8,6 +8,7 @@ pub mod bootstrap;
 pub mod logging;
 pub mod navigation;
 pub mod window;
+pub mod workspace_scope;
 
 use tauri::Manager;
 
