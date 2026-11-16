@@ -35,17 +35,21 @@ fn file_units(index: &SemanticIndex, workspace: &str, path: &str) -> Vec<Semanti
         .expect("file units")
 }
 
-/// Every embedding of a space, read through the streaming iterator.
+/// Every embedding of a space, read in one pass.
 fn embeddings(
     index: &SemanticIndex,
     workspace: &str,
     space: &SemanticEmbeddingSpace,
     filters: &SemanticSearchFilters,
 ) -> Vec<StoredSemanticEmbedding> {
+    let mut collected = Vec::new();
     index
-        .indexed_embeddings(workspace, space, filters)
-        .collect::<noct_db::Result<Vec<_>>>()
-        .expect("embeddings")
+        .for_each_indexed_embedding(workspace, space, filters, |embedding| {
+            collected.push(embedding);
+            Ok(())
+        })
+        .expect("embeddings");
+    collected
 }
 
 fn open(name: &str) -> Database {

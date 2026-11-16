@@ -276,12 +276,12 @@ fn rust_returns_the_rows_the_typescript_repositories_wrote() {
         }, None).expect("filtered semantic units"),
         "semanticUnitsLimited": semantic.list_units("/work/alpha", &SemanticSearchFilters::default(), Some(2)).expect("limited semantic units"),
         "semanticFileUnits": semantic.file_units("/work/alpha", "src/app.ts").collect::<Result<Vec<_>>>().expect("file semantic units"),
-        "semanticEmbeddings": embeddings_json(semantic.indexed_embeddings("/work/alpha", &semantic_space(), &SemanticSearchFilters::default()).collect::<Result<Vec<_>>>().expect("embeddings")),
-        "semanticEmbeddingsVersioned": embeddings_json(semantic.indexed_embeddings("/work/alpha", &SemanticEmbeddingSpace {
+        "semanticEmbeddings": embeddings_json(indexed_embeddings(&semantic, "/work/alpha", &semantic_space(), &SemanticSearchFilters::default()).expect("embeddings")),
+        "semanticEmbeddingsVersioned": embeddings_json(indexed_embeddings(&semantic, "/work/alpha", &SemanticEmbeddingSpace {
             model_version: Some("2".to_string()),
             dimensions: 2,
             ..semantic_space()
-        }, &SemanticSearchFilters::default()).collect::<Result<Vec<_>>>().expect("versioned embeddings")),
+        }, &SemanticSearchFilters::default()).expect("versioned embeddings")),
         "semanticLexical": {
             "helper": ranked(semantic.search_lexical("/work/alpha", "helper", &SemanticSearchFilters::default(), None)),
             "phrase": ranked(semantic.search_lexical("/work/alpha", "  módulo  principal ", &SemanticSearchFilters::default(), None)),
@@ -380,6 +380,21 @@ fn numbers_as_integers(value: &Value) -> Value {
 
 /// Indexed embeddings as the gate compares them: each unit with its vector, in identifier order.
 /// The vector is serialized here, in the test, and nowhere else.
+/// Every indexed embedding of a space, read in one pass, in identifier order.
+fn indexed_embeddings(
+    semantic: &SemanticIndex,
+    workspace: &str,
+    space: &SemanticEmbeddingSpace,
+    filters: &SemanticSearchFilters,
+) -> Result<Vec<StoredSemanticEmbedding>> {
+    let mut stored = Vec::new();
+    semantic.for_each_indexed_embedding(workspace, space, filters, |item| {
+        stored.push(item);
+        Ok(())
+    })?;
+    Ok(stored)
+}
+
 fn embeddings_json(stored: Vec<StoredSemanticEmbedding>) -> Value {
     Value::Array(
         stored

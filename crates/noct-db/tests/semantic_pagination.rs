@@ -312,11 +312,17 @@ fn embeddings_page_in_identifier_order_within_their_space() {
     }
 
     assert_eq!(ids, ["a", "b", "c", "d", "e"]);
-    let streamed: Vec<String> = index
-        .indexed_embeddings(ALPHA, &space(), &filters)
-        .map(|item| item.expect("embedding").unit.id)
-        .collect();
-    assert_eq!(streamed, ids);
+    let mut streamed = Vec::new();
+    index
+        .for_each_indexed_embedding(ALPHA, &space(), &filters, |item| {
+            streamed.push(item.unit.id);
+            Ok(())
+        })
+        .expect("single pass");
+    assert_eq!(
+        streamed, ids,
+        "the single pass reads the pages' rows in the same order"
+    );
 
     let other_space = SemanticEmbeddingSpace {
         dimensions: 3,
@@ -331,11 +337,9 @@ fn embeddings_page_in_identifier_order_within_their_space() {
     );
 }
 
-#[test]
-fn an_unreadable_embedding_fails_its_page_and_ends_the_stream() {
-    let db = open("pages-corrupt");
-    let index = SemanticIndex::new(db.connection());
-    let mut stored: Vec<PersistedSemanticUnit> = ["a", "b", "c"]
+/// Three indexed embeddings with identifiers `a`, `b` and `c`, in a space of two dimensions.
+fn three_embeddings() -> Vec<PersistedSemanticUnit> {
+    ["a", "b", "c"]
         .iter()
         .enumerate()
         .map(|(line, id)| {
@@ -346,23 +350,70 @@ fn an_unreadable_embedding_fails_its_page_and_ends_the_stream() {
                 embedding: Some(vec![1.0, 2.0]),
             }
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn an_unreadable_embedding_stops_the_pass_after_the_rows_before_it() {
+    let db = open("pages-corrupt");
+    let index = SemanticIndex::new(db.connection());
+    let mut stored = three_embeddings();
     // A vector of three values stored under a space of two dimensions.
     stored[1].embedding = Some(vec![1.0, 2.0, 3.0]);
     index
         .replace_file_units(ALPHA, APP, &stored)
         .expect("insert");
 
-    let outcomes: Vec<bool> = index
-        .indexed_embeddings(ALPHA, &space(), &SemanticSearchFilters::default())
-        .map(|item| item.is_ok())
-        .collect();
+    let mut visited = Vec::new();
+    let result = index.for_each_indexed_embedding(
+        ALPHA,
+        &space(),
+        &SemanticSearchFilters::default(),
+        |item| {
+            visited.push(item.unit.id);
+            Ok(())
+        },
+    );
 
-    // The page is read in one query, so the bad row fails the whole page, and the stream then stops
-    // with that single error rather than yielding the rows read before it.
+    assert!(result.is_err(), "the bad vector fails the pass");
     assert_eq!(
-        outcomes,
-        [false],
-        "the page fails as a whole, and the stream ends"
+        visited,
+        ["a"],
+        "the row before the bad one is visited, and nothing after it"
+    );
+}
+
+#[test]
+fn an_error_returned_by_the_visitor_stops_the_pass_at_once() {
+    let db = open("pages-visitor-error");
+    let index = SemanticIndex::new(db.connection());
+    let stored = three_embeddings();
+    index
+        .replace_file_units(ALPHA, APP, &stored)
+        .expect("insert");
+
+    let mut visited = Vec::new();
+    let result = index.for_each_indexed_embedding(
+        ALPHA,
+        &space(),
+        &SemanticSearchFilters::default(),
+        |item| {
+            visited.push(item.unit.id.clone());
+            if item.unit.id == "b" {
+                Err(noct_db::Error::Message("stop at b".to_string()))
+            } else {
+                Ok(())
+            }
+        },
+    );
+
+    assert!(
+        matches!(result, Err(noct_db::Error::Message(ref message)) if message == "stop at b"),
+        "the visitor's error is returned unchanged"
+    );
+    assert_eq!(
+        visited,
+        ["a", "b"],
+        "the row after the error is not visited"
     );
 }
