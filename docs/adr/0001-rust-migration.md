@@ -82,7 +82,7 @@ is a gap that must be closed before phase 6 (IPC and shell) is accepted.
 | Renderer never touches privileged APIs | `withGlobalTauri: false`; commands granted by capability | Configured in phase 0 |
 | IPC payloads and origins validated | Command arguments validated with `noct-core` types; capability limits windows | Phase 6 |
 | Browser permissions denied by default | Webview grants nothing beyond `core:default` | Configured in phase 0; verify per platform |
-| External navigation restricted | `on_navigation` handler in the core | **Gap**: implement in phase 6 |
+| External navigation restricted | The main window is created in code (`crates/noct-app/src/window.rs`) with an `on_navigation` handler that allows only the packaged frontend, and the dev server in debug builds (`navigation::is_app_url`); `on_new_window` denies every request. Unit tests in `navigation.rs` | Implemented in phase 6. Not yet checked in a running webview on each platform |
 | Content Security Policy | `app.security.csp` in `tauri.conf.json` | Configured in phase 0 |
 | Credentials never reach renderer | Secrets held in the OS credential store through `keyring-core` (`crates/noct-secrets`); SQLite and the renderer see opaque references only | Phase 5. Vault done; storage choice pending confirmation (see [Open decisions](#open-decisions)). **Superseded in part by [ADR 0002](0002-envelope-provider-credentials.md):** one master key in the store, secrets in an encrypted file |
 | Review Mode read-only | Logic port, unchanged | Phase 4 |

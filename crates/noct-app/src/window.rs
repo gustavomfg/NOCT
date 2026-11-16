@@ -1,0 +1,29 @@
+//! The main window, created in code so that its navigation and new-window policy are attached when
+//! it is built. A window declared in `tauri.conf.json` would exist before any policy could be set.
+
+use tauri::webview::NewWindowResponse;
+use tauri::{App, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+use crate::navigation;
+
+/// The label the capability in `capabilities/default.json` grants to.
+pub const MAIN_WINDOW_LABEL: &str = "main";
+
+/// Opens the main window on the packaged frontend. Its navigation is limited to the application
+/// (see `navigation::is_app_url`), and every request for a new window is denied.
+pub fn create_main_window<R: Runtime>(app: &App<R>) -> tauri::Result<WebviewWindow<R>> {
+    // The development server is an origin only in debug builds.
+    let dev_server = if cfg!(debug_assertions) {
+        app.config().build.dev_url.clone()
+    } else {
+        None
+    };
+
+    WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("index.html".into()))
+        .title("NOCT")
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(960.0, 640.0)
+        .on_navigation(move |url| navigation::is_app_url(url, dev_server.as_ref()))
+        .on_new_window(|_, _| NewWindowResponse::Deny)
+        .build()
+}

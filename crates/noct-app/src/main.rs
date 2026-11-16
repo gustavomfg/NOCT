@@ -7,8 +7,15 @@
 // Keep release builds from opening a console window on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod navigation;
+mod window;
+
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            window::create_main_window(app)?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running the NOCT shell");
 }

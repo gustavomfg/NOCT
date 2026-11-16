@@ -80,13 +80,13 @@ fn the_global_tauri_object_stays_hidden() {
     assert!(!context.config().app.with_global_tauri);
 }
 
+/// The main window is created in `src/window.rs`, with the navigation policy attached. A window declared
+/// in the configuration would be created by Tauri before that policy exists, so none may be declared.
 #[test]
-fn the_shell_declares_one_main_window() {
+fn no_window_is_created_from_the_configuration() {
     let context = context();
-    let windows = &context.config().app.windows;
 
-    assert_eq!(windows.len(), 1);
-    assert_eq!(windows[0].label, "main");
+    assert!(context.config().app.windows.is_empty());
 }
 
 /// The capability of the main window grants the core defaults and nothing else. Whitespace is removed
