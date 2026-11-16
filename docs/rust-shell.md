@@ -63,9 +63,10 @@ These are recorded in code and in the ADR as well. The workspace folder rules fo
 
 - **Access check.** `WorkspaceTrust.ts` asks the operating system with `access(R_OK | X_OK)`. The standard
   library has no such call and the shell adds no native dependency for it, so the Rust check lists the
-  folder (`read_dir`) and looks up its `.` entry (`metadata`). The two agree for the owner of a folder,
-  which is the case that matters for a workspace. A permission that allows listing but not searching is
-  refused in both.
+  folder (`read_dir`) and looks up its `.` entry (`metadata`). Both calls need the permissions that
+  `access` checks, read and search. The tests in `crates/noct-app/tests/workspace_scope.rs` cover folders
+  with no permission bits and read-only folders, as the owner. They do not cover ACLs, other users, or
+  access granted through groups, where `access` and the two calls can still differ.
 - **Home folder.** The blocked roots include the home folder. The shell reads `HOME` on Linux and macOS and
   `USERPROFILE` on Windows. Node's `os.homedir()` on Unix also falls back to the password database, which the
   shell does not read. If `HOME` is unset on Unix, the two can disagree about the home folder.

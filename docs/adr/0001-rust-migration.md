@@ -328,12 +328,26 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   types, and the workspace inspection follows `WorkspaceTrust.ts`. Tests run through Tauri's
   mock runtime with the real capability: a granted command runs, an unlisted command and a
   second window are refused by the access control list, and a refused update writes nothing.
+  `conversations_list` is paged: its request takes a required `limit` from 1 to 500 and an optional
+  cursor, the key `updatedAt` and `id` of the last conversation of the previous page, and it returns
+  `items`, `hasMore` and `nextCursor`. The order is `updatedAt` descending, then `id` descending, and
+  the cursor walk visits every conversation once. The limit of 500 is a bound of the Rust contract; the
+  TypeScript conversation page is 100 (`shared/constants.ts`), which this phase does not change. There is
+  no unpaginated command.
   The outputs of the four commands are compared with the TypeScript application for each of the nine
   release lines: the legacy file, which Rust upgrades when it opens it, and a copy into which the
-  TypeScript repositories wrote values that are not defaults (`scripts/generate-output-differential.mjs`
-  and `crates/noct-app/tests/output_differential.rs`, run by the workflow). The reference is written on
-  each run and not committed, because the conversation identifiers and timestamps change between
-  runs. Not verified: the webview on each platform.
+  TypeScript repositories wrote values that are not defaults, and seven conversations with distinct
+  update times (`scripts/generate-output-differential.mjs` and `crates/noct-app/tests/output_differential.rs`,
+  run by the workflow). Rust reads the conversations in pages of one and of the maximum, and both walks must
+  agree before they are compared with TypeScript. The reference is written on each run and not committed,
+  because the conversation identifiers and timestamps change between runs. A CI step regenerates the Tauri
+  permissions and fails on any difference from the committed files.
+  Approximations, recorded in [docs/rust-shell.md](../rust-shell.md#known-approximations): the workspace
+  access check approximates `access(R_OK | X_OK)` without a native call, and the home folder comes from
+  `HOME` (Unix) or `USERPROFILE` (Windows), not from `os.homedir()`.
+  Not verified: the debug and release windows in a running webview, on any platform. The run modes are in
+  [docs/rust-shell.md](../rust-shell.md); they were checked by their plan and by the dev server answering,
+  not by opening the window.
 - **Not started:** phases 3 to 9.
 
 The row gate now reads rows that the TypeScript repositories wrote at schema 32, and it
