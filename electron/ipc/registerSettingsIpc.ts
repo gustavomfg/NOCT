@@ -5,7 +5,7 @@ import type { Logger } from '../logging/Logger'
 import { IPC_CHANNELS } from '../../shared/ipc/channels'
 import { safeIpcMain, type SafeIpcMain } from './safeIpc'
 
-const settingsSchema = z.object({
+export const settingsSchema = z.object({
   approvalPolicy: z.enum(['untrusted', 'on-request']).optional(),
   diagnosticMode: z.boolean().optional(),
   theme: z.enum(['dark', 'light']).optional(),
