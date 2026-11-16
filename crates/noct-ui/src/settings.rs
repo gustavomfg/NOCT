@@ -3,9 +3,8 @@
 //! shown as the saved one would mislead the person.
 
 use noct_core::ipc::settings::{AppLanguage, AppSettings, AppTheme, ApprovalPolicy};
-use serde_json::Value;
 
-use crate::ipc::Outcome;
+use crate::ipc::{self, Failure, Outcome};
 
 /// The command the interface reads its settings with.
 pub const COMMAND: &str = "settings_get";
@@ -18,54 +17,16 @@ pub enum SettingsView {
     Failed(Failure),
 }
 
-/// Why the settings could not be read: a code and the message to show. The message comes from the shell
-/// when the shell answered with an error, and from this module otherwise.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Failure {
-    pub code: String,
-    pub message: String,
-}
-
-const UNAVAILABLE_MESSAGE: &str =
-    "Não foi possível falar com o NOCT. Abra o aplicativo pela janela do desktop.";
-const UNEXPECTED_MESSAGE: &str = "O NOCT respondeu de forma inesperada.";
-const UNKNOWN_MESSAGE: &str = "Não foi possível ler as configurações.";
 const NOT_INFORMED: &str = "Não informado";
 
 /// Turns the outcome of a call into what the settings area shows.
 pub fn settle(outcome: Outcome) -> SettingsView {
-    match outcome {
-        Outcome::Resolved(text) => match serde_json::from_str::<AppSettings>(&text) {
+    match ipc::reply(outcome) {
+        Ok(text) => match serde_json::from_str::<AppSettings>(&text) {
             Ok(settings) => SettingsView::Ready(settings),
-            Err(_) => SettingsView::Failed(Failure {
-                code: "invalid-response".to_string(),
-                message: UNEXPECTED_MESSAGE.to_string(),
-            }),
+            Err(_) => SettingsView::Failed(ipc::invalid_response()),
         },
-        Outcome::Rejected(text) => SettingsView::Failed(failure_of(&text)),
-        Outcome::Unavailable => SettingsView::Failed(Failure {
-            code: "unavailable".to_string(),
-            message: UNAVAILABLE_MESSAGE.to_string(),
-        }),
-    }
-}
-
-/// The code and message of a command error, which the shell sends as `{ "code": ..., "message": ... }`.
-fn failure_of(text: &str) -> Failure {
-    let parsed: Option<Value> = serde_json::from_str(text).ok();
-    let field = |name: &str| {
-        parsed
-            .as_ref()
-            .and_then(|value| value.get(name))
-            .and_then(Value::as_str)
-            .map(str::to_string)
-    };
-    match (field("code"), field("message")) {
-        (Some(code), Some(message)) => Failure { code, message },
-        _ => Failure {
-            code: "unknown".to_string(),
-            message: UNKNOWN_MESSAGE.to_string(),
-        },
+        Err(failure) => SettingsView::Failed(failure),
     }
 }
 
@@ -128,6 +89,8 @@ fn diagnostic_label(enabled: Option<bool>) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ipc::{UNAVAILABLE_MESSAGE, UNEXPECTED_MESSAGE, UNKNOWN_MESSAGE};
+    use serde_json::Value;
 
     /// The shared contract of the settings reply: the cases `noct-core` accepts and refuses.
     const CONTRACT: &str = include_str!("../../noct-core/tests/fixtures/ipc/settings-get.json");

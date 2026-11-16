@@ -22,6 +22,62 @@ pub enum Outcome {
     Unavailable,
 }
 
+/// Why a call failed: the code and the message to show. The message comes from the shell when the shell
+/// answered with an error, and from this module otherwise.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Failure {
+    pub code: String,
+    pub message: String,
+}
+
+/// The message when the page is not running in the shell.
+pub const UNAVAILABLE_MESSAGE: &str =
+    "Não foi possível falar com o NOCT. Abra o aplicativo pela janela do desktop.";
+/// The message when the shell answered with a reply that the contract does not allow.
+pub const UNEXPECTED_MESSAGE: &str = "O NOCT respondeu de forma inesperada.";
+/// The message when the shell answered with an error that is not in the shell's shape.
+pub const UNKNOWN_MESSAGE: &str = "O NOCT retornou um erro sem detalhes legíveis.";
+
+/// The reply text of a call that resolved, or the failure of a call that did not. A reply is checked against
+/// the contract of its command by the caller, which is the only place that knows the shape it expects.
+pub fn reply(outcome: Outcome) -> Result<String, Failure> {
+    match outcome {
+        Outcome::Resolved(text) => Ok(text),
+        Outcome::Rejected(text) => Err(failure_of(&text)),
+        Outcome::Unavailable => Err(Failure {
+            code: "unavailable".to_string(),
+            message: UNAVAILABLE_MESSAGE.to_string(),
+        }),
+    }
+}
+
+/// The failure of a reply that does not match the contract of its command.
+pub fn invalid_response() -> Failure {
+    Failure {
+        code: "invalid-response".to_string(),
+        message: UNEXPECTED_MESSAGE.to_string(),
+    }
+}
+
+/// The code and message of a command error, which the shell sends as `{ "code": ..., "message": ... }`.
+fn failure_of(text: &str) -> Failure {
+    let parsed: Option<serde_json::Value> = serde_json::from_str(text).ok();
+    let field = |name: &str| {
+        parsed
+            .as_ref()
+            .and_then(|value| value.get(name))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    match (field("code"), field("message")) {
+        (Some(code), Some(message)) => Failure { code, message },
+        _ => Failure {
+            code: "unknown".to_string(),
+            message: UNKNOWN_MESSAGE.to_string(),
+        },
+    }
+}
+
 #[wasm_bindgen]
 extern "C" {
     /// The shell's invoke. It throws when the page is not running in the shell, which `catch` reports.
