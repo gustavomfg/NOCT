@@ -8,6 +8,8 @@
 //! are written by `scripts/generate-ipc-samples.mjs`, and `tests/ipc_contracts.rs` checks this module
 //! against them: zod decides the inputs and the TypeScript compiler decides the outputs.
 
+use std::collections::BTreeMap;
+
 use serde::de::{self, DeserializeOwned};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
@@ -128,5 +130,59 @@ pub mod settings {
         E: de::Error,
     {
         serde_json::from_value(value).map_err(E::custom)
+    }
+
+    /// The output of `settings.get` and `settings.set`: the saved values read the way `readSettings` reads
+    /// them in `electron/ipc/registerSettingsIpc.ts`. The defaults are the ones the settings repository
+    /// applies. A saved key the contract does not hold is not part of the output.
+    pub fn from_saved(saved: &BTreeMap<String, String>) -> AppSettings {
+        let value = |key: &str| saved.get(key).map(String::as_str);
+        AppSettings {
+            approval_policy: match value("approvalPolicy") {
+                Some("untrusted") => ApprovalPolicy::Untrusted,
+                _ => ApprovalPolicy::OnRequest,
+            },
+            diagnostic_mode: Some(value("diagnosticMode") == Some("true")),
+            theme: Some(match value("theme") {
+                Some("light") => AppTheme::Light,
+                _ => AppTheme::Dark,
+            }),
+            language: Some(match value("language") {
+                Some("en") => AppLanguage::En,
+                _ => AppLanguage::PtBr,
+            }),
+            pandoc_version: value("pandocVersion").map(str::to_string),
+        }
+    }
+
+    /// The saved values for an update, as `settings.set` writes them: the enum values as stored, and
+    /// `diagnosticMode` as the strings `"true"` or `"false"`. Only the fields present are written.
+    pub fn to_saved(update: &SettingsUpdate) -> BTreeMap<String, String> {
+        let mut saved = BTreeMap::new();
+        if let Some(policy) = update.approval_policy {
+            let stored = match policy {
+                ApprovalPolicy::Untrusted => "untrusted",
+                ApprovalPolicy::OnRequest => "on-request",
+            };
+            saved.insert("approvalPolicy".to_string(), stored.to_string());
+        }
+        if let Some(diagnostic) = update.diagnostic_mode {
+            saved.insert("diagnosticMode".to_string(), diagnostic.to_string());
+        }
+        if let Some(theme) = update.theme {
+            let stored = match theme {
+                AppTheme::Dark => "dark",
+                AppTheme::Light => "light",
+            };
+            saved.insert("theme".to_string(), stored.to_string());
+        }
+        if let Some(language) = update.language {
+            let stored = match language {
+                AppLanguage::PtBr => "pt-BR",
+                AppLanguage::En => "en",
+            };
+            saved.insert("language".to_string(), stored.to_string());
+        }
+        saved
     }
 }
