@@ -150,3 +150,7 @@ jobs:
       - name: Check the IPC contract samples against zod and TypeScript (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: node scripts/generate-ipc-samples.mjs --check
+
+      - name: Test the launcher options and the release-line fixture copy (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: node --test scripts/run-rust-shell.test.mjs
