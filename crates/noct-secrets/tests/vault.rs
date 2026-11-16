@@ -644,6 +644,91 @@ fn a_missing_document_is_not_configured_and_needs_no_key() {
 }
 
 #[test]
+fn listed_answers_while_the_store_is_locked_and_has_does_not() {
+    let directory = scratch("listed-locked");
+    let store = MemoryStore::new();
+    let vault = vault_in(&directory, &store);
+    let reference = vault
+        .create(&secret(KNOWN_SECRET))
+        .expect("create")
+        .to_string();
+
+    store.lock(true);
+    assert_eq!(vault.listed(&reference), Ok(true));
+    assert_eq!(vault.listed(UNKNOWN), Ok(false));
+    assert_eq!(
+        vault.has(&reference),
+        Err(VaultError::SecureStorageUnavailable),
+        "the strict check still needs the store"
+    );
+    store.lock(false);
+}
+
+#[test]
+fn listed_reads_no_key_so_a_lost_key_does_not_hide_the_status() {
+    let directory = scratch("listed-lost-key");
+    let store = MemoryStore::new();
+    let vault = vault_in(&directory, &store);
+    let reference = vault
+        .create(&secret(KNOWN_SECRET))
+        .expect("create")
+        .to_string();
+    store.forget(SERVICE_NAME, MASTER_KEY_ACCOUNT);
+
+    assert_eq!(vault.listed(&reference), Ok(true));
+    assert_eq!(
+        vault.has(&reference),
+        Err(VaultError::MasterKeyMissing),
+        "the strict check reports the lost key"
+    );
+}
+
+#[test]
+fn listed_is_false_for_an_unknown_or_missing_reference_and_refuses_malformed_ones() {
+    let directory = scratch("listed-missing");
+    let store = MemoryStore::new();
+    let vault = vault_in(&directory, &store);
+    let reference = vault
+        .create(&secret(KNOWN_SECRET))
+        .expect("create")
+        .to_string();
+
+    assert_eq!(vault.listed(UNKNOWN), Ok(false));
+    assert_eq!(
+        vault.listed("not-a-reference"),
+        Err(VaultError::InvalidReference)
+    );
+
+    fs::remove_file(directory.join(DOCUMENT_FILE)).expect("remove document");
+    store.lock(true);
+    assert_eq!(vault.listed(&reference), Ok(false));
+    store.lock(false);
+
+    let empty = scratch("listed-empty");
+    let empty_vault = vault_in(&empty, &MemoryStore::new());
+    assert_eq!(empty_vault.listed(UNKNOWN), Ok(false));
+}
+
+#[test]
+fn listed_can_say_true_for_a_reference_the_document_does_not_hold() {
+    // The documented trade-off of `listed`: the index names the reference, but the document lost its
+    // secret. `listed` reads the index only, so it says true; `has` reads the document, and says false.
+    let directory = scratch("listed-divergent");
+    let store = MemoryStore::new();
+    let vault = vault_in(&directory, &store);
+    let kept = vault.create(&secret("kept")).expect("create").to_string();
+    let document_before = fs::read(directory.join(DOCUMENT_FILE)).expect("document");
+    let lost = vault.create(&secret("lost")).expect("create").to_string();
+
+    fs::write(directory.join(DOCUMENT_FILE), document_before).expect("restore document");
+
+    assert_eq!(vault.listed(&lost), Ok(true), "the index names it");
+    assert_eq!(vault.has(&lost), Ok(false), "the document does not hold it");
+    assert_eq!(vault.listed(&kept), Ok(true));
+    assert_eq!(vault.has(&kept), Ok(true));
+}
+
+#[test]
 fn reset_after_a_lost_key_clears_the_vault_and_the_vault_works_again() {
     let directory = scratch("reset-lost-key");
     let store = MemoryStore::new();

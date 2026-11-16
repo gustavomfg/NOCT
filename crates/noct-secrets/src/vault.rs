@@ -135,6 +135,18 @@ impl ProviderCredentialVault {
             .is_some_and(|document| document.contains(&reference)))
     }
 
+    /// Reports whether the index names a reference and the document exists. This is the status the
+    /// interface shows. It reads only the index file and the presence of the document, never the
+    /// operating system store, so it answers while the store is locked and never prompts the user
+    /// to unlock it. `true` does not prove that the document holds the secret; [`Self::has`] does.
+    /// The two differ only after a crash between the writes of `create`, or after an edit made
+    /// outside NOCT.
+    pub fn listed(&self, reference: &str) -> Result<bool, VaultError> {
+        let reference = CredentialReference::parse(reference)?;
+        let _guard = self.lock();
+        Ok(self.index.load()?.contains(&reference) && self.document.exists()?)
+    }
+
     /// Removes a secret and its index entry. The secret leaves the document first, so a failure
     /// keeps the reference indexed and the operation can be retried.
     pub fn delete(&self, reference: &str) -> Result<bool, VaultError> {
