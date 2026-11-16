@@ -98,6 +98,9 @@ jobs:
       - name: Check the shell Content-Security-Policy in Chromium
         run: node scripts/check-shell-csp.mjs
 
+      - name: Check the settings area with a mocked shell in Chromium
+        run: node scripts/check-shell-ui.mjs
+
       - name: Check the log redaction fixture against TypeScript
         run: node scripts/generate-log-redaction-fixture.mjs --check
 
