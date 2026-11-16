@@ -59,11 +59,31 @@ pub fn resolve_data_directory(
     }
 }
 
+/// The category of the warning about a data directory outside the user's profile.
+pub const PROFILE_WARNING_EVENT: &str = "bootstrap.data-directory";
+
+/// The warning written when the data directory is outside the user's profile. It is written in English, like the
+/// other diagnostics. It names no path, because the log is shared when it is sent for support.
+pub const OUTSIDE_PROFILE_MESSAGE: &str = "The data directory is outside the user profile. Its files are protected only by the permissions of that folder.";
+
 /// Opens the store and the file log in `directory`, creating the directory when it does not exist. The
 /// diagnostic gate starts with the saved `diagnosticMode`, as the TypeScript logger does at startup.
+///
+/// On Windows the directory is checked against the user's profile folder, and a warning is written when it is
+/// outside it. The shell still opens the directory: the check informs, it does not refuse.
 pub fn open(directory: &Path) -> Result<Persistence, BootstrapError> {
+    open_with_profile(directory, user_profile().as_deref())
+}
+
+/// Opens as `open` does, and checks the directory against `profile`, the user's profile folder. `None` means the
+/// profile is not known or not checked, and then no warning is written.
+pub fn open_with_profile(
+    directory: &Path,
+    profile: Option<&Path>,
+) -> Result<Persistence, BootstrapError> {
     fs::create_dir_all(directory).map_err(BootstrapError::DataDirectory)?;
     let log = Arc::new(FileLogSink::open(directory).map_err(BootstrapError::Log)?);
+    warn_if_outside_profile(log.as_ref(), directory, profile);
     let diagnostics = Arc::new(DiagnosticGate::new(log, false));
     let sink: Arc<dyn DiagnosticSink> = diagnostics.clone();
     let store = Store::open_with(
@@ -80,4 +100,51 @@ pub fn open(directory: &Path) -> Result<Persistence, BootstrapError> {
         store: Arc::new(Mutex::new(store)),
         diagnostics,
     })
+}
+
+/// The profile folder of the user on Windows, where the user's files are kept. The other systems protect the data
+/// folder with POSIX modes (0700 and 0600), so no profile is checked there.
+fn user_profile() -> Option<PathBuf> {
+    if cfg!(windows) {
+        std::env::var_os("USERPROFILE").map(PathBuf::from)
+    } else {
+        None
+    }
+}
+
+/// Writes the profile warning when `directory` is outside `profile`. Returns whether it was written.
+fn warn_if_outside_profile(
+    sink: &dyn DiagnosticSink,
+    directory: &Path,
+    profile: Option<&Path>,
+) -> bool {
+    let Some(profile) = profile else {
+        return false;
+    };
+    if !is_outside_profile(directory, profile) {
+        return false;
+    }
+    sink.warn(PROFILE_WARNING_EVENT, OUTSIDE_PROFILE_MESSAGE);
+    true
+}
+
+/// Whether `directory` is outside `profile`. Both paths are resolved when they exist, and compared without case and
+/// with `\` as the separator, as Windows names them. A folder that only starts with the profile's name, such as
+/// `C:\Users\ana2` for `C:\Users\ana`, is outside it.
+pub fn is_outside_profile(directory: &Path, profile: &Path) -> bool {
+    let directory = comparable(directory);
+    let profile = comparable(profile);
+    let inside_prefix = if profile.ends_with('\\') {
+        profile.clone()
+    } else {
+        format!("{profile}\\")
+    };
+    !(directory == profile || directory.starts_with(&inside_prefix))
+}
+
+fn comparable(path: &Path) -> String {
+    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let text = resolved.to_string_lossy().into_owned();
+    let unprefixed = text.strip_prefix(r"\\?\").unwrap_or(&text);
+    unprefixed.replace('/', r"\").to_lowercase()
 }

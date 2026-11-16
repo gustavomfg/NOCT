@@ -1,6 +1,7 @@
 # Windows: the local files have no 0600 equivalent
 
-Status: analysis for a decision. Nothing here is implemented. The owner decides the open points at the end.
+Status: the warning is implemented; the ACL is not. The owner decided that `windows-sys` is not approved now, so the ACL
+waits for the integration of the Rust vault, with the owner present. The open points are at the end.
 
 ## What is applied today
 
@@ -50,6 +51,18 @@ users, or uploads them. The same applies to a folder that inherits `Everyone` or
 
 The residual exposure of the default folder is low. The exposure of a custom folder is the real one.
 
+## What is implemented
+
+- **The warning, on Windows only.** When the data folder is outside the user's profile (the folder named by
+  `USERPROFILE`), `bootstrap::open` writes one warning to `nocturne.log`: category `bootstrap.data-directory`, level
+  `warn`, and a fixed message in English that names no path. The shell still opens the folder; the check informs, it
+  does not refuse. The profile is not checked on the other systems, where the POSIX modes apply.
+- **The tests** (`crates/noct-app/tests/bootstrap.rs`): a folder outside the profile is warned and still opens; a folder
+  inside it, or a shell with no known profile, is not warned; a sibling whose name starts with the profile's name is
+  outside it. The reading of `USERPROFILE` itself runs only on Windows and is not tested directly; the Windows job
+  runs the rest of the tests.
+- **Not implemented:** the ACL of the folder (proposal items 1, 2 and 4 below).
+
 ## Proposal
 
 1. **A protected ACL for the folder the shell creates.** The folder gets a DACL with inheritance removed, granting full
@@ -61,21 +74,28 @@ The residual exposure of the default folder is low. The exposure of a custom fol
    already in `Cargo.lock` as a transitive dependency, in two versions. Using it directly adds a direct dependency,
    which needs the owner's approval first. `icacls` run as a child process was rejected: its output depends on the
    locale, and it spawns a process to change a security descriptor.
-3. **`NOCT_DATA_DIR` policy.** In a release build, warn in the diagnostics when the folder is not under the user's
-   profile, or refuse it if its ACL grants access beyond the owner, SYSTEM and Administrators. Development and scratch
-   folders keep working.
+3. **`NOCT_DATA_DIR` policy.** The warning when the folder is not under the user's profile is implemented (see above).
+   Refusing such a folder, or refusing one whose ACL grants access beyond the owner, SYSTEM and Administrators, is not
+   proposed now.
 4. **Tests.** A test that runs only on Windows, in the existing `shell` matrix: after `bootstrap::open`, the folder's
    DACL has no entry for `Everyone`, `Users` or `Authenticated Users`, and a file created in it inherits the same rule.
 5. **Nothing in the TypeScript application changes.** Its files keep their current behaviour on Windows, and this
    proposal does not reach it.
 
-## Decisions for the owner
+## Decisions
+
+Decided by the owner:
+
+- `NOCT_DATA_DIR` outside the profile: warn, and do not refuse. Implemented.
+- `windows-sys` as a direct dependency: not approved now. It is decided with the owner present, in the integration of
+  the Rust vault.
+- The ACL itself is not applied by this slice.
+
+Still open, for the integration:
 
 - Keep SYSTEM in the DACL (recommended), or owner only?
 - Apply the DACL to a folder that already exists, or only to folders the shell creates? Changing an existing folder
   silently is a behaviour change, so the recommendation is to warn and not to change it.
-- For `NOCT_DATA_DIR` outside the profile: warn, or refuse in release builds?
-- Approve `windows-sys` as a direct dependency of `noct-db` (or of a small module of `noct-app`)?
 
 ## Not verified
 

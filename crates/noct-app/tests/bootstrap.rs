@@ -4,7 +4,8 @@ mod common;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use common::Scratch;
 use noct_app::bootstrap::{self, BootstrapError};
@@ -93,4 +94,74 @@ fn a_data_directory_that_is_a_file_is_refused() {
         Err(other) => panic!("unexpected error: {other}"),
         Ok(_) => panic!("a file was opened as a data directory"),
     }
+}
+
+/// The records of the profile warning in the log of `directory`, read after the shell has closed.
+fn profile_warnings(directory: &Path) -> Vec<serde_json::Value> {
+    fs::read_to_string(directory.join("nocturne.log"))
+        .expect("the log file")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("each line is JSON"))
+        .filter(|entry| entry["category"] == bootstrap::PROFILE_WARNING_EVENT)
+        .collect()
+}
+
+#[test]
+fn a_directory_outside_the_profile_is_warned_and_still_opens() {
+    let scratch = Scratch::new("outside-profile");
+    let profile = scratch.path().join("ana");
+    let directory = scratch.path().join("shared").join("noct");
+    fs::create_dir_all(&profile).expect("the profile is created");
+
+    drop(bootstrap::open_with_profile(&directory, Some(&profile)).expect("the shell still opens"));
+
+    let warnings = profile_warnings(&directory);
+    assert_eq!(warnings.len(), 1, "one warning is written");
+    assert_eq!(warnings[0]["level"], "warn");
+    assert_eq!(warnings[0]["message"], bootstrap::OUTSIDE_PROFILE_MESSAGE);
+    assert!(
+        directory.join("nocturne.db").is_file(),
+        "the database is created"
+    );
+    let log = fs::read_to_string(directory.join("nocturne.log")).expect("the log file");
+    assert!(
+        !log.contains(&*directory.to_string_lossy()),
+        "the warning names no path"
+    );
+}
+
+#[test]
+fn a_directory_inside_the_profile_is_not_warned() {
+    let scratch = Scratch::new("inside-profile");
+    let profile = scratch.path().join("ana");
+    let directory = profile.join("AppData").join("noct");
+
+    drop(bootstrap::open_with_profile(&directory, Some(&profile)).expect("the shell opens"));
+
+    assert!(profile_warnings(&directory).is_empty());
+}
+
+#[test]
+fn without_a_known_profile_nothing_is_warned() {
+    let scratch = Scratch::new("no-profile");
+    let directory = scratch.path().join("noct");
+
+    drop(bootstrap::open_with_profile(&directory, None).expect("the shell opens"));
+
+    assert!(profile_warnings(&directory).is_empty());
+}
+
+#[test]
+fn a_sibling_that_only_starts_with_the_profile_name_is_outside_it() {
+    let scratch = Scratch::new("sibling");
+    let profile = scratch.path().join("ana");
+    let sibling = scratch.path().join("ana2");
+    let inside = profile.join("noct");
+    for folder in [&profile, &sibling, &inside] {
+        fs::create_dir_all(folder).expect("the folder is created");
+    }
+
+    assert!(bootstrap::is_outside_profile(&sibling, &profile));
+    assert!(!bootstrap::is_outside_profile(&profile, &profile));
+    assert!(!bootstrap::is_outside_profile(&inside, &profile));
 }
