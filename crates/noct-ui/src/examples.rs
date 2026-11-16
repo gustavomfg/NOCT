@@ -51,9 +51,6 @@ pub struct DiffLine {
     pub text: &'static str,
 }
 
-/// EXAMPLE. The projects of the sidebar, in order. The first one is the current project.
-pub const EXAMPLE_PROJECTS: [&str; 3] = ["noct", "frx", "ovra"];
-
 /// EXAMPLE. The model shown in the sidebar.
 pub const EXAMPLE_MODEL: &str = "Ollama · local";
 

@@ -1,18 +1,21 @@
 //! The window: the sidebar, the three modes, the settings (Ajustes) and the fixed question box, laid out as in
-//! docs/New_Design/mockup-vidro-painel.html. The projects, the findings and the diffs are EXAMPLE data
-//! (`examples.rs`). The settings are read with `settings_get` (`settings.rs`). No control in this window runs
-//! a command or writes a file: the approval, the revert and the confirmation are shown, not carried out.
+//! docs/New_Design/mockup-vidro-painel.html. The sidebar's projects come from `workspaces_list`
+//! (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The findings, the diffs, the model and
+//! the vault are EXAMPLE data (`examples.rs`). No control in this window runs a command or writes a file: the
+//! approval, the revert and the confirmation are shown, not carried out.
 
 use leptos::prelude::*;
+use noct_core::contracts::Workspace;
 
 use crate::dom;
 use crate::examples::{
     DiffKind, DiffLine, EXAMPLE_BUILD_DIFF, EXAMPLE_BUILD_FILE, EXAMPLE_COMMAND, EXAMPLE_DOC_DIFF,
-    EXAMPLE_DOC_FILE, EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_PROJECTS, EXAMPLE_VAULT,
+    EXAMPLE_DOC_FILE, EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_VAULT,
 };
 use crate::ipc;
 use crate::settings::{self, SettingsView};
 use crate::theme::Theme;
+use crate::workspaces::{self, WorkspacesView};
 
 /// The three modes of the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +35,6 @@ pub fn App() -> impl IntoView {
 
     let (mode, set_mode) = signal(Mode::Review);
     let (settings_open, set_settings_open) = signal(false);
-    let (project, set_project) = signal(0_usize);
     let (approved, set_approved) = signal(false);
     let (asked, set_asked) = signal(false);
 
@@ -50,6 +52,15 @@ pub fn App() -> impl IntoView {
         });
     };
     read_settings();
+
+    let (workspaces_view, set_workspaces_view) = signal(WorkspacesView::Loading);
+    let read_workspaces = move || {
+        set_workspaces_view.set(WorkspacesView::Loading);
+        ipc::call(workspaces::COMMAND, move |outcome| {
+            set_workspaces_view.set(workspaces::settle(outcome));
+        });
+    };
+    read_workspaces();
 
     Effect::new(move |_| dom::set_root_attribute("data-theme", theme.get().attribute()));
 
@@ -90,22 +101,7 @@ pub fn App() -> impl IntoView {
                 </div>
                 <nav class="nav" aria-label="Projetos">
                     <div class="nav__label">"Projetos"</div>
-                    {EXAMPLE_PROJECTS
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, name)| {
-                            view! {
-                                <button
-                                    type="button"
-                                    class="nav__item row"
-                                    aria-current=move || (project.get() == index).then_some("true")
-                                    on:click=move |_| set_project.set(index)
-                                >
-                                    {name}
-                                </button>
-                            }
-                        })
-                        .collect_view()}
+                    {move || projects_view(workspaces_view.get(), read_workspaces)}
                 </nav>
                 <div class="spacer"></div>
                 <div class="sidebar__bottom">
@@ -210,6 +206,54 @@ pub fn App() -> impl IntoView {
                 </div>
             </div>
         </div>
+    }
+}
+
+/// The sidebar's project list, or the state of its read: loading, nothing registered yet, the shell's error with
+/// a way to try again, or the list itself.
+fn projects_view(view: WorkspacesView, retry: impl Fn() + Copy + Send + Sync + 'static) -> AnyView {
+    match view {
+        WorkspacesView::Loading => view! {
+            <p class="note project__state" role="status" data-testid="projects-loading">
+                "Carregando projetos…"
+            </p>
+        }
+        .into_any(),
+        WorkspacesView::Failed(failure) => view! {
+            <div class="status error-card" role="alert" data-testid="projects-error">
+                <p>{failure.message}</p>
+                <button class="btn" type="button" on:click=move |_| retry()>
+                    "Tentar novamente"
+                </button>
+            </div>
+        }
+        .into_any(),
+        WorkspacesView::Ready(list) if list.is_empty() => view! {
+            <p class="note project__state" data-testid="projects-empty">
+                "Nenhum projeto registrado ainda."
+            </p>
+        }
+        .into_any(),
+        WorkspacesView::Ready(list) => view! {
+            <ul class="projects" data-testid="projects">
+                {list.iter().map(project_item).collect_view()}
+            </ul>
+        }
+        .into_any(),
+    }
+}
+
+/// One project: its name, a tag when it is a favourite, a note when it cannot be used as it is, and its folder.
+fn project_item(workspace: &Workspace) -> impl IntoView {
+    let favorite = workspace.favorite.then_some("Favorito");
+    let note = workspaces::note(workspace);
+    view! {
+        <li class="project row">
+            <span class="project__name">{workspace.name.clone()}</span>
+            {favorite.map(|label| view! { <span class="project__tag">{label}</span> })}
+            {note.map(|text| view! { <span class="project__note">{text}</span> })}
+            <span class="path project__path">{workspace.path.clone()}</span>
+        </li>
     }
 }
 
