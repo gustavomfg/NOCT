@@ -10,11 +10,11 @@ publish.workspace = true
 noct-core = { path = "../noct-core" }
 noct-db = { path = "../noct-db" }
 serde.workspace = true
+serde_json.workspace = true
 tauri.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 # The mock runtime of Tauri drives the commands through the capabilities, without a display.
 tauri = { workspace = true, features = ["test"] }
 

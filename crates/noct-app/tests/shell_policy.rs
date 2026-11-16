@@ -88,16 +88,3 @@ fn no_window_is_created_from_the_configuration() {
 
     assert!(context.config().app.windows.is_empty());
 }
-
-/// The capability of the main window grants the core defaults and nothing else. Whitespace is removed
-/// before the comparison, so the layout of the file does not matter.
-#[test]
-fn the_main_window_is_granted_the_core_defaults_only() {
-    let capability: String = include_str!("../capabilities/default.json")
-        .split_whitespace()
-        .collect();
-
-    assert!(capability.contains("\"identifier\":\"main-window\""));
-    assert!(capability.contains("\"windows\":[\"main\"]"));
-    assert!(capability.contains("\"permissions\":[\"core:default\"]"));
-}

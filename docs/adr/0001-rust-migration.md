@@ -80,7 +80,7 @@ is a gap that must be closed before phase 6 (IPC and shell) is accepted.
 | `contextIsolation` on | Not applicable. Commands are the only bridge | Set by design |
 | `nodeIntegration` off | No Node runtime in the webview | Set by design |
 | Renderer never touches privileged APIs | `withGlobalTauri: false`; commands granted by capability | Configured in phase 0 |
-| IPC payloads and origins validated | Command arguments validated with `noct-core` types; capability limits windows | Phase 6 |
+| IPC payloads and origins validated | Command arguments validated with `noct-core` types; capability limits windows. The first slice grants four commands to the `main` window only, and mock-runtime tests refuse an ungranted command and a window without the grant | Phase 6, first slice (not yet checked in a running window) |
 | Browser permissions denied by default | Webview grants nothing beyond `core:default` | Configured in phase 0; verify per platform |
 | External navigation restricted | The main window is created in code (`crates/noct-app/src/window.rs`) with an `on_navigation` handler that allows only the packaged frontend, and the dev server in debug builds (`navigation::is_app_url`); `on_new_window` denies every request. Unit tests in `navigation.rs` | Implemented in phase 6. Not yet checked in a running webview on each platform |
 | Content Security Policy | `app.security.csp` in `tauri.conf.json` | Configured in phase 0 |
@@ -312,6 +312,16 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   with pinned sources, and the operation observer with its catalog.
 - **Remaining, phase 2:** the realism condition on real data before any public release, the
   call sites of the observer (phase 6), and CI wiring for the gate.
+- **Done, phase 6 (first slice, not yet checked in a running window):** the shell opens the
+  store and the file log in `NOCT_DATA_DIR` (an absolute path) or in the application data
+  folder, which is not the Electron folder `Nocturne Studio`. `build.rs` declares the four
+  commands of the slice (`settings_get`, `settings_set`, `workspaces_list`,
+  `conversations_list`) in the application manifest, and `capabilities/default.json` grants
+  them to the `main` window and nothing else. Arguments are checked with the `noct-core`
+  types, and the workspace inspection follows `WorkspaceTrust.ts`. Tests run through Tauri's
+  mock runtime with the real capability: a granted command runs, an unlisted command and a
+  second window are refused by the access control list, and a refused update writes nothing.
+  Not verified: the webview on each platform, and the output differential (see below).
 - **Not started:** phases 3 to 9.
 
 The row gate now reads rows that the TypeScript repositories wrote at schema 32, and it
