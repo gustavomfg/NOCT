@@ -15,6 +15,12 @@ pub const MAIN_WINDOW_LABEL: &str = "main";
 /// does not show through it, and the interface paints over this colour.
 pub const WINDOW_BACKGROUND: Color = Color(0x0b, 0x0b, 0x0e, 0xff);
 
+/// The smallest size the window can be. The layout is checked at this size by `scripts/check-shell-ui.mjs`,
+/// which reads these two constants, so the minimum and the check cannot drift apart. It is the minimum of the
+/// Electron window as well (`electron/main.ts`).
+pub const MIN_WINDOW_WIDTH: f64 = 720.0;
+pub const MIN_WINDOW_HEIGHT: f64 = 600.0;
+
 /// Opens the main window on the packaged frontend. Its navigation is limited to the application
 /// (see `navigation::is_app_url`), and every request for a new window is denied.
 pub fn create_main_window<R: Runtime>(app: &App<R>) -> tauri::Result<WebviewWindow<R>> {
@@ -28,7 +34,7 @@ pub fn create_main_window<R: Runtime>(app: &App<R>) -> tauri::Result<WebviewWind
     WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("index.html".into()))
         .title("NOCT")
         .inner_size(1280.0, 800.0)
-        .min_inner_size(960.0, 640.0)
+        .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         .transparent(false)
         .background_color(WINDOW_BACKGROUND)
         .on_navigation(move |url| navigation::is_app_url(url, dev_server.as_ref()))
