@@ -206,6 +206,10 @@ reason is the packaging model, not the signing decision. The signing and updater
   through the real store on Linux (under a private session bus, with a Secret Service daemon and an
   unlocked collection that holds no real secret), Windows and macOS. The test uses its own service
   name, so it never reads or removes the master key of the installed application.
+  **Result on commit `10e8eb0` (run 43794363520):** `ubuntu-24.04`, `windows-latest` and `macos-latest` pass
+  the unit tests and the round trip. The Linux job had failed on the previous run (43661858148, commit
+  `d3eae4e`) with `SecureStorageUnavailable`. The daemon received an empty password without a line feed and
+  asked for it through a prompt. The fix is in `58c1f8d`.
 - **Dependency policy:** `cargo deny 0.20.2` passes `advisories`, `bans`, `licenses` and `sources`.
   The advisories it ignores are listed in `deny.toml`, with the reason and the upstream crate for
   each. `cargo audit 0.23.0` finds no vulnerability. It reports six warnings: five unmaintained
