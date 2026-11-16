@@ -8,6 +8,7 @@
 mod clock;
 mod codec;
 pub mod diagnostics;
+pub mod file_log;
 pub mod migrations;
 pub mod observer;
 pub mod persistence;
