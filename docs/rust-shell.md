@@ -172,7 +172,11 @@ matrix over `ubuntu-latest`, `windows-latest` and `macos-latest`, with `fail-fas
 **Covered on all three systems:**
 
 - The interface builds with Trunk in release mode.
-- `cargo test --workspace` runs, without the ignored tests.
+- `cargo test --workspace --no-fail-fast` runs every test binary, without the ignored tests. The integration test
+  executables on Windows carry the Common Controls v6 manifest that the application has: they build the application
+  with `tauri::test`, which reaches `comctl32` exports, and tauri-build embeds the manifest only in binaries. The
+  manifest is `crates/noct-app/windows/common-controls.manifest`, a copy of tauri-build's, linked by
+  `crates/noct-app/build.rs`. Without it the Windows test executables stopped with STATUS_ENTRYPOINT_NOT_FOUND.
 - The release shell builds with `--features custom-protocol`, and the step checks that the wasm file name trunk wrote
   is in the binary. The debug binary, built without the feature, is the control of that check.
 
