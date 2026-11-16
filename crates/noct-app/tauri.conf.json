@@ -5,8 +5,8 @@
   "identifier": "com.nocturne.codex",
   "build": {
     "frontendDist": "../noct-ui/dist",
-    "devUrl": "http://localhost:8080",
-    "beforeDevCommand": "cd ../noct-ui && trunk serve --port 8080",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "cd ../noct-ui && trunk serve --port 1420",
     "beforeBuildCommand": "cd ../noct-ui && trunk build --release"
   },
   "app": {

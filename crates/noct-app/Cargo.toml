@@ -14,6 +14,12 @@ serde_json.workspace = true
 tauri.workspace = true
 thiserror.workspace = true
 
+[features]
+# Serves the interface from the embedded frontend instead of the dev URL. Tauri's own CLI enables it for
+# production builds; without it a release build would load `build.devUrl`. The release mode of
+# scripts/run-rust-shell.mjs enables it.
+custom-protocol = ["tauri/custom-protocol"]
+
 [dev-dependencies]
 # The mock runtime of Tauri drives the commands through the capabilities, without a display.
 tauri = { workspace = true, features = ["test"] }
