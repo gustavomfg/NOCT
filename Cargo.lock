@@ -2797,8 +2797,12 @@ name = "noct-app"
 version = "1.0.5"
 dependencies = [
  "noct-core",
+ "noct-db",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
