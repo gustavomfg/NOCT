@@ -2863,6 +2863,8 @@ version = "1.0.5"
 dependencies = [
  "leptos",
  "noct-core",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]

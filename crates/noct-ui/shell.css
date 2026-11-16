@@ -1,0 +1,20 @@
+/* The settings area of the shell's interface. Classes only: the shell's policy grants no inline style. The
+   colours, spacing and type come from the Nocturne tokens (src/styles/tokens.css). */
+
+.settings-facts {
+  display: grid;
+  grid-template-columns: minmax(10rem, max-content) minmax(0, 1fr);
+  gap: var(--spacing-xs) var(--spacing-md);
+  margin: 0;
+}
+
+.settings-facts dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-small);
+}
+
+.settings-facts dd {
+  margin: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
