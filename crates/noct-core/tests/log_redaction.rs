@@ -18,9 +18,38 @@ fn the_text_redaction_reproduces_the_typescript_outputs() {
     assert!(!cases.is_empty());
     for case in cases {
         let input = case["input"].as_str().expect("input");
-        let expected = case["output"].as_str().expect("output");
+        // A recorded divergence states what the port must give. Every other case is TypeScript's output.
+        let expected = case
+            .get("rustOutput")
+            .unwrap_or(&case["output"])
+            .as_str()
+            .expect("output");
         assert_eq!(redact_text(input), expected, "input {input:?}");
     }
+}
+
+/// A divergence differs from TypeScript and says why. A case without one has neither field.
+#[test]
+fn every_intentional_divergence_is_recorded_with_its_reason() {
+    let fixture = fixture();
+    let mut recorded = 0;
+    for case in fixture["text"].as_array().expect("text cases") {
+        match case.get("rustOutput") {
+            None => assert!(case.get("divergence").is_none(), "{}", case["input"]),
+            Some(rust_output) => {
+                recorded += 1;
+                assert_ne!(rust_output, &case["output"], "{}", case["input"]);
+                assert!(
+                    case["divergence"]
+                        .as_str()
+                        .is_some_and(|reason| !reason.is_empty()),
+                    "{}",
+                    case["input"]
+                );
+            }
+        }
+    }
+    assert_eq!(recorded, 4, "the private key divergences");
 }
 
 #[test]
@@ -89,17 +118,31 @@ fn a_pair_straddling_the_limit_is_dropped_whole() {
     );
 }
 
-/// Known finding, reproduced from the TypeScript pattern: `SENSITIVE_KEYS` needs `KEY` right after the
-/// algorithm, so an RSA or DSA private key header is not redacted, while a bare `PRIVATE KEY` header is.
-/// The port keeps the TypeScript behavior until the owner decides the fix.
+/// TypeScript redacts a private key header only when `KEY` follows the algorithm directly, so
+/// `BEGIN RSA PRIVATE KEY` is not redacted there. The port redacts every algorithm. The divergence is
+/// recorded in the fixture (`rustOutput`); this test pins the port's values.
 #[test]
-fn the_private_key_header_follows_the_typescript_pattern() {
-    assert_eq!(
-        redact_text("-----BEGIN PRIVATE KEY-----"),
-        "[REDACTED-TOKEN]"
-    );
-    assert_eq!(
-        redact_text("-----BEGIN RSA PRIVATE KEY-----"),
-        "-----BEGIN RSA PRIVATE KEY-----"
-    );
+fn every_private_key_algorithm_header_is_redacted() {
+    for header in [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "-----BEGIN DSA PRIVATE KEY-----",
+        "-----BEGIN EC PRIVATE KEY-----",
+        "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "-----BEGIN RSA KEY-----",
+    ] {
+        assert_eq!(redact_text(header), "[REDACTED-TOKEN]", "{header}");
+    }
+}
+
+/// The header pattern is not wider than the private key headers.
+#[test]
+fn the_header_pattern_does_not_match_other_pem_labels() {
+    for text in [
+        "-----BEGIN KEY-----",
+        "-----BEGIN PUBLIC KEY-----",
+        "-----BEGIN CERTIFICATE-----",
+    ] {
+        assert_eq!(redact_text(text), text);
+    }
 }

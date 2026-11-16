@@ -39,7 +39,35 @@
     },
     {
       "input": "-----BEGIN RSA PRIVATE KEY-----",
-      "output": "-----BEGIN RSA PRIVATE KEY-----"
+      "output": "-----BEGIN RSA PRIVATE KEY-----",
+      "rustOutput": "[REDACTED-TOKEN]",
+      "divergence": "TypeScript needs KEY right after the algorithm, so RSA, DSA, EC and OPENSSH private key headers are not redacted there."
+    },
+    {
+      "input": "-----BEGIN DSA PRIVATE KEY-----",
+      "output": "-----BEGIN DSA PRIVATE KEY-----",
+      "rustOutput": "[REDACTED-TOKEN]",
+      "divergence": "TypeScript needs KEY right after the algorithm, so RSA, DSA, EC and OPENSSH private key headers are not redacted there."
+    },
+    {
+      "input": "-----BEGIN EC PRIVATE KEY-----",
+      "output": "-----BEGIN EC PRIVATE KEY-----",
+      "rustOutput": "[REDACTED-TOKEN]",
+      "divergence": "TypeScript needs KEY right after the algorithm, so RSA, DSA, EC and OPENSSH private key headers are not redacted there."
+    },
+    {
+      "input": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "output": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "rustOutput": "[REDACTED-TOKEN]",
+      "divergence": "TypeScript needs KEY right after the algorithm, so RSA, DSA, EC and OPENSSH private key headers are not redacted there."
+    },
+    {
+      "input": "-----BEGIN RSA KEY-----",
+      "output": "[REDACTED-TOKEN]"
+    },
+    {
+      "input": "-----BEGIN PUBLIC KEY-----",
+      "output": "-----BEGIN PUBLIC KEY-----"
     },
     {
       "input": "password: senha-sem-aspas",

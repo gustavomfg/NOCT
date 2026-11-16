@@ -32,10 +32,14 @@ const TEXT = [
   `ghp_${'a'.repeat(36)}`,
   'AKIAABCDEFGHIJKLMNOP',
   'eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.c2lnbmF0dXJlMTIz',
-  // The TypeScript pattern needs `KEY` right after the algorithm, so `BEGIN RSA PRIVATE KEY` is not
-  // redacted. The port keeps that behavior and records it as a finding; it is not a fix.
+  // Private key headers. Where the port and TypeScript differ, DIVERGENCES below records it.
   '-----BEGIN PRIVATE KEY-----',
   '-----BEGIN RSA PRIVATE KEY-----',
+  '-----BEGIN DSA PRIVATE KEY-----',
+  '-----BEGIN EC PRIVATE KEY-----',
+  '-----BEGIN OPENSSH PRIVATE KEY-----',
+  '-----BEGIN RSA KEY-----',
+  '-----BEGIN PUBLIC KEY-----',
   'password: senha-sem-aspas',
   'message="mensagem com dados"',
   "prompt: 'pedido privado'",
@@ -89,11 +93,36 @@ function loadLogger() {
   return require(output)
 }
 
+// Intentional divergences from TypeScript, decided by the owner. The TypeScript output stays as `output`;
+// the Rust port must give `rustOutput`, and crates/noct-core/tests/log_redaction.rs checks it. The TypeScript
+// code is not changed by this record: its fix is a separate decision.
+const PRIVATE_KEY_DIVERGENCE = {
+  rustOutput: '[REDACTED-TOKEN]',
+  reason: 'TypeScript needs KEY right after the algorithm, so RSA, DSA, EC and OPENSSH private key headers are not redacted there.',
+}
+const DIVERGENCES = new Map([
+  ['-----BEGIN RSA PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
+  ['-----BEGIN DSA PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
+  ['-----BEGIN EC PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
+  ['-----BEGIN OPENSSH PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
+])
+
+function textCase(input, redactLogText) {
+  const output = redactLogText(input)
+  const divergence = DIVERGENCES.get(input)
+  if (!divergence) return { input, output }
+  // A recorded divergence that TypeScript no longer has would be a stale record: refuse it.
+  if (divergence.rustOutput === output) {
+    throw new Error(`${JSON.stringify(input)} no longer diverges from TypeScript: remove it from DIVERGENCES`)
+  }
+  return { input, output, rustOutput: divergence.rustOutput, divergence: divergence.reason }
+}
+
 function generate() {
   const { redactLogText, redactLogValue } = loadLogger()
   const fixtureContent = {
     source: 'electron/logging/Logger.ts',
-    text: TEXT.map((input) => ({ input, output: redactLogText(input) })),
+    text: TEXT.map((input) => textCase(input, redactLogText)),
     value: VALUE.map((input) => ({ input, output: redactLogValue(input) })),
   }
   return `${JSON.stringify(fixtureContent, null, 2)}\n`
