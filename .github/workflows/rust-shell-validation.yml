@@ -108,8 +108,9 @@ jobs:
       - name: Run the workspace tests
         # The ignored tests are not run here: the output differential and the row gate run on Linux below,
         # and the operating system keyring has its own workflow (keyring-round-trip.yml) on all three systems.
+        # --no-fail-fast runs every test binary, so one run shows every failure on a system, not only the first.
         shell: bash
-        run: cargo test --workspace
+        run: cargo test --workspace --no-fail-fast
 
       - name: Build the release shell with the interface embedded
         # No window is opened. The release build with `custom-protocol` must hold the interface that trunk
