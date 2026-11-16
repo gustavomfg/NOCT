@@ -2,9 +2,13 @@ name: Rust shell validation
 
 # The Rust shell and its interface: the Trunk build of the UI, the workspace tests, the shell's
 # Content-Security-Policy checked in Chromium, and the drift checks of the fixtures that Rust shares with
-# TypeScript. Dispatch only. The Rust branch has no pull request trigger here yet.
+# TypeScript. It runs on pushes to the migration branch only, and by dispatch once this file is on the
+# default branch. There is no pull request trigger.
 
 on:
+  push:
+    branches:
+      - migration/rust
   workflow_dispatch:
 
 permissions:
