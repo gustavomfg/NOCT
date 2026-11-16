@@ -54,7 +54,9 @@ installation's database by default.
 | **Release mode** of the settings area (embedded interface), on Linux with WebKitGTK | **Verified by hand.** Command in [Manual check](#manual-check-linux-webkitgtk) |
 | `settings_get` end to end on Linux, in both modes: interface, `invoke`, access control list, command, store, contract, screen | **Verified by hand**, in a real webview, with the values of a scratch data folder |
 | The new layout (sidebar, modes, Ajustes, question box, themes, glass) in a real window | **Not verified.** Checked in Chromium only (see [The interface](#the-interface)) |
-| The layout in Chromium at 720x600 and 1440x920, both themes, keyboard focus, reduced motion, reduced transparency, glass on and off | Verified in Chromium with the shipped policy (`scripts/check-shell-ui.mjs`, run in CI on Linux) |
+| The layout in Chromium at the minimum window size (720x600) and 1440x920, both themes, keyboard focus, reduced motion, reduced transparency, glass on and off | Verified in Chromium with the shipped policy (`scripts/check-shell-ui.mjs`, run in CI on Linux) |
+| The sidebar lists the projects of `workspaces_list`, with its loading, empty, error and retry states | Verified in Chromium with a mocked shell. **Not verified** with real workspaces in a real window |
+| The minimum window size, `MIN_WINDOW_WIDTH` x `MIN_WINDOW_HEIGHT` (720x600) | Set in `window.rs` and tested. **Not verified** that the window manager enforces it in a real window |
 | Content-Security-Policy enforced by a webview; the WebAssembly handler runs under it | Verified in Chromium (`scripts/check-shell-csp.mjs`, run in CI on Linux). **Not verified in a webview** |
 | The window is opaque in the colour of the Electron window | Verified by a test of the constant (`crates/noct-app/tests/window.rs`). A thin border with the desktop in the margins remains after the change; it is treated as the desktop's window decoration (see [Window appearance](#window-appearance)) |
 | The mock follows the Tauri version named in Cargo.lock | Verified by a test (`crates/noct-app/tests/shell_ui_mock.rs`) that fails on a mismatch |
@@ -62,7 +64,7 @@ installation's database by default.
 | The glass layer costs nothing measurable in the real window | **Not measured.** See [The glass layer](#the-glass-layer) |
 | The inline-style guard | Verified by a test of the sources and of the page (`crates/noct-app/tests/shell_policy.rs`), and by the DOM check of every browser scenario |
 | Navigation policy in a running webview | **Not verified** |
-| Commands other than `settings_get` called from a window | **Not verified** |
+| Commands other than `settings_get` and `workspaces_list` called from a window | **Not verified** |
 | WebView2 (Windows) | **Not verified** |
 | WKWebView (macOS) | **Not verified** |
 
@@ -90,9 +92,12 @@ The window follows `docs/New_Design/design.md` and `docs/New_Design/mockup-vidro
 reference and is not production code. The source of the window is `crates/noct-ui/src/app.rs`, its styles are
 `crates/noct-ui/shell.css`, and the theme rules are in `crates/noct-ui/src/theme.rs`.
 
-- **Sidebar:** the brand, the theme button (a moon when the theme is light, a sun when it is dark), the list of
-  projects with the current one marked `aria-current`, a card for the model and a card for the key vault, and
-  Ajustes at the bottom.
+- **Sidebar:** the brand, the theme button (a moon when the theme is light, a sun when it is dark), the projects
+  the shell lists (`workspaces_list`), a card for the model and a card for the key vault, and Ajustes at the bottom.
+  A favourite project shows a tag. A project that cannot be used as it is shows a note under its name: the shell's
+  message when it has one, otherwise the reason. A project not authorized in this session asks to be chosen again.
+  The list has its own loading, empty, error and retry states. A reply outside the contract is an error, not a
+  shorter list. Conversations are not listed: see [Conversations](#conversations).
 - **Modes:** Revisar, Construir and Documentar in a segmented control (`aria-pressed`). A mode leaves Ajustes.
 - **Question box:** fixed at the bottom of the window, with a label. It says that questions are not answered yet.
 - **Ajustes:** the settings the shell returns (`settings_get`), with the loading state, the shell's error and
@@ -100,17 +105,24 @@ reference and is not production code. The source of the window is `crates/noct-u
   setting.
 - **Theme:** the saved setting (`settings_get`). A setting never chosen follows the system. The attribute
   `data-theme` on `<html>` selects the colours.
-- **Example data:** the projects, the models, the vault state, the findings, the approval, the diffs and the
-  document changes are EXAMPLE values in `crates/noct-ui/src/examples.rs`. The window says so, and no control in
-  it runs a command or writes a file. The approval shows its result as an example.
+- **Example data:** the models, the vault state, the findings, the approval, the diffs and the document changes are
+  EXAMPLE values in `crates/noct-ui/src/examples.rs`. The window says so, and no control in it runs a command or
+  writes a file. The approval shows its result as an example. The projects are not example data: they come from
+  `workspaces_list`.
 
 **Verified in Chromium** (`node scripts/check-shell-ui.mjs`, run in CI on Linux, against the Trunk build under the
-shipped policy): the ten scenarios pass. They cover the settings as ready, loading then ready, error then retry,
-a reply outside the contract, a page outside the shell, the theme from the saved setting and from the system, the
-sidebar theme button, the modes and Ajustes with their pressed and current states, the question box, the project
-marks, the keyboard focus, the layout at 720x600 and 1440x920 without horizontal scroll, the glass switch, reduced
-motion, and reduced transparency (which this Chromium reports, so it is checked and not only noted). No inline style
-is set and the policy reports no violation.
+shipped policy): the fourteen scenarios pass. The mock answers `settings_get` and `workspaces_list` separately, and
+the check requires that the interface calls only those two, each with an empty payload. The scenarios cover the
+settings as ready, loading then ready, error then retry, a reply outside the contract, a page outside the shell, the
+theme from the saved setting and from the system, the sidebar theme button, the modes and Ajustes with their pressed
+and current states, the question box, the projects (order, favourite tag, notes, the loading, empty, error and retry
+states, a reply outside the contract, and no example name), the keyboard focus, a hovered card that does not move, the
+layout at the minimum window size and at 1440x920 without horizontal scroll, the glass switch, reduced motion, and
+reduced transparency (which this Chromium reports, so it is checked and not only noted). No inline style is set and
+the policy reports no violation.
+
+The check fails on a regression of the hover: with a `translateY` added to the hover of the published page, the hover
+scenarios fail in both themes.
 
 **Not verified:** any of this in a real webview; the colours and the glass against the captures of the design,
 because the captures that `design.md` names (`docs/design/painel-*.png`) are not in the repository.
@@ -119,6 +131,25 @@ because the captures that `design.md` names (`docs/design/painel-*.png`) are not
 application: `shell.css` has its own tokens, taken from the design. The Geist fonts vendored under
 `crates/noct-ui/assets` are no longer copied by the build; the interface names Inter and falls back to the
 system face.
+
+## Conversations
+
+The shell has `conversations_list`, a paginated command, and the interface does not call it. The design the shell
+follows does not give conversations a place in the sidebar, and a conversation list would be a new screen, which is
+a product decision. It waits for the owner. When it is added it must use the paginated reply and keep the loading,
+empty and error states of the projects.
+
+## Vendored fonts and their licence
+
+`crates/noct-ui/assets/@fontsource-variable/geist` and `crates/noct-ui/assets/@fontsource-variable/geist-mono` hold
+the Geist and Geist Mono variable fonts as WOFF2 files, vendored from the `@fontsource-variable` npm packages. Each
+folder has its `LICENSE` next to the files. It is the SIL Open Font License, Version 1.1, with the copyright line
+"Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)".
+
+Checked on this machine: both `LICENSE` files are byte-identical to those of the installed packages, and every WOFF2
+file is byte-identical to the file of the same name in its package. Nothing in the interface refers to these files
+(`shell.css`, `index.html` and `crates/noct-ui/src` do not name Geist), so they reach no window today. The licence
+travels with them if they are used.
 
 ## The glass layer
 
@@ -164,6 +195,18 @@ margins and rounded corners remains, much smaller than before. The person who ch
 desktop's window decoration, not the application's. The shell does not draw that frame and does not ask for it,
 so no change is made here. Removing the decoration would change the title bar, which is a separate decision.
 
+## Minimum size
+
+The window cannot be made smaller than `MIN_WINDOW_WIDTH` x `MIN_WINDOW_HEIGHT` in `crates/noct-app/src/window.rs`,
+which are 720 x 600: the minimum of the Electron window (`electron/main.ts`). `crates/noct-app/tests/window.rs` fixes
+the two values, and `scripts/check-shell-ui.mjs` reads them and lays the interface out at that size.
+
+Measured in Chromium with the mock, in a temporary sweep that is not in the repository: at 560 px wide the mode control
+is cut, and at 600 px it fits. At 720 px the content pane is 430 px wide. The question box stays on screen down to
+480 px high. The width is the limit that matters; the height of 600 px is the Electron minimum and leaves room. This
+is a Chromium measurement. Whether the window manager enforces the minimum, and the layout in WebKitGTK, WebView2 and
+WKWebView, are not verified.
+
 ## Gaps in CI
 
 The workflow `.github/workflows/rust-shell-validation.yml` runs on pushes to `migration/rust`. Its `shell` job is a
@@ -200,12 +243,14 @@ On Windows and macOS nine steps ran and eleven Linux-only steps were skipped, as
 - No window is opened on any system. The window is checked by hand on Linux, and not on Windows or macOS.
 - WebView2 (Windows) and WKWebView (macOS) are not exercised by any job.
 - The release shell is compiled on Windows and macOS, but it is not run there.
-- The row gate (`node scripts/verify-row-gate.mjs`) is not run by any workflow.
+- The row gate (`node scripts/verify-row-gate.mjs`) is not run by any workflow. A proposal to run it before the merge
+  to `main` is in [the row gate proposal](rust-row-gate-workflow.md). No workflow is changed by it.
 - The Windows restrictive file permissions: the POSIX modes of the database, the logs and the atomic writes apply on
   Linux and macOS only, as the tests in `crates/noct-db` gate them. On Windows the Rust code applies no ACL, so
   Windows gives new files the access rules of their folder. The TypeScript application has the same limit: its
   `chmod` calls (`electron/persistence/AtomicFile.ts`, `electron/security/ProviderCredentialVault.ts`) only change the
-  read-only flag on Windows. Closing this needs an ACL decision, which is not part of this slice.
+  read-only flag on Windows. Closing this needs an ACL decision, which is not part of this slice. The analysis and the proposal are in
+  [the Windows file permissions analysis](rust-windows-file-permissions.md), which implements nothing.
 - Caching: each run builds the workspace from scratch, so the Windows and macOS jobs take most of their time to
   compile. A cache action would be a third-party action, which needs approval first.
 
