@@ -142,7 +142,7 @@ impl Store {
     }
 
     pub fn semantic_index(&self) -> SemanticIndex<'_> {
-        SemanticIndex::new(self.connection())
+        SemanticIndex::with_diagnostics(self.connection(), self.database.diagnostics())
     }
 
     pub fn settings(&self) -> Settings<'_> {

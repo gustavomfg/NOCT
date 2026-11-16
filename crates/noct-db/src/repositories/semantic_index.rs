@@ -20,8 +20,11 @@ use serde::Serialize;
 
 use crate::clock::iso_now;
 use crate::codec::{Stored, enum_text};
+use crate::diagnostics::{DiagnosticSink, StandardErrorSink};
 use crate::repositories::workspace_evidence::WorkspaceEvidence;
-use crate::{Error, Result, transaction};
+use crate::{Error, Result, statistics, transaction};
+
+static STANDARD_ERROR: StandardErrorSink = StandardErrorSink;
 
 const DEFAULT_STALE_REASON: &str = "O arquivo mudou após a análise.";
 const INVALID_EMBEDDING: &str = "Vetor de embedding inválido.";
@@ -129,11 +132,18 @@ pub struct UnitPosition {
 
 pub struct SemanticIndex<'a> {
     conn: &'a Connection,
+    diagnostics: &'a dyn DiagnosticSink,
 }
 
 impl<'a> SemanticIndex<'a> {
+    /// An index whose warnings go to standard error.
     pub fn new(conn: &'a Connection) -> Self {
-        Self { conn }
+        Self::with_diagnostics(conn, &STANDARD_ERROR)
+    }
+
+    /// An index whose warnings go to `diagnostics`.
+    pub fn with_diagnostics(conn: &'a Connection, diagnostics: &'a dyn DiagnosticSink) -> Self {
+        Self { conn, diagnostics }
     }
 
     pub fn create_run(&self, run: &SemanticIndexRun) -> Result<()> {
@@ -164,14 +174,16 @@ impl<'a> SemanticIndex<'a> {
     }
 
     /// Updates a run. A run that ends is first recorded as workspace evidence, in the same unit.
+    /// A run that ends with at least `LARGE_ROWS` indexed units refreshes the statistics of
+    /// `semantic_units` after its unit of work has committed. A failure of that refresh is logged and
+    /// does not fail the update, because the run is already recorded.
     pub fn update_run(&self, run: &SemanticIndexRun) -> Result<()> {
+        let ended = matches!(
+            run.status,
+            SemanticRunStatus::Completed | SemanticRunStatus::Failed | SemanticRunStatus::Cancelled
+        );
         transaction::run(self.conn, |conn| {
-            if matches!(
-                run.status,
-                SemanticRunStatus::Completed
-                    | SemanticRunStatus::Failed
-                    | SemanticRunStatus::Cancelled
-            ) {
+            if ended {
                 WorkspaceEvidence::new(conn).record_semantic_index(
                     &run.workspace,
                     &run.id,
@@ -198,7 +210,11 @@ impl<'a> SemanticIndex<'a> {
                 ],
             )?;
             Ok(())
-        })
+        })?;
+        if ended && run.indexed_units >= statistics::LARGE_ROWS {
+            statistics::refresh_after_round(self.conn, self.diagnostics);
+        }
+        Ok(())
     }
 
     pub fn latest_run(&self, workspace: &str) -> Result<Option<SemanticIndexRun>> {

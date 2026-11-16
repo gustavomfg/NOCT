@@ -9,6 +9,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::thread::JoinHandle;
 
 use noct_core::limits::DATABASE_SCHEMA_VERSION;
 use rusqlite::backup::Progress;
@@ -18,6 +19,7 @@ use time::macros::format_description;
 use time::{Duration, OffsetDateTime};
 
 use crate::diagnostics::{DiagnosticSink, StandardErrorSink};
+use crate::statistics::{self, StatisticsOutcome};
 use crate::{Error, Result, migrations, schema};
 
 pub const DATABASE_FILE_NAME: &str = "nocturne.db";
@@ -43,16 +45,22 @@ const CONNECTION_PRAGMAS: &str = "
 
 const ORPHAN_CLEANUP_SQL: &str = "DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions); DELETE FROM brain_memories WHERE workspace_id NOT IN (SELECT path FROM workspaces) OR (conversation_id IS NOT NULL AND conversation_id NOT IN (SELECT id FROM conversations)); DELETE FROM workspace_model_bindings WHERE workspace_id NOT IN (SELECT path FROM workspaces);";
 
+/// How long the background statistics analysis waits for a lock that the application's writes hold.
+pub const DEFAULT_STATISTICS_BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Options of [`Database::open_with`]. The defaults are the application's.
 #[derive(Debug, Clone)]
 pub struct OpenOptions {
-    /// Receives the warnings of the persistence layer.
+    /// How long the background statistics analysis waits for a lock before it fails.
+    pub statistics_busy_timeout: std::time::Duration,
+    /// Receives the warnings of the persistence layer, such as a failed statistics analysis.
     pub diagnostics: Arc<dyn DiagnosticSink>,
 }
 
 impl Default for OpenOptions {
     fn default() -> Self {
         Self {
+            statistics_busy_timeout: DEFAULT_STATISTICS_BUSY_TIMEOUT,
             diagnostics: Arc::new(StandardErrorSink),
         }
     }
@@ -64,6 +72,8 @@ pub struct Database {
     path: PathBuf,
     connection: Connection,
     diagnostics: Arc<dyn DiagnosticSink>,
+    /// The statistics analysis that `open` started, until it is waited for.
+    statistics: Option<JoinHandle<StatisticsOutcome>>,
 }
 
 impl Database {
@@ -102,15 +112,39 @@ impl Database {
         })?;
         restrict_database_files(&path)?;
 
-        let database = Self {
+        let mut database = Self {
             data_directory: data_directory.to_path_buf(),
             path,
             connection,
             diagnostics: options.diagnostics,
+            statistics: None,
         };
         database.run_scheduled_integrity_check()?;
         database.cleanup_orphans()?;
+        // Off the open path: the analysis runs on its own connection and is waited for at close.
+        database.statistics = statistics::start_if_needed(
+            &database.connection,
+            &database.path,
+            options.statistics_busy_timeout,
+            Arc::clone(&database.diagnostics),
+        );
         Ok(database)
+    }
+
+    /// Whether the statistics analysis started by `open` has not been waited for yet.
+    pub fn statistics_pending(&self) -> bool {
+        self.statistics.is_some()
+    }
+
+    /// Waits for the statistics analysis started by `open`, if it is still pending. A failure is not an
+    /// error of the database: the analysis logs it, and it is reported here as `Failed`.
+    pub fn wait_for_statistics(&mut self) -> StatisticsOutcome {
+        let Some(handle) = self.statistics.take() else {
+            return StatisticsOutcome::NotNeeded;
+        };
+        handle
+            .join()
+            .unwrap_or_else(|_| statistics::background_panicked(self.diagnostics.as_ref()))
     }
 
     pub fn data_directory(&self) -> &Path {
@@ -170,10 +204,17 @@ impl Database {
         remove_orphans(&self.connection)
     }
 
-    /// Checkpoints and closes the connection, then restricts the database files again.
-    pub fn close(self) -> Result<()> {
-        self.connection
-            .execute_batch("PRAGMA optimize; PRAGMA wal_checkpoint(PASSIVE);")?;
+    /// Waits for a pending statistics analysis, refreshes the statistics of `semantic_units` when they
+    /// need it, then runs `PRAGMA optimize`, checkpoints the WAL and closes the connection. A statistics
+    /// failure is logged and the rest still runs. The refresh comes before `PRAGMA optimize`, which
+    /// would otherwise store sampled estimates for the table.
+    pub fn close(mut self) -> Result<()> {
+        self.wait_for_statistics();
+        statistics::refresh_if_needed(&self.connection, self.diagnostics.as_ref(), "on close");
+        let steps = final_steps(&self.connection);
+        // The optimize is reported first when both fail, because it ran first.
+        steps.optimize?;
+        steps.checkpoint?;
         self.connection
             .close()
             .map_err(|(_, error)| Error::Sqlite(error))?;
@@ -213,6 +254,38 @@ impl Database {
             (QUICK_CHECK_KEY, crate::clock::iso_now()?),
         )?;
         Ok(())
+    }
+}
+
+/// What the two last steps of a close did. The checkpoint runs whatever the optimize did.
+#[derive(Debug)]
+pub(crate) struct FinalSteps {
+    pub(crate) optimize: rusqlite::Result<()>,
+    pub(crate) checkpoint: rusqlite::Result<WalCheckpoint>,
+}
+
+/// The row that `PRAGMA wal_checkpoint` returns: whether the checkpoint was blocked, the frames in the log,
+/// and the frames copied into the database.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct WalCheckpoint {
+    pub(crate) busy: i64,
+    pub(crate) log_frames: i64,
+    pub(crate) checkpointed_frames: i64,
+}
+
+/// Runs `PRAGMA optimize`, then a passive WAL checkpoint. A failed optimize does not stop the checkpoint.
+pub(crate) fn final_steps(connection: &Connection) -> FinalSteps {
+    let optimize = connection.execute_batch("PRAGMA optimize;");
+    let checkpoint = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |row| {
+        Ok(WalCheckpoint {
+            busy: row.get(0)?,
+            log_frames: row.get(1)?,
+            checkpointed_frames: row.get(2)?,
+        })
+    });
+    FinalSteps {
+        optimize,
+        checkpoint,
     }
 }
 
@@ -358,5 +431,57 @@ fn restrict_if_present(path: &Path) -> io::Result<()> {
     match restrict_path(path) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn the_checkpoint_runs_when_the_optimize_fails() {
+        let directory =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/noct-db-final-steps");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).expect("directory");
+        let connection = Connection::open(directory.join(DATABASE_FILE_NAME)).expect("open");
+        connection
+            .execute_batch(
+                "PRAGMA journal_mode = WAL; \
+                 CREATE TABLE semantic_units(id TEXT PRIMARY KEY, workspace TEXT NOT NULL);",
+            )
+            .expect("schema");
+        connection
+            .execute(
+                "WITH RECURSIVE numbers(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM numbers WHERE i < ?1) \
+                 INSERT INTO semantic_units(id, workspace) SELECT 'unit-' || i, '/work/a' FROM numbers",
+                [statistics::LARGE_ROWS],
+            )
+            .expect("rows");
+        // Read-only from here. PRAGMA optimize has statistics to write for the table, and cannot write them.
+        connection
+            .pragma_update(None, "query_only", true)
+            .expect("query only");
+
+        let steps = final_steps(&connection);
+
+        let optimize = steps
+            .optimize
+            .expect_err("PRAGMA optimize cannot write in a read-only connection");
+        assert!(optimize.to_string().contains("readonly"), "{optimize}");
+        let checkpoint = steps
+            .checkpoint
+            .expect("the checkpoint runs after the failed optimize");
+        assert_eq!(checkpoint.busy, 0, "{checkpoint:?}");
+        assert!(
+            checkpoint.log_frames > 0,
+            "the rows are still in the log: {checkpoint:?}"
+        );
+        assert_eq!(
+            checkpoint.checkpointed_frames, checkpoint.log_frames,
+            "every frame of the log is copied: {checkpoint:?}"
+        );
     }
 }

@@ -14,10 +14,12 @@ pub mod recovery;
 pub mod repositories;
 pub mod runtime;
 pub mod schema;
+mod statistics;
 pub mod store;
 pub mod transaction;
 
 pub use runtime::{Database, OpenOptions};
+pub use statistics::StatisticsOutcome;
 
 /// Persistence error. `Message` carries the user-facing text the application shows.
 #[derive(Debug, thiserror::Error)]

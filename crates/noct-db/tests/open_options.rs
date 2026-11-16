@@ -29,6 +29,7 @@ fn the_database_reports_to_the_injected_sink() {
         &directory,
         OpenOptions {
             diagnostics: recording.clone(),
+            ..OpenOptions::default()
         },
     )
     .expect("open");
