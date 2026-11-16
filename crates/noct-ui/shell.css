@@ -387,7 +387,7 @@ button {
   border-radius: 14px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
-  transition: transform 0.25s, box-shadow 0.25s, background 0.25s;
+  transition: box-shadow 0.25s, background 0.25s;
 }
 
 .card--flush {
@@ -413,8 +413,8 @@ button {
   border-top: 1px solid var(--line);
 }
 
+/* The hover changes only the shadow. A card keeps its box: nothing moves under the pointer. */
 .card:hover {
-  transform: translateY(-2px);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.12);
 }
 
@@ -726,9 +726,5 @@ button {
   .seg,
   .card {
     transition: none;
-  }
-
-  .card:hover {
-    transform: none;
   }
 }
