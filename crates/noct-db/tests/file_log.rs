@@ -97,7 +97,7 @@ fn secrets_and_private_fields_never_reach_the_file() {
         "pedido privado",
         "senha-privada",
     ] {
-        assert!(!text.contains(secret), "{secret} reached the file");
+        assert!(!text.contains(secret), "sensitive value reached the file");
     }
     let entries = read_entries(&directory);
     assert_eq!(entries[0]["message"], "Authorization: Bearer [REDACTED]");
