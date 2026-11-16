@@ -132,6 +132,15 @@ against the Rust code, or the difference must be recorded as an intentional chan
 Phases 1 to 4 can overlap once phase 2 lands. Phase 7 cannot start before phase
 6, because the UI calls the commands that phase 6 defines.
 
+The phase 7 UI cannot use inline `style=` attributes. The shipped policy grants
+`style-src 'self'` and no `'unsafe-inline'`, so the webview refuses them. The rule
+is held by `crates/noct-app/tests/shell_policy.rs`, which fails if a
+`style-src-attr` or `style-src-elem` directive appears, and by
+`scripts/check-shell-csp.mjs`, which renders the built UI under the policy. The
+split form (`style-src-elem 'self'` with `style-src-attr 'unsafe-inline'`) passed
+the same check and was not adopted. Reopening it, or any run-time style value, is
+a decision for phase 7 and must pass that check before it is accepted.
+
 ### Progress
 
 Recorded on branch `migration/rust`. Each item names the commit that delivers it.
