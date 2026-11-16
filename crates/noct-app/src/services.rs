@@ -5,6 +5,9 @@
 use std::path::PathBuf;
 
 use noct_core::contracts::{Conversation, Workspace};
+use noct_core::ipc::conversations::{
+    ConversationCursor, ConversationPage, ConversationPageRequest,
+};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::Store;
@@ -68,12 +71,31 @@ pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec
         .collect()
 }
 
-pub fn conversations_list(store: &Store) -> Result<Vec<Conversation>, CommandError> {
-    let rows = store
+/// One page of conversations after the cursor of the request. The store is asked for one row more than the
+/// limit: that extra row says whether another page exists, and it is not returned.
+pub fn conversations_page(
+    store: &Store,
+    request: &ConversationPageRequest,
+) -> Result<ConversationPage, CommandError> {
+    let after = request
+        .cursor
+        .as_ref()
+        .map(|cursor| (cursor.updated_at.as_str(), cursor.id.as_str()));
+    let mut rows = store
         .conversations()
-        .list()
+        .page_after(after, request.limit + 1)
         .map_err(|_| CommandError::Persistence)?;
-    Ok(rows
+    let has_more = rows.len() > request.limit;
+    rows.truncate(request.limit);
+    let next_cursor = if has_more {
+        rows.last().map(|row| ConversationCursor {
+            updated_at: row.updated_at.clone(),
+            id: row.id.clone(),
+        })
+    } else {
+        None
+    };
+    let items = rows
         .into_iter()
         .map(|row| Conversation {
             id: row.id,
@@ -82,5 +104,10 @@ pub fn conversations_list(store: &Store) -> Result<Vec<Conversation>, CommandErr
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
-        .collect())
+        .collect();
+    Ok(ConversationPage {
+        items,
+        has_more,
+        next_cursor,
+    })
 }

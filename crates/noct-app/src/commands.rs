@@ -4,7 +4,8 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use noct_core::contracts::{Conversation, Workspace};
+use noct_core::contracts::Workspace;
+use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
 use noct_db::store::Store;
 use tauri::State;
@@ -58,14 +59,19 @@ pub async fn workspaces_list(
     .await
 }
 
+/// One page of conversations. The argument is a page request: a required limit from 1 to 500, and the
+/// cursor of the previous page. The unpaginated list is not a command.
 #[tauri::command]
 pub async fn conversations_list(
     state: State<'_, Persistence>,
-) -> Result<Vec<Conversation>, CommandError> {
+    input: serde_json::Value,
+) -> Result<ConversationPage, CommandError> {
+    let request: ConversationPageRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
     let store = state.store.clone();
     blocking(move || {
         let guard = lock(&store)?;
-        services::conversations_list(&guard)
+        services::conversations_page(&guard, &request)
     })
     .await
 }

@@ -15,6 +15,7 @@
 // gate directory.
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { writeReleaseLines, readPins } from './release-lines.mjs'
@@ -92,10 +93,34 @@ function readOutputs(database, inspectWorkspaceScope) {
   return { settings, workspaces, conversations }
 }
 
+// Conversations with distinct update times, so that the pages of the Rust side cover more than one
+// conversation. The TypeScript repository stamps the current time, and two creations can share a
+// millisecond; SQLite does not define the order of equal times, so the TypeScript list would not have one
+// order to compare with. The rows are written directly, with the columns that ConversationRepository.create
+// writes.
+const EXTRA_CONVERSATIONS = 7
+
+function addConversations(readDirectory) {
+  const Database = requireFromRoot('better-sqlite3')
+  const raw = new Database(path.join(readDirectory, 'nocturne.db'))
+  try {
+    const insert = raw.prepare(
+      'INSERT INTO conversations (id,title,workspace,created_at,updated_at) VALUES (?,?,?,?,?)',
+    )
+    for (let index = 1; index <= EXTRA_CONVERSATIONS; index += 1) {
+      const at = new Date(Date.UTC(2026, 1, index, 10, index * 3)).toISOString()
+      insert.run(randomUUID(), `Conversa extra ${index}`, '/work/extra', at, at)
+    }
+  } finally {
+    raw.close()
+  }
+}
+
 // Writes on the read copy only, through the TypeScript repositories, so that the outputs cover values
 // that are not the defaults: every setting changed, a missing folder, and a file saved as a workspace.
 // The Rust side reads the same copy, so these writes are part of both sides of the comparison.
 function addReadingState(database, readDirectory) {
+  addConversations(readDirectory)
   database.setSettings({
     approvalPolicy: 'untrusted',
     diagnosticMode: 'true',

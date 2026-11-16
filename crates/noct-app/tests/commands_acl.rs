@@ -83,10 +83,37 @@ fn the_main_window_runs_the_granted_commands() {
     assert_eq!(
         ok_json(get_ipc_response(
             &main,
-            request("conversations_list", json!({}))
+            request("conversations_list", json!({ "input": { "limit": 10 } }))
         )),
-        json!([])
+        json!({ "items": [], "hasMore": false, "nextCursor": null })
     );
+}
+
+/// A page request is checked before the store is read. A missing, out-of-range or non-integer limit, an
+/// unknown field, an explicit null cursor, a cursor without its key, and a missing input are refused as
+/// invalid input.
+#[test]
+fn conversations_list_refuses_page_requests_outside_the_contract() {
+    let scratch = Scratch::new("conversation-page");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+
+    for input in [
+        json!({ "input": {} }),
+        json!({ "input": { "limit": 0 } }),
+        json!({ "input": { "limit": 501 } }),
+        json!({ "input": { "limit": "10" } }),
+        json!({ "input": { "limit": 10, "offset": 5 } }),
+        json!({ "input": { "limit": 10, "cursor": null } }),
+        json!({ "input": { "limit": 10, "cursor": { "updatedAt": "2026-01-01T00:00:00.000Z" } } }),
+        json!({ "input": null }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request("conversations_list", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
 }
 
 #[test]

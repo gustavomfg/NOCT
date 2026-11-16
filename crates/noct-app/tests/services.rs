@@ -7,6 +7,7 @@ use common::Scratch;
 use noct_app::bootstrap;
 use noct_app::services;
 use noct_core::contracts::WorkspaceAvailability;
+use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
@@ -242,11 +243,72 @@ fn conversations_are_listed_with_their_workspace() {
         .create("/work/project")
         .expect("the conversation is created");
 
-    let listed = services::conversations_list(&store).expect("conversations are read");
+    let request = ConversationPageRequest {
+        limit: 10,
+        cursor: None,
+    };
+    let page = services::conversations_page(&store, &request).expect("conversations are read");
 
-    assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].id, created.id);
-    assert_eq!(listed[0].workspace, "/work/project");
-    assert_eq!(listed[0].created_at, created.created_at);
-    assert_eq!(listed[0].updated_at, created.updated_at);
+    assert!(!page.has_more);
+    assert_eq!(page.next_cursor, None);
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].id, created.id);
+    assert_eq!(page.items[0].workspace, "/work/project");
+    assert_eq!(page.items[0].created_at, created.created_at);
+    assert_eq!(page.items[0].updated_at, created.updated_at);
+}
+
+/// Pages of one conversation each: the first page reports more and carries the key of its conversation,
+/// the page after it takes that key, and the last page reports no more and carries no cursor.
+#[test]
+fn conversation_pages_follow_the_cursor_and_report_more() {
+    let scratch = Scratch::new("conversation-pages");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let created: Vec<_> = (0..3)
+        .map(|_| {
+            store
+                .conversations()
+                .create("/work/project")
+                .expect("the conversation is created")
+        })
+        .collect();
+
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    let mut pages = 0;
+    loop {
+        let page =
+            services::conversations_page(&store, &ConversationPageRequest { limit: 1, cursor })
+                .expect("a page is read");
+        pages += 1;
+        assert_eq!(page.items.len(), 1, "one conversation per page");
+        assert_eq!(
+            page.next_cursor.is_some(),
+            page.has_more,
+            "the cursor is present exactly when more pages follow"
+        );
+        seen.push(page.items[0].id.clone());
+        if !page.has_more {
+            assert_eq!(page.next_cursor, None);
+            break;
+        }
+        let next = page.next_cursor.expect("a page with more has a cursor");
+        assert_eq!(
+            next.id, page.items[0].id,
+            "the cursor is the last conversation of its page"
+        );
+        assert_eq!(next.updated_at, page.items[0].updated_at);
+        cursor = Some(next);
+        assert!(pages <= created.len(), "the walk must end");
+    }
+
+    assert_eq!(pages, created.len(), "one page per conversation");
+    let mut expected: Vec<String> = created.iter().map(|row| row.id.clone()).collect();
+    seen.sort();
+    expected.sort();
+    assert_eq!(
+        seen, expected,
+        "every conversation is returned exactly once"
+    );
 }
