@@ -67,7 +67,7 @@ impl Store {
     /// Opens the database and records the operations that the last run left running. Running
     /// it again on the same database changes nothing.
     pub fn open(data_directory: &Path) -> Result<Self> {
-        let database = Database::open(data_directory)?;
+        let database = Database::open_runtime(data_directory)?;
         OperationRecovery::new(database.connection()).reconcile()?;
         Ok(Self { database })
     }

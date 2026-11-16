@@ -48,7 +48,7 @@ const ORPHAN_CLEANUP_SQL: &str = "DELETE FROM messages WHERE conversation_id NOT
 /// How long the background statistics analysis waits for a lock that the application's writes hold.
 pub const DEFAULT_STATISTICS_BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// Options of [`Database::open_with`]. The defaults are the application's.
+/// Options of [`Database::open_runtime_with`]. The defaults are the application's.
 #[derive(Debug, Clone)]
 pub struct OpenOptions {
     /// How long the background statistics analysis waits for a lock before it fails.
@@ -77,15 +77,16 @@ pub struct Database {
 }
 
 impl Database {
-    /// Opens `nocturne.db` inside `data_directory`, migrates it to the supported schema
-    /// and runs the startup maintenance. Fails without modifying the schema when the
-    /// file was written by a newer application version.
-    pub fn open(data_directory: &Path) -> Result<Self> {
-        Self::open_with(data_directory, OpenOptions::default())
+    /// Runtime-level open: migrates `nocturne.db` inside `data_directory` to the supported
+    /// schema and runs the startup maintenance. It does **not** reconcile interrupted
+    /// operations; application code opens the database through [`Store::open`], which does.
+    /// Fails without modifying the schema when the file was written by a newer version.
+    pub fn open_runtime(data_directory: &Path) -> Result<Self> {
+        Self::open_runtime_with(data_directory, OpenOptions::default())
     }
 
-    /// Opens the database with the given options. See [`Database::open`].
-    pub fn open_with(data_directory: &Path, options: OpenOptions) -> Result<Self> {
+    /// Opens the database with the given options. See [`Database::open_runtime`].
+    pub fn open_runtime_with(data_directory: &Path, options: OpenOptions) -> Result<Self> {
         let path = data_directory.join(DATABASE_FILE_NAME);
         restrict_if_present(&path)?;
         let mut connection = Connection::open(&path)?;

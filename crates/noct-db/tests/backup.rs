@@ -15,7 +15,7 @@ const AT: &str = "2026-01-01T00:00:00.000Z";
 const WORKSPACE: &str = "/work/backup";
 
 fn open(name: &str) -> Database {
-    let db = Database::open(&scratch(name)).expect("open database");
+    let db = Database::open_runtime(&scratch(name)).expect("open database");
     db.connection()
         .execute_batch(&format!(
             "INSERT INTO workspaces(path,name,favorite,authorized,created_at,last_opened_at) \

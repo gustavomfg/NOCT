@@ -55,7 +55,7 @@ fn mode(path: &Path) -> u32 {
 #[test]
 fn fresh_database_opens_at_latest_schema_with_private_files() {
     let dir = scratch("fresh");
-    let db = Database::open(&dir).expect("open");
+    let db = Database::open_runtime(&dir).expect("open");
     assert_eq!(schema::user_version(db.connection()).unwrap(), 32);
     db.close().expect("close");
 
@@ -74,7 +74,7 @@ fn newer_schema_is_refused_without_touching_the_file() {
         .execute_batch("PRAGMA user_version = 33;")
         .unwrap();
 
-    let Err(error) = Database::open(&dir) else {
+    let Err(error) = Database::open_runtime(&dir) else {
         panic!("a newer schema must be refused");
     };
     assert_eq!(
@@ -99,7 +99,7 @@ fn legacy_database_is_backed_up_before_migrating_and_backups_are_pruned() {
         fs::write(dir.join(format!("nocturne.db.backup-{stamp}.db")), b"older").unwrap();
     }
 
-    let db = Database::open(&dir).expect("open legacy database");
+    let db = Database::open_runtime(&dir).expect("open legacy database");
     db.close().expect("close");
 
     assert_eq!(file_user_version(&dir.join(DATABASE_FILE_NAME)), 32);
@@ -132,7 +132,7 @@ fn legacy_database_is_backed_up_before_migrating_and_backups_are_pruned() {
 #[test]
 fn recovery_snapshots_are_private_and_limited_to_the_newest_points() {
     let dir = scratch("recovery");
-    let db = Database::open(&dir).expect("open");
+    let db = Database::open_runtime(&dir).expect("open");
     for _ in 0..(RECOVERY_RETENTION + 1) {
         db.create_recovery_snapshot(RECOVERY_RETENTION)
             .expect("snapshot");
@@ -155,7 +155,7 @@ fn recovery_snapshots_are_private_and_limited_to_the_newest_points() {
 #[test]
 fn startup_cleanup_removes_rows_left_behind_by_deleted_conversations() {
     let dir = scratch("orphans");
-    let db = Database::open(&dir).expect("open");
+    let db = Database::open_runtime(&dir).expect("open");
     db.connection()
         .execute_batch(
             "PRAGMA foreign_keys = OFF;
@@ -190,7 +190,7 @@ fn integrity_check_is_recorded_and_repeated_only_after_seven_days() {
             .unwrap()
     };
 
-    let db = Database::open(&dir).expect("first open");
+    let db = Database::open_runtime(&dir).expect("first open");
     let first = read_stamp(&db);
     db.close().expect("close");
     assert_eq!(
@@ -208,13 +208,13 @@ fn integrity_check_is_recorded_and_repeated_only_after_seven_days() {
             [QUICK_CHECK_KEY],
         )
         .unwrap();
-    let db = Database::open(&dir).expect("open after stale stamp");
+    let db = Database::open_runtime(&dir).expect("open after stale stamp");
     let refreshed = read_stamp(&db);
     db.close().expect("close");
     assert_ne!(refreshed, "2001-01-01T00:00:00.000Z");
 
     // A recent stamp is left alone.
-    let db = Database::open(&dir).expect("open within interval");
+    let db = Database::open_runtime(&dir).expect("open within interval");
     assert_eq!(read_stamp(&db), refreshed);
     db.close().expect("close");
 }

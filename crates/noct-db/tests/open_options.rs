@@ -1,4 +1,4 @@
-//! The options of `Database::open_with`: the injected diagnostic sink receives the warnings of the database.
+//! The options of `Database::open_runtime_with`: the injected diagnostic sink receives the warnings of the database.
 
 use std::sync::{Arc, Mutex};
 
@@ -25,7 +25,7 @@ impl DiagnosticSink for Recording {
 fn the_database_reports_to_the_injected_sink() {
     let directory = scratch("open-options-sink");
     let recording = Arc::new(Recording::default());
-    let database = Database::open_with(
+    let database = Database::open_runtime_with(
         &directory,
         OpenOptions {
             diagnostics: recording.clone(),

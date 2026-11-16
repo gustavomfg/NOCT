@@ -3,6 +3,7 @@
 //! turn that is stored whole or not at all.
 
 use noct_core::limits::persistence::METADATA_CHARACTERS;
+use noct_db::runtime::Database;
 use noct_db::store::Store;
 use noct_db::store::{AssistantTurn, TurnArtifact};
 use rusqlite::params;
@@ -60,6 +61,66 @@ fn opening_records_the_operations_the_last_run_left_running() {
         count(&again, "SELECT COUNT(*) FROM interrupted_operations"),
         1
     );
+}
+
+/// The public path reconciles a change set still waiting for a decision. The runtime-level
+/// open does not: it migrates and maintains the file, nothing more. This is the divergence
+/// the parity run found in 1.0.1 and 1.0.2, so the contract is pinned here.
+#[test]
+fn the_public_open_records_pending_decisions_and_the_runtime_open_does_not() {
+    let directory = scratch("store-reconcile-decision");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/alpha")
+        .expect("conversation")
+        .id;
+    let connection = store.connection();
+    connection
+        .execute(
+            "INSERT INTO executions(id,workspace,conversation_id,prompt,mode,status,decision,started_at,finished_at) \
+             VALUES('exec-1','/work/alpha',?1,'Tarefa','build','completed','pending',?2,?2)",
+            params![conversation, AT],
+        )
+        .expect("completed execution");
+    for (id, phase) in [("cp-before", "before"), ("cp-after", "after")] {
+        connection
+            .execute(
+                "INSERT INTO checkpoints(id,execution_id,workspace,phase,status,captured_at,root_path) \
+                 VALUES(?1,'exec-1','/work/alpha',?2,'ready',?3,'/work/alpha')",
+                params![id, phase, AT],
+            )
+            .expect("checkpoint");
+    }
+    connection
+        .execute(
+            "INSERT INTO change_sets(id,execution_id,before_checkpoint_id,after_checkpoint_id,status,created_at,updated_at) \
+             VALUES('cs-1','exec-1','cp-before','cp-after','pending',?1,?1)",
+            params![AT],
+        )
+        .expect("change set");
+    store.close().expect("close");
+
+    let runtime = Database::open_runtime(&directory).expect("runtime open");
+    let recorded: i64 = runtime
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM interrupted_operations WHERE kind='awaiting-decision'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count");
+    assert_eq!(recorded, 0, "the runtime open must not reconcile");
+    runtime.close().expect("close");
+
+    let public = Store::open(&directory).expect("public open");
+    assert_eq!(
+        count(
+            &public,
+            "SELECT COUNT(*) FROM interrupted_operations WHERE kind='awaiting-decision'"
+        ),
+        1
+    );
+    public.close().expect("close");
 }
 
 #[test]

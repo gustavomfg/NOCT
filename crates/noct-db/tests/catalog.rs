@@ -36,7 +36,7 @@ fn message(error: Error) -> String {
 
 #[test]
 fn replacing_a_provider_lists_its_models_in_order_and_drops_the_old_ones() {
-    let db = Database::open(&scratch("catalog-replace")).unwrap();
+    let db = Database::open_runtime(&scratch("catalog-replace")).unwrap();
     let catalog = ModelCatalog::new(db.connection());
     catalog
         .replace_provider_models(
@@ -77,7 +77,7 @@ fn replacing_a_provider_lists_its_models_in_order_and_drops_the_old_ones() {
 
 #[test]
 fn a_rejected_catalog_replacement_leaves_the_previous_models_in_place() {
-    let db = Database::open(&scratch("catalog-reject")).unwrap();
+    let db = Database::open_runtime(&scratch("catalog-reject")).unwrap();
     let catalog = ModelCatalog::new(db.connection());
     catalog
         .replace_provider_models("provider-1", &[descriptor("provider-1", "kept")])
@@ -114,7 +114,7 @@ fn a_rejected_catalog_replacement_leaves_the_previous_models_in_place() {
 
 #[test]
 fn stored_models_are_stored_trimmed_and_checked_when_read() {
-    let db = Database::open(&scratch("catalog-corrupt")).unwrap();
+    let db = Database::open_runtime(&scratch("catalog-corrupt")).unwrap();
     let catalog = ModelCatalog::new(db.connection());
     let mut padded = descriptor(" provider-1 ", " model-1 ");
     padded["displayName"] = json!("  Nome  ");
@@ -146,7 +146,7 @@ fn stored_models_are_stored_trimmed_and_checked_when_read() {
 
 #[test]
 fn deleting_a_provider_reports_how_many_models_went() {
-    let db = Database::open(&scratch("catalog-delete")).unwrap();
+    let db = Database::open_runtime(&scratch("catalog-delete")).unwrap();
     let catalog = ModelCatalog::new(db.connection());
     catalog
         .replace_provider_models(
@@ -172,7 +172,7 @@ fn bindings(workspace: &str, default_model: &str) -> WorkspaceModelBindings {
 
 #[test]
 fn bindings_store_one_record_per_workspace_and_validate_on_write() {
-    let db = Database::open(&scratch("bindings")).unwrap();
+    let db = Database::open_runtime(&scratch("bindings")).unwrap();
     let workspaces = Workspaces::new(db.connection());
     workspaces.touch("/work/alpha").unwrap();
     workspaces.touch("/work/beta").unwrap();
@@ -198,7 +198,7 @@ fn bindings_store_one_record_per_workspace_and_validate_on_write() {
 
 #[test]
 fn relocating_a_workspace_moves_its_rows_and_bindings_and_keeps_its_favorite() {
-    let db = Database::open(&scratch("relocate")).unwrap();
+    let db = Database::open_runtime(&scratch("relocate")).unwrap();
     let source = "/work/original";
     let destination = "/work/moved";
     Workspaces::new(db.connection()).touch(source).unwrap();
@@ -252,7 +252,7 @@ fn relocating_a_workspace_moves_its_rows_and_bindings_and_keeps_its_favorite() {
 
 #[test]
 fn relocation_refuses_a_missing_source_or_an_occupied_destination_without_writing() {
-    let db = Database::open(&scratch("relocate-refuse")).unwrap();
+    let db = Database::open_runtime(&scratch("relocate-refuse")).unwrap();
     let workspaces = Workspaces::new(db.connection());
     workspaces.touch("/work/one").unwrap();
     workspaces.touch("/work/two").unwrap();
@@ -276,7 +276,7 @@ fn relocation_refuses_a_missing_source_or_an_occupied_destination_without_writin
 
 #[test]
 fn relocating_onto_the_same_folder_only_records_it_as_opened() {
-    let db = Database::open(&scratch("relocate-same")).unwrap();
+    let db = Database::open_runtime(&scratch("relocate-same")).unwrap();
     let workspaces = Workspaces::new(db.connection());
     workspaces.touch("/work/same").unwrap();
     workspaces.relocate("/work/same", "/work/same").unwrap();

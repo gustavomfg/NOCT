@@ -56,7 +56,7 @@ fn open_recording(directory: &Path) -> (Database, Arc<Recording>) {
         diagnostics: recording.clone(),
         ..OpenOptions::default()
     };
-    let database = Database::open_with(directory, options).expect("open");
+    let database = Database::open_runtime_with(directory, options).expect("open");
     (database, recording)
 }
 
@@ -243,7 +243,7 @@ fn optimize_on_its_own(directory: &Path) {
 fn opening_a_database_without_statistics_analyzes_it_in_the_background() {
     let directory = scratch("statistics-open-background");
     {
-        let database = Database::open(&directory).expect("open");
+        let database = Database::open_runtime(&directory).expect("open");
         fill(&database, WORKSPACE, 0..10_000);
         // Dropped without close, so no statistics are written.
     }
@@ -268,11 +268,11 @@ fn opening_a_database_without_statistics_analyzes_it_in_the_background() {
 fn opening_a_small_database_without_statistics_starts_no_analysis() {
     let directory = scratch("statistics-open-small");
     {
-        let database = Database::open(&directory).expect("open");
+        let database = Database::open_runtime(&directory).expect("open");
         fill(&database, WORKSPACE, 0..9_999);
     }
 
-    let database = Database::open(&directory).expect("reopen");
+    let database = Database::open_runtime(&directory).expect("reopen");
     assert!(
         !database.statistics_pending(),
         "below the threshold, the planner's default is kept"
@@ -283,7 +283,7 @@ fn opening_a_small_database_without_statistics_starts_no_analysis() {
 #[test]
 fn opening_a_database_with_exact_statistics_starts_no_analysis() {
     let directory = scratch("statistics-open-exact");
-    let database = Database::open(&directory).expect("open");
+    let database = Database::open_runtime(&directory).expect("open");
     fill(&database, WORKSPACE, 0..10_000);
     database.close().expect("close");
 
@@ -299,7 +299,7 @@ fn opening_a_database_with_exact_statistics_starts_no_analysis() {
 fn opening_a_database_with_sampled_statistics_analyzes_it() {
     let directory = scratch("statistics-open-sampled-one");
     {
-        let database = Database::open(&directory).expect("open");
+        let database = Database::open_runtime(&directory).expect("open");
         fill(&database, WORKSPACE, 0..10_000);
     }
     optimize_on_its_own(&directory);
@@ -325,7 +325,7 @@ fn opening_a_database_with_sampled_statistics_analyzes_it() {
 fn opening_a_database_sampled_across_ten_workspaces_analyzes_it() {
     let directory = scratch("statistics-open-sampled-ten");
     {
-        let database = Database::open(&directory).expect("open");
+        let database = Database::open_runtime(&directory).expect("open");
         for workspace in 0..10 {
             fill(&database, &format!("/work/w{workspace}"), 0..1_000);
         }
@@ -349,12 +349,12 @@ fn opening_a_database_sampled_across_ten_workspaces_analyzes_it() {
 #[test]
 fn opening_a_database_with_exact_uneven_workspaces_starts_no_analysis() {
     let directory = scratch("statistics-open-uneven");
-    let database = Database::open(&directory).expect("open");
+    let database = Database::open_runtime(&directory).expect("open");
     fill(&database, "/work/a", 0..9_000);
     fill(&database, "/work/b", 0..3_000);
     database.close().expect("close");
 
-    let database = Database::open(&directory).expect("reopen");
+    let database = Database::open_runtime(&directory).expect("reopen");
     assert!(
         !database.statistics_pending(),
         "the average per workspace is the exact figure, so the check accepts it"
@@ -365,12 +365,12 @@ fn opening_a_database_with_exact_uneven_workspaces_starts_no_analysis() {
 #[test]
 fn opening_a_database_whose_statistics_predate_a_doubling_analyzes_it() {
     let directory = scratch("statistics-open-doubled");
-    let database = Database::open(&directory).expect("open");
+    let database = Database::open_runtime(&directory).expect("open");
     fill(&database, WORKSPACE, 0..10_000);
     database.close().expect("close");
 
     {
-        let database = Database::open(&directory).expect("reopen");
+        let database = Database::open_runtime(&directory).expect("reopen");
         assert!(!database.statistics_pending());
         fill(&database, WORKSPACE, 10_000..20_000);
         // Dropped without close: the statistics still describe 10,000 rows.
@@ -388,7 +388,7 @@ fn opening_a_database_whose_statistics_predate_a_doubling_analyzes_it() {
 #[test]
 fn closing_a_database_records_exact_statistics_before_optimize() {
     let directory = scratch("statistics-close-exact");
-    let database = Database::open(&directory).expect("open");
+    let database = Database::open_runtime(&directory).expect("open");
     fill(&database, WORKSPACE, 0..50_000);
     database.close().expect("close");
 
@@ -443,7 +443,7 @@ fn a_large_round_that_ends_refreshes_the_statistics() {
             _ => SemanticRunStatus::Cancelled,
         };
         let directory = scratch(&format!("statistics-round-{name}"));
-        let database = Database::open(&directory).expect("open");
+        let database = Database::open_runtime(&directory).expect("open");
         fill(&database, WORKSPACE, 0..10_000);
         assert_eq!(
             rows_per_workspace(database.connection()),
@@ -464,7 +464,7 @@ fn a_large_round_that_ends_refreshes_the_statistics() {
 #[test]
 fn a_small_round_leaves_the_statistics_alone() {
     let directory = scratch("statistics-round-small");
-    let database = Database::open(&directory).expect("open");
+    let database = Database::open_runtime(&directory).expect("open");
     fill(&database, WORKSPACE, 0..100);
 
     end_run(&database, "run-small", SemanticRunStatus::Completed, 100);
@@ -475,7 +475,7 @@ fn a_small_round_leaves_the_statistics_alone() {
 #[test]
 fn a_large_round_still_running_does_not_refresh_the_statistics() {
     let directory = scratch("statistics-round-running");
-    let database = Database::open(&directory).expect("open");
+    let database = Database::open_runtime(&directory).expect("open");
     fill(&database, WORKSPACE, 0..10_000);
 
     end_run(&database, "run-running", SemanticRunStatus::Running, 10_000);
@@ -493,7 +493,7 @@ fn measure_statistics_by_size() {
     use std::time::Instant;
     for rows in [10_000usize, 50_000, 200_000] {
         let directory = scratch(&format!("statistics-measure-{rows}"));
-        let database = Database::open(&directory).expect("open");
+        let database = Database::open_runtime(&directory).expect("open");
         fill(&database, WORKSPACE, 0..rows);
         let connection = database.connection();
 

@@ -111,7 +111,7 @@ fn keyed<T: Serialize>(ids: &[String], read: impl Fn(&str) -> Result<T>) -> Valu
 #[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
 fn rust_returns_the_rows_the_typescript_repositories_wrote() {
     let directory = copy_typescript_database("row-gate-typescript-database");
-    let db = Database::open(&directory).expect("open the TypeScript database");
+    let db = Database::open_runtime(&directory).expect("open the TypeScript database");
     let conn = db.connection();
     let expected = expected();
 
@@ -531,7 +531,7 @@ fn reconciles_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before reconciliation");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
 
     OperationRecovery::new(db.connection())
         .reconcile()
@@ -570,7 +570,7 @@ fn evidence_matches_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the stale mark");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let evidence = WorkspaceEvidence::new(db.connection());
 
     let text = fs::read_to_string(gate_directory().join("evidence-expected.json"))
@@ -618,7 +618,7 @@ fn reconciles_suggestions_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the review");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
 
     let text = fs::read_to_string(gate_directory().join("suggestion-expected.json"))
@@ -668,7 +668,7 @@ fn removes_changed_files_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the change");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
 
     let text = fs::read_to_string(gate_directory().join("change-expected.json"))
@@ -793,7 +793,7 @@ fn applies_semantic_writes_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the writes");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
     let index = SemanticIndex::new(conn);
 
@@ -1137,7 +1137,7 @@ fn applies_engineering_writes_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the writes");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
     let store = EngineeringIntelligence::new(conn);
 
@@ -1328,7 +1328,7 @@ fn backup_scenario(name: &str, document: &Value, scope: ImportScope) -> Value {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the imports");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let before = backup_export(db.connection());
     let data: ImportData = serde_json::from_value(document.clone()).expect("import document");
     let refused = Backup::new(db.connection()).import(&data, scope).is_err();

@@ -21,7 +21,7 @@ fn tick() {
 }
 
 fn open(name: &str) -> Database {
-    Database::open(&scratch(name)).expect("open database")
+    Database::open_runtime(&scratch(name)).expect("open database")
 }
 
 fn title(conversations: &Conversations<'_>, id: &str) -> String {

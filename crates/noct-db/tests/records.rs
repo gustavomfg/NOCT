@@ -39,7 +39,7 @@ fn artifact<'a>(conversation_id: &'a str, title: &'a str) -> NewArtifact<'a> {
 
 #[test]
 fn artifacts_list_newest_first_and_page_with_a_lookahead() {
-    let db = Database::open(&scratch("artifacts-page")).unwrap();
+    let db = Database::open_runtime(&scratch("artifacts-page")).unwrap();
     let chat = conversation(&db, "/work/project");
     let artifacts = Artifacts::new(db.connection());
     for title in ["primeiro", "segundo", "terceiro"] {
@@ -65,7 +65,7 @@ fn artifacts_list_newest_first_and_page_with_a_lookahead() {
 
 #[test]
 fn a_known_file_path_updates_the_artifact_and_keeps_its_identity() {
-    let db = Database::open(&scratch("artifacts-upsert")).unwrap();
+    let db = Database::open_runtime(&scratch("artifacts-upsert")).unwrap();
     let chat = conversation(&db, "/work/project");
     let artifacts = Artifacts::new(db.connection());
     let mut input = artifact(&chat.id, "relatório");
@@ -85,7 +85,7 @@ fn a_known_file_path_updates_the_artifact_and_keeps_its_identity() {
 
 #[test]
 fn an_empty_file_path_never_matches_an_existing_artifact() {
-    let db = Database::open(&scratch("artifacts-empty-path")).unwrap();
+    let db = Database::open_runtime(&scratch("artifacts-empty-path")).unwrap();
     let chat = conversation(&db, "/work/project");
     let artifacts = Artifacts::new(db.connection());
     let mut input = artifact(&chat.id, "sem caminho");
@@ -99,7 +99,7 @@ fn an_empty_file_path_never_matches_an_existing_artifact() {
 
 #[test]
 fn artifact_metadata_is_stored_as_json_text_in_insertion_order() {
-    let db = Database::open(&scratch("artifacts-metadata")).unwrap();
+    let db = Database::open_runtime(&scratch("artifacts-metadata")).unwrap();
     let chat = conversation(&db, "/work/project");
     let artifacts = Artifacts::new(db.connection());
     let metadata = json!({ "zeta": 1, "alpha": [true, null, "x"] });
@@ -115,7 +115,7 @@ fn artifact_metadata_is_stored_as_json_text_in_insertion_order() {
 
 #[test]
 fn artifact_metadata_is_bounded_by_size_and_depth() {
-    let db = Database::open(&scratch("artifacts-metadata-limits")).unwrap();
+    let db = Database::open_runtime(&scratch("artifacts-metadata-limits")).unwrap();
     let chat = conversation(&db, "/work/project");
     let artifacts = Artifacts::new(db.connection());
 
@@ -135,7 +135,7 @@ fn artifact_metadata_is_bounded_by_size_and_depth() {
 
 #[test]
 fn deleting_an_artifact_requires_its_own_conversation() {
-    let db = Database::open(&scratch("artifacts-delete")).unwrap();
+    let db = Database::open_runtime(&scratch("artifacts-delete")).unwrap();
     let chat = conversation(&db, "/work/project");
     let other = conversation(&db, "/work/other");
     let artifacts = Artifacts::new(db.connection());
@@ -148,7 +148,7 @@ fn deleting_an_artifact_requires_its_own_conversation() {
 
 #[test]
 fn approvals_record_the_decision_and_truncate_long_commands() {
-    let db = Database::open(&scratch("approvals")).unwrap();
+    let db = Database::open_runtime(&scratch("approvals")).unwrap();
     let approvals = Approvals::new(db.connection());
     let long_command = "a".repeat(5_000);
     approvals
@@ -178,7 +178,7 @@ fn approvals_record_the_decision_and_truncate_long_commands() {
 
 #[test]
 fn workspace_memory_defaults_to_empty_and_round_trips() {
-    let db = Database::open(&scratch("workspace-memory")).unwrap();
+    let db = Database::open_runtime(&scratch("workspace-memory")).unwrap();
     let memory = WorkspaceMemory::new(db.connection());
 
     let empty = memory.get("/work/project").unwrap();
