@@ -4,7 +4,7 @@
 // with. The page is the Trunk build in crates/noct-ui/dist, served with the policy as a response header and
 // opened in the headless Chromium that the repository's Playwright already uses. The check fails when the
 // browser reports a policy violation, when the page does not render, or when a click does not reach the
-// WebAssembly counter. Chromium is an approximation of the webview of each system; the directives are the
+// WebAssembly handler. Chromium is an approximation of the webview of each system; the directives are the
 // same, and the webview check is recorded in the migration notes.
 //
 // Usage:
@@ -74,17 +74,16 @@ try {
   })
   page.on('pageerror', (error) => result.pageErrors.push(error.message))
   await page.goto(`http://127.0.0.1:${server.address().port}/`)
-  const counter = '[data-testid="presses"]'
-  await page.waitForFunction(
-    (selector) => document.querySelector(selector)?.textContent?.includes('0 toques'),
-    counter,
-    { timeout: 8000 },
-  ).then(() => { result.rendered = true }, () => undefined)
+  // The theme button is rendered by WebAssembly and changes the page when it is clicked, so a click that
+  // reaches the handler proves the module runs under the policy.
+  const themeButton = 'button[aria-label^="Usar tema"]'
+  await page.waitForSelector(themeButton, { timeout: 8000 }).then(() => { result.rendered = true }, () => undefined)
   if (result.rendered) {
-    await page.getByRole('button', { name: 'Tocar' }).click()
+    const before = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    await page.locator(themeButton).click()
     await page.waitForFunction(
-      (selector) => document.querySelector(selector)?.textContent?.includes('1 toques'),
-      counter,
+      (previous) => document.documentElement.getAttribute('data-theme') !== previous,
+      before,
       { timeout: 5000 },
     ).then(() => { result.clicked = true }, () => undefined)
   }

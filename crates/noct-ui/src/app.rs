@@ -1,92 +1,407 @@
-//! Spike screen: the topbar and composer shell, rendered with the existing class names
-//! so the Leptos build can be judged against the React design. Phase 7 replaces it.
-//!
-//! The settings area is the first part that reads the shell: it calls `settings_get` when the page
-//! opens, and shows a loading state, the settings, or the error with a way to try again.
+//! The window: the sidebar, the three modes, the settings (Ajustes) and the fixed question box, laid out as in
+//! docs/New_Design/mockup-vidro-painel.html. The projects, the findings and the diffs are EXAMPLE data
+//! (`examples.rs`). The settings are read with `settings_get` (`settings.rs`). No control in this window runs
+//! a command or writes a file: the approval, the revert and the confirmation are shown, not carried out.
 
 use leptos::prelude::*;
 
+use crate::dom;
+use crate::examples::{
+    DiffKind, DiffLine, EXAMPLE_BUILD_DIFF, EXAMPLE_BUILD_FILE, EXAMPLE_COMMAND, EXAMPLE_DOC_DIFF,
+    EXAMPLE_DOC_FILE, EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_PROJECTS, EXAMPLE_VAULT,
+};
 use crate::ipc;
 use crate::settings::{self, SettingsView};
+use crate::theme::Theme;
+
+/// The three modes of the window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Review,
+    Build,
+    Docs,
+}
 
 #[component]
 pub fn App() -> impl IntoView {
-    let (presses, set_presses) = signal(0_u32);
-    let (draft, set_draft) = signal(String::new());
-    let characters = move || draft.with(|text| text.chars().count());
+    // The theme starts as the system prefers, and takes the saved setting when the settings arrive. A theme the
+    // person changed in this session is kept over the saved one.
+    let system_dark = dom::system_prefers_dark();
+    let (theme, set_theme) = signal(Theme::from_setting(None, system_dark));
+    let (theme_touched, set_theme_touched) = signal(false);
+
+    let (mode, set_mode) = signal(Mode::Review);
+    let (settings_open, set_settings_open) = signal(false);
+    let (project, set_project) = signal(0_usize);
+    let (approved, set_approved) = signal(false);
+    let (asked, set_asked) = signal(false);
 
     let (settings_view, set_settings_view) = signal(SettingsView::Loading);
     let read_settings = move || {
         set_settings_view.set(SettingsView::Loading);
         ipc::call(settings::COMMAND, move |outcome| {
-            set_settings_view.set(settings::settle(outcome));
+            let view = settings::settle(outcome);
+            if let SettingsView::Ready(saved) = &view
+                && !theme_touched.get_untracked()
+            {
+                set_theme.set(Theme::from_setting(saved.theme, system_dark));
+            }
+            set_settings_view.set(view);
         });
     };
     read_settings();
 
+    Effect::new(move |_| dom::set_root_attribute("data-theme", theme.get().attribute()));
+
+    let toggle_theme = move |_| {
+        set_theme_touched.set(true);
+        set_theme.update(|current| *current = current.toggled());
+    };
+    let theme_button_label = move || match theme.get() {
+        Theme::Light => "Usar tema escuro",
+        Theme::Dark => "Usar tema claro",
+    };
+
+    let pressed = move |target: Mode| (!settings_open.get() && mode.get() == target).to_string();
+    let open_mode = move |chosen: Mode| {
+        set_mode.set(chosen);
+        set_settings_open.set(false);
+    };
+
     view! {
-        <header class="topbar">
-            <div class="title-block"><h1>"NOCT"</h1></div>
-            <div class="top-actions">
-                <span class="branch-pill" data-testid="presses">
-                    {move || format!("{} toques", presses.get())}
-                </span>
-            </div>
-        </header>
-        <main class="composer-wrap" id="leptos-spike">
-            <button
-                class="icon-button"
-                type="button"
-                on:click=move |_| set_presses.update(|count| *count += 1)
-            >
-                "Tocar"
-            </button>
-            <textarea
-                aria-label="Mensagem"
-                prop:value=move || draft.get()
-                on:input=move |event| set_draft.set(event_target_value(&event))
-            ></textarea>
-            <p class="mode-description" data-testid="characters">
-                {move || format!("{} caracteres", characters())}
-            </p>
-        </main>
-        <section class="settings-section" aria-labelledby="settings-heading" data-testid="settings">
-            <h3 id="settings-heading">"Configurações"</h3>
-            {move || match settings_view.get() {
-                SettingsView::Loading => view! {
-                    <p class="mode-description" role="status" data-testid="settings-loading">
-                        "Carregando configurações…"
+        <div class="app">
+            <aside class="sidebar">
+                <div class="sidebar__top">
+                    <span class="brand">"NOCT"</span>
+                    <button
+                        class="icon-btn row"
+                        type="button"
+                        aria-label=theme_button_label
+                        on:click=toggle_theme
+                    >
+                        {move || {
+                            if theme.get() == Theme::Light {
+                                moon_icon().into_any()
+                            } else {
+                                sun_icon().into_any()
+                            }
+                        }}
+                    </button>
+                </div>
+                <nav class="nav" aria-label="Projetos">
+                    <div class="nav__label">"Projetos"</div>
+                    {EXAMPLE_PROJECTS
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, name)| {
+                            view! {
+                                <button
+                                    type="button"
+                                    class="nav__item row"
+                                    aria-current=move || (project.get() == index).then_some("true")
+                                    on:click=move |_| set_project.set(index)
+                                >
+                                    {name}
+                                </button>
+                            }
+                        })
+                        .collect_view()}
+                </nav>
+                <div class="spacer"></div>
+                <div class="sidebar__bottom">
+                    <div class="status">
+                        <div class="status__label">"Modelo"</div>
+                        <div class="status__value">{EXAMPLE_MODEL}</div>
+                        <div class="status__note">"Exemplo"</div>
+                    </div>
+                    <div class="status">
+                        <div class="status__label">"Cofre de chaves"</div>
+                        <div class="status__value">{EXAMPLE_VAULT}</div>
+                        <div class="status__note">"Exemplo: ainda não lido do backend"</div>
+                    </div>
+                    <button
+                        type="button"
+                        class="nav__item nav__item--muted row"
+                        aria-current=move || settings_open.get().then_some("page")
+                        on:click=move |_| set_settings_open.set(true)
+                    >
+                        "Ajustes"
+                    </button>
+                </div>
+            </aside>
+
+            <div class="content">
+                <header class="modes">
+                    <div class="segmented" role="group" aria-label="Modo de trabalho">
+                        <button
+                            type="button"
+                            class="seg"
+                            aria-pressed=move || pressed(Mode::Review)
+                            on:click=move |_| open_mode(Mode::Review)
+                        >
+                            "Revisar"
+                        </button>
+                        <button
+                            type="button"
+                            class="seg"
+                            aria-pressed=move || pressed(Mode::Build)
+                            on:click=move |_| open_mode(Mode::Build)
+                        >
+                            "Construir"
+                        </button>
+                        <button
+                            type="button"
+                            class="seg"
+                            aria-pressed=move || pressed(Mode::Docs)
+                            on:click=move |_| open_mode(Mode::Docs)
+                        >
+                            "Documentar"
+                        </button>
+                    </div>
+                </header>
+
+                <main class="main" id="main">
+                    <div class="stack">
+                        {move || {
+                            if settings_open.get() {
+                                settings_panel(settings_view, read_settings).into_any()
+                            } else {
+                                match mode.get() {
+                                    Mode::Review => review_panel().into_any(),
+                                    Mode::Build => {
+                                        build_panel(approved, set_approved).into_any()
+                                    }
+                                    Mode::Docs => docs_panel().into_any(),
+                                }
+                            }
+                        }}
+                    </div>
+                </main>
+
+                <div class="composer-wrap">
+                    <form
+                        class="composer"
+                        on:submit=move |event| {
+                            event.prevent_default();
+                            set_asked.set(true);
+                        }
+                    >
+                        <label for="ask" class="sr-only">"Pergunte sobre o projeto"</label>
+                        <input
+                            id="ask"
+                            class="composer__input"
+                            type="text"
+                            autocomplete="off"
+                            placeholder="Pergunte sobre o projeto"
+                        />
+                        <button class="composer__send" type="submit" aria-label="Enviar">
+                            {arrow_icon()}
+                        </button>
+                    </form>
+                    <p class="note" aria-live="polite" data-testid="ask-note">
+                        {move || {
+                            if asked.get() {
+                                "Perguntas ainda não são respondidas nesta fatia."
+                            } else {
+                                ""
+                            }
+                        }}
                     </p>
-                }
-                .into_any(),
-                SettingsView::Failed(failure) => view! {
-                    <div class="error-card" role="alert" data-testid="settings-error">
-                        <div>
-                            <strong>"Não foi possível carregar as configurações."</strong>
-                            <p>{failure.message}</p>
-                        </div>
-                        <span>
-                            <button
-                                class="icon-button"
-                                type="button"
-                                on:click=move |_| read_settings()
-                            >
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// The review mode: read-only findings, each with its severity, its file and its description. EXAMPLE.
+fn review_panel() -> impl IntoView {
+    view! {
+        <div class="stack">
+            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
+            <div>
+                <h1 class="h1">"Revisão"</h1>
+                <p class="lead">"Análise somente leitura, com as evidências ao lado de cada achado."</p>
+            </div>
+            {EXAMPLE_FINDINGS
+                .iter()
+                .map(|finding| {
+                    view! {
+                        <article class="card">
+                            <div class="finding__head">
+                                <span class=finding.severity.class()>{finding.severity.label()}</span>
+                                <h2 class="h2">{finding.title}</h2>
+                            </div>
+                            <code class="path">{finding.path}</code>
+                            <p class="body">{finding.body}</p>
+                        </article>
+                    }
+                })
+                .collect_view()}
+        </div>
+    }
+}
+
+/// The build mode: a command waiting for approval, then a diff with a revert. EXAMPLE, nothing is run.
+fn build_panel(approved: ReadSignal<bool>, set_approved: WriteSignal<bool>) -> impl IntoView {
+    view! {
+        <div class="stack">
+            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
+            <div>
+                <h1 class="h1">"Construir"</h1>
+                <p class="lead">"Cada comando espera a sua aprovação. Toda alteração pode ser revertida."</p>
+            </div>
+            <section class="card">
+                <div class="eyebrow" hidden=move || approved.get()>"AGUARDANDO APROVAÇÃO"</div>
+                <code class="cmd">{EXAMPLE_COMMAND}</code>
+                <div class="actions" hidden=move || approved.get()>
+                    <button type="button" class="btn">"Negar"</button>
+                    <button
+                        type="button"
+                        class="btn btn--primary"
+                        on:click=move |_| set_approved.set(true)
+                    >
+                        "Aprovar"
+                    </button>
+                </div>
+                <p class="lead" hidden=move || !approved.get()>
+                    "Aprovado. Esta é uma tela de exemplo: nenhum comando foi executado."
+                </p>
+            </section>
+            <section class="card card--flush">
+                <div class="card__head">
+                    <code class="path">{EXAMPLE_BUILD_FILE}</code>
+                    <button type="button" class="btn btn--ghost">"Reverter"</button>
+                </div>
+                <div class="diff">{EXAMPLE_BUILD_DIFF.iter().map(diff_line).collect_view()}</div>
+            </section>
+        </div>
+    }
+}
+
+/// The document mode: a prose diff, kept only after the person confirms it. EXAMPLE, nothing is written.
+fn docs_panel() -> impl IntoView {
+    view! {
+        <div class="stack">
+            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
+            <div>
+                <h1 class="h1">"Documentar"</h1>
+                <p class="lead">"Atualizações incrementais em Markdown, só depois da sua confirmação."</p>
+            </div>
+            <section class="card card--flush">
+                <div class="card__head">
+                    <code class="path">{EXAMPLE_DOC_FILE}</code>
+                </div>
+                <div class="prose">
+                    {EXAMPLE_DOC_DIFF.iter().map(prose_line).collect_view()}
+                </div>
+                <div class="card__foot">
+                    <button type="button" class="btn">"Descartar"</button>
+                    <button type="button" class="btn btn--primary">"Confirmar alteração"</button>
+                </div>
+            </section>
+        </div>
+    }
+}
+
+/// The settings (Ajustes) in the same layout: the saved values as the shell returns them, with the states of
+/// the read and the way to try again.
+fn settings_panel(
+    settings_view: ReadSignal<SettingsView>,
+    retry: impl Fn() + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <div class="stack" data-testid="settings">
+            <div>
+                <h1 class="h1">"Ajustes"</h1>
+                <p class="lead">"Preferências salvas. O NOCT lê estes valores ao abrir a janela."</p>
+            </div>
+            <section class="card" aria-label="Preferências salvas">
+                {move || match settings_view.get() {
+                    SettingsView::Loading => view! {
+                        <p class="lead" role="status" data-testid="settings-loading">
+                            "Carregando configurações…"
+                        </p>
+                    }
+                    .into_any(),
+                    SettingsView::Failed(failure) => view! {
+                        <div class="error-card" role="alert" data-testid="settings-error">
+                            <div>
+                                <strong>"Não foi possível carregar as configurações."</strong>
+                                <p>{failure.message}</p>
+                            </div>
+                            <button class="btn" type="button" on:click=move |_| retry()>
                                 "Tentar novamente"
                             </button>
-                        </span>
-                    </div>
-                }
-                .into_any(),
-                SettingsView::Ready(settings) => view! {
-                    <dl class="settings-facts" data-testid="settings-values">
-                        {settings::rows(&settings)
-                            .into_iter()
-                            .map(|(label, value)| view! { <dt>{label}</dt><dd>{value}</dd> })
-                            .collect_view()}
-                    </dl>
-                }
-                .into_any(),
-            }}
-        </section>
+                        </div>
+                    }
+                    .into_any(),
+                    SettingsView::Ready(saved) => view! {
+                        <dl class="settings-facts" data-testid="settings-values">
+                            {settings::rows(&saved)
+                                .into_iter()
+                                .map(|(label, value)| view! { <dt>{label}</dt><dd>{value}</dd> })
+                                .collect_view()}
+                        </dl>
+                    }
+                    .into_any(),
+                }}
+            </section>
+            <p class="note">
+                "O botão de tema da barra lateral muda só esta sessão. A linha Tema mostra a preferência salva."
+            </p>
+        </div>
+    }
+}
+
+fn diff_line(line: &DiffLine) -> impl IntoView {
+    let (class, sign, spoken) = match line.kind {
+        DiffKind::Added => ("diff__line diff__line--add", "+", "Adicionada: "),
+        DiffKind::Removed => ("diff__line diff__line--del", "−", "Removida: "),
+    };
+    view! {
+        <div class=class>
+            <span aria-hidden="true">{sign}</span>
+            <span class="sr-only">{spoken}</span>
+            <span>{line.text}</span>
+        </div>
+    }
+}
+
+fn prose_line(line: &DiffLine) -> impl IntoView {
+    let (class, sign, spoken) = match line.kind {
+        DiffKind::Added => ("prose-add", "+", "Adicionada: "),
+        DiffKind::Removed => ("prose-del", "−", "Removida: "),
+    };
+    view! {
+        <p class=class>
+            <span aria-hidden="true">{sign}</span>
+            <span class="sr-only">{spoken}</span>
+            {line.text}
+        </p>
+    }
+}
+
+fn moon_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+    }
+}
+
+fn sun_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+    }
+}
+
+fn arrow_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
     }
 }

@@ -127,3 +127,22 @@ fn no_window_is_created_from_the_configuration() {
 
     assert!(context.config().app.windows.is_empty());
 }
+
+/// The glass layer is on in the committed page (`crates/noct-ui/shell.css`, `data-glass`). `scripts/set-glass.mjs`
+/// turns it off for a comparison and back on. A page committed with it off would open with the solid colours,
+/// and nobody would see the change.
+#[test]
+fn the_window_starts_with_the_glass_layer_on() {
+    let page =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../noct-ui/index.html"))
+            .expect("the interface page is readable");
+    let html_tag = page
+        .lines()
+        .find(|line| line.trim_start().starts_with("<html"))
+        .expect("the page declares its <html> element");
+
+    assert!(
+        html_tag.contains(r#"data-glass="on""#),
+        "the committed page must start with the glass on: {html_tag}"
+    );
+}
