@@ -1,0 +1,45 @@
+{
+  "source": "shared/types.ts (AppSettings)",
+  "valid": [
+    {
+      "approvalPolicy": "on-request",
+      "diagnosticMode": false,
+      "theme": "dark",
+      "language": "pt-BR"
+    },
+    {
+      "approvalPolicy": "untrusted",
+      "diagnosticMode": true,
+      "theme": "light",
+      "language": "en",
+      "pandocVersion": "3.1.2"
+    },
+    {
+      "approvalPolicy": "on-request"
+    }
+  ],
+  "invalid": [
+    {
+      "approvalPolicy": "always"
+    },
+    {
+      "theme": "dark"
+    },
+    {
+      "approvalPolicy": "on-request",
+      "language": "fr"
+    },
+    {
+      "approvalPolicy": "on-request",
+      "diagnosticMode": "true"
+    },
+    {
+      "approvalPolicy": "on-request",
+      "theme": null
+    },
+    {
+      "approvalPolicy": "on-request",
+      "pandocVersion": 3
+    }
+  ]
+}

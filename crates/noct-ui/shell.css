@@ -1,0 +1,734 @@
+/* The interface of the shell. Classes only: the shell's policy grants no inline style (crates/noct-app/tauri.conf.json).
+   The tokens and the layout follow docs/New_Design/design.md and docs/New_Design/mockup-vidro-painel.html. The
+   light theme is the default; the dark one is selected by <html data-theme="dark">.
+
+   The glass layer is on while <html data-glass="on"> (the default in index.html). "off" keeps the solid colours,
+   and so does prefers-reduced-transparency. The window itself is opaque: the glass is painted inside the page. */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #FBFBFC;
+  --side: #F3F3F5;
+  --surface: #FFFFFF;
+  --text: #1D1D1F;
+  --muted: #5F6068;
+  --line: rgba(0, 0, 0, 0.09);
+  --accent: #4F46E5;
+  --on-accent: #FFFFFF;
+  --sel: rgba(79, 70, 229, 0.10);
+  --hover: rgba(0, 0, 0, 0.045);
+  --track: rgba(0, 0, 0, 0.06);
+  --code: #F3F3F5;
+  --add: rgba(22, 128, 60, 0.10);
+  --add-text: #0F6B33;
+  --del: rgba(180, 35, 24, 0.09);
+  --del-text: #9B2318;
+  --sev-high: #B42318;
+  --sev-mid: #8A4B08;
+  --sev-low: #475467;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.65);
+  --glass-edge: rgba(0, 0, 0, 0.07);
+  --bg-a: #E6E8FF;
+  --bg-b: #F6E9FF;
+  --bg-c: #DDF1FF;
+  --blob1: rgba(99, 102, 241, 0.38);
+  --blob2: rgba(236, 72, 153, 0.22);
+  --blob3: rgba(56, 189, 248, 0.30);
+  --pane-a: rgba(255, 255, 255, 0.38);
+  --pane-b: rgba(255, 255, 255, 0.16);
+  --pane-edge: rgba(255, 255, 255, 0.75);
+  --pane-hi: rgba(255, 255, 255, 0.9);
+  --pane-shadow: rgba(60, 50, 140, 0.18);
+  --pane-sheen: rgba(255, 255, 255, 0.65);
+  --pane-streak: rgba(255, 255, 255, 0.22);
+  --card-a: rgba(255, 255, 255, 0.46);
+  --card-b: rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101012;
+  --side: #161618;
+  --surface: #1C1C1F;
+  --text: #F4F4F5;
+  --muted: #A0A0AB;
+  --line: rgba(255, 255, 255, 0.10);
+  --accent: #9B9CFF;
+  --on-accent: #101012;
+  --sel: rgba(155, 156, 255, 0.16);
+  --hover: rgba(255, 255, 255, 0.06);
+  --track: rgba(255, 255, 255, 0.08);
+  --code: #141416;
+  --add: rgba(74, 222, 128, 0.12);
+  --add-text: #7EE2A3;
+  --del: rgba(248, 113, 113, 0.12);
+  --del-text: #FCA5A5;
+  --sev-high: #FCA5A5;
+  --sev-mid: #F5C26B;
+  --sev-low: #A0A0AB;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  --glass: rgba(32, 32, 40, 0.50);
+  --glass-strong: rgba(32, 32, 40, 0.68);
+  --glass-line: rgba(255, 255, 255, 0.10);
+  --glass-edge: rgba(0, 0, 0, 0.35);
+  --bg-a: #0E0E18;
+  --bg-b: #15101F;
+  --bg-c: #0B1620;
+  --blob1: rgba(129, 140, 248, 0.34);
+  --blob2: rgba(217, 70, 239, 0.20);
+  --blob3: rgba(34, 211, 238, 0.18);
+  --pane-a: rgba(255, 255, 255, 0.075);
+  --pane-b: rgba(255, 255, 255, 0.025);
+  --pane-edge: rgba(255, 255, 255, 0.16);
+  --pane-hi: rgba(255, 255, 255, 0.22);
+  --pane-shadow: rgba(0, 0, 0, 0.5);
+  --pane-sheen: rgba(190, 190, 255, 0.16);
+  --pane-streak: rgba(255, 255, 255, 0.05);
+  --card-a: rgba(255, 255, 255, 0.09);
+  --card-b: rgba(255, 255, 255, 0.04);
+}
+
+/* Type and base. Inter when it is installed, otherwise the system face. No font is loaded from a network. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Layout. The sidebar keeps 248px and shrinks to 200px; the content takes the rest. The window never wraps. */
+.app {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  gap: 14px;
+  height: 100vh;
+  padding: 14px;
+  background: var(--bg);
+}
+
+.sidebar {
+  flex: 0 1 248px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 14px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--side);
+}
+
+.sidebar__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 10px;
+}
+
+.brand {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.row {
+  transition: background 0.15s;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav__label {
+  padding: 0 10px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.nav__item {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.nav__item[aria-current="true"],
+.nav__item[aria-current="page"] {
+  background: var(--sel);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.nav__item--muted {
+  color: var(--muted);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.sidebar__bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.status__label,
+.status__note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status__value {
+  font-weight: 500;
+}
+
+.status__note {
+  margin-top: 2px;
+}
+
+.content {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: var(--bg);
+}
+
+.modes {
+  display: flex;
+  justify-content: center;
+  padding: 20px 24px 6px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--track);
+}
+
+.seg {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+
+.seg[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 32px 8px;
+}
+
+.stack {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.lead {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.body {
+  margin: 2px 0 0;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.example-banner {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.path {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.25s, box-shadow 0.25s, background 0.25s;
+}
+
+.card--flush {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.card__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.12);
+}
+
+.finding__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.sev {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sev--high {
+  color: var(--sev-high);
+}
+
+.sev--mid {
+  color: var(--sev-mid);
+}
+
+.sev--low {
+  color: var(--sev-low);
+}
+
+.cmd {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--code);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.btn--primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn--ghost {
+  padding: 0 14px;
+  border: 0;
+  color: var(--muted);
+}
+
+.diff {
+  padding: 10px 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.diff__line {
+  display: flex;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.diff__line--add,
+.prose-add {
+  background: var(--add);
+  color: var(--add-text);
+}
+
+.diff__line--del,
+.prose-del {
+  background: var(--del);
+  color: var(--del-text);
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.prose p {
+  margin: 0;
+  padding: 6px 18px;
+}
+
+.error-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.error-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.settings-facts {
+  display: grid;
+  grid-template-columns: minmax(10rem, max-content) minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.settings-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer-wrap {
+  padding: 8px 32px 28px;
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 6px 6px 6px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.composer__input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+}
+
+.composer__send {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.composer-wrap .note {
+  max-width: 720px;
+  margin: 6px auto 0;
+  padding: 0 6px;
+}
+
+/* The glass layer. Solid colours above are the fallback; these rules paint the panes over the gradient. */
+[data-glass="on"] .app {
+  background:
+    radial-gradient(600px 420px at 12% 18%, var(--blob1), transparent 70%),
+    radial-gradient(560px 420px at 88% 12%, var(--blob2), transparent 70%),
+    radial-gradient(640px 480px at 70% 95%, var(--blob3), transparent 70%),
+    linear-gradient(135deg, var(--bg-a), var(--bg-b) 55%, var(--bg-c));
+}
+
+[data-glass="on"] .sidebar {
+  border-color: var(--glass-line);
+  background: var(--glass);
+}
+
+[data-glass="on"] .segmented {
+  border-color: var(--glass-line);
+  background: var(--glass);
+}
+
+[data-glass="on"] .seg[aria-pressed="true"] {
+  background: var(--glass-strong);
+}
+
+[data-glass="on"] .status {
+  border-color: var(--glass-line);
+  background: var(--glass);
+}
+
+[data-glass="on"] .content {
+  border-color: var(--pane-edge);
+  background: linear-gradient(160deg, var(--pane-a), var(--pane-b));
+  box-shadow: inset 0 1px 0 var(--pane-hi), inset 0 -1px 0 rgba(0, 0, 0, 0.05), 0 24px 60px var(--pane-shadow);
+}
+
+[data-glass="on"] .content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(900px 260px at 15% -10%, var(--pane-sheen), transparent 60%),
+    linear-gradient(115deg, transparent 40%, var(--pane-streak) 50%, transparent 60%);
+  opacity: 0.9;
+}
+
+[data-glass="on"] .content > * {
+  position: relative;
+}
+
+[data-glass="on"] .card,
+[data-glass="on"] .composer {
+  border-color: var(--pane-edge);
+  background: linear-gradient(160deg, var(--card-a), var(--card-b));
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+[data-glass="on"] .card:hover {
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 14px 32px rgba(0, 0, 0, 0.12);
+}
+
+[data-glass="on"] .composer {
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.10);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-glass="on"] .sidebar,
+  [data-glass="on"] .segmented,
+  [data-glass="on"] .status,
+  [data-glass="on"] .card,
+  [data-glass="on"] .composer {
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+  }
+
+  [data-glass="on"] .content {
+    -webkit-backdrop-filter: blur(34px) saturate(1.7);
+    backdrop-filter: blur(34px) saturate(1.7);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-glass="on"] .app {
+    background: var(--bg);
+  }
+
+  [data-glass="on"] .sidebar,
+  [data-glass="on"] .status {
+    border-color: var(--line);
+    background: var(--side);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  [data-glass="on"] .status {
+    background: var(--surface);
+  }
+
+  [data-glass="on"] .segmented {
+    border-color: transparent;
+    background: var(--track);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  [data-glass="on"] .seg[aria-pressed="true"] {
+    background: var(--surface);
+  }
+
+  [data-glass="on"] .content {
+    border-color: var(--line);
+    background: var(--bg);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  [data-glass="on"] .content::before {
+    display: none;
+  }
+
+  [data-glass="on"] .card,
+  [data-glass="on"] .composer {
+    border-color: var(--line);
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .seg,
+  .card {
+    transition: none;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}

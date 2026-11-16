@@ -1,0 +1,33 @@
+{
+  "source": "shared/types.ts (Conversation[])",
+  "valid": [
+    [],
+    [
+      {
+        "id": "7d1a4c2e-6b1f-4f7e-9a55-1c2d3e4f5a6b",
+        "title": "Revisão",
+        "workspace": "/work/alpha",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-02T00:00:00.000Z"
+      }
+    ]
+  ],
+  "invalid": [
+    [
+      {
+        "id": "7d1a4c2e-6b1f-4f7e-9a55-1c2d3e4f5a6b",
+        "title": "Revisão",
+        "workspace": "/work/alpha"
+      }
+    ],
+    [
+      {
+        "id": 1,
+        "title": "Revisão",
+        "workspace": "/work/alpha",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-02T00:00:00.000Z"
+      }
+    ]
+  ]
+}

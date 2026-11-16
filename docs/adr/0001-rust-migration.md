@@ -80,9 +80,9 @@ is a gap that must be closed before phase 6 (IPC and shell) is accepted.
 | `contextIsolation` on | Not applicable. Commands are the only bridge | Set by design |
 | `nodeIntegration` off | No Node runtime in the webview | Set by design |
 | Renderer never touches privileged APIs | `withGlobalTauri: false`; commands granted by capability | Configured in phase 0 |
-| IPC payloads and origins validated | Command arguments validated with `noct-core` types; capability limits windows | Phase 6 |
+| IPC payloads and origins validated | Command arguments validated with `noct-core` types; capability limits windows. The first slice grants four commands to the `main` window only, and mock-runtime tests refuse an ungranted command and a window without the grant | Phase 6, first slice (not yet checked in a running window) |
 | Browser permissions denied by default | Webview grants nothing beyond `core:default` | Configured in phase 0; verify per platform |
-| External navigation restricted | `on_navigation` handler in the core | **Gap**: implement in phase 6 |
+| External navigation restricted | The main window is created in code (`crates/noct-app/src/window.rs`) with an `on_navigation` handler that allows only the packaged frontend, and the dev server in debug builds (`navigation::is_app_url`); `on_new_window` denies every request. Unit tests in `navigation.rs` | Implemented in phase 6. Not yet checked in a running webview on each platform |
 | Content Security Policy | `app.security.csp` in `tauri.conf.json` | Configured in phase 0 |
 | Credentials never reach renderer | Secrets held in the OS credential store through `keyring-core` (`crates/noct-secrets`); SQLite and the renderer see opaque references only | Phase 5. Vault done; storage choice pending confirmation (see [Open decisions](#open-decisions)). **Superseded in part by [ADR 0002](0002-envelope-provider-credentials.md):** one master key in the store, secrets in an encrypted file |
 | Review Mode read-only | Logic port, unchanged | Phase 4 |
@@ -131,6 +131,22 @@ against the Rust code, or the difference must be recorded as an intentional chan
 
 Phases 1 to 4 can overlap once phase 2 lands. Phase 7 cannot start before phase
 6, because the UI calls the commands that phase 6 defines.
+
+The phase 7 UI cannot use inline `style=` attributes. The shipped policy grants
+`style-src 'self'` and no `'unsafe-inline'`, so the webview refuses them. The rule
+is held by `crates/noct-app/tests/shell_policy.rs`, which fails if a
+`style-src-attr` or `style-src-elem` directive appears, and by
+`scripts/check-shell-csp.mjs`, which renders the built UI under the policy. The
+split form (`style-src-elem 'self'` with `style-src-attr 'unsafe-inline'`) passed
+the same check and was not adopted.
+
+**Decision (closed):** the policy stays `style-src 'self'`. The phase 7 UI expresses
+its look with CSS classes and the `data-theme` attribute, and sets no inline style of
+any kind: no `style` attribute, no `<style>` element, no Leptos `style:` directive,
+no `attr:style`, and no `.style(...)` call. A value that would need an inline style is
+expressed as a class or a `data-` attribute chosen in advance. The guard
+`the_interface_sets_no_inline_style` in `crates/noct-app/tests/shell_policy.rs` scans
+`crates/noct-ui/src` and `crates/noct-ui/index.html` for those forms.
 
 ### Progress
 
@@ -298,18 +314,131 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
     TypeScript title depends on the locale's date format and the interface knows the language.
     The brain memory retrieval, the paged lists and the other methods that only delegate are
     repository calls.
-- **Remaining, phase 2:** upgrade fixtures from the other tagged releases (0.5.0-beta to
-  0.9.0-beta, and 1.0.0 to 1.0.2), and the operation timing observer, which goes with the
-  diagnostics command.
+- **Done, phase 2 closure** (see [Phase 2 closure](#phase-2-closure-cut-gaps-and-decisions)):
+  the public open path, upgrade fixtures for the nine tagged lines from 0.5.0-beta to 1.0.2
+  with pinned sources, and the operation observer with its catalog.
+- **Remaining, phase 2:** the realism condition on real data before any public release, the
+  call sites of the observer (phase 6), and CI wiring for the gate.
+- **Done, phase 6 (first slice, not yet checked in a running window):** the shell opens the
+  store and the file log in `NOCT_DATA_DIR` (an absolute path) or in the application data
+  folder, which is not the Electron folder `Nocturne Studio`. `build.rs` declares the four
+  commands of the slice (`settings_get`, `settings_set`, `workspaces_list`,
+  `conversations_list`) in the application manifest, and `capabilities/default.json` grants
+  them to the `main` window and nothing else. Arguments are checked with the `noct-core`
+  types, and the workspace inspection follows `WorkspaceTrust.ts`. Tests run through Tauri's
+  mock runtime with the real capability: a granted command runs, an unlisted command and a
+  second window are refused by the access control list, and a refused update writes nothing.
+  `conversations_list` is paged: its request takes a required `limit` from 1 to 500 and an optional
+  cursor, the key `updatedAt` and `id` of the last conversation of the previous page, and it returns
+  `items`, `hasMore` and `nextCursor`. The order is `updatedAt` descending, then `id` descending, and
+  the cursor walk visits every conversation once. The limit of 500 is a bound of the Rust contract; the
+  TypeScript conversation page is 100 (`shared/constants.ts`), which this phase does not change. There is
+  no unpaginated command.
+  The outputs of the four commands are compared with the TypeScript application for each of the nine
+  release lines: the legacy file, which Rust upgrades when it opens it, and a copy into which the
+  TypeScript repositories wrote values that are not defaults, and seven conversations with distinct
+  update times (`scripts/generate-output-differential.mjs` and `crates/noct-app/tests/output_differential.rs`,
+  run by the workflow). Rust reads the conversations in pages of one and of the maximum, and both walks must
+  agree before they are compared with TypeScript. The reference is written on each run and not committed,
+  because the conversation identifiers and timestamps change between runs. A CI step regenerates the Tauri
+  permissions and fails on any difference from the committed files.
+  Approximations, recorded in [docs/rust-shell.md](../rust-shell.md#known-approximations): the workspace
+  access check approximates `access(R_OK | X_OK)` without a native call, and the home folder comes from
+  `HOME` (Unix) or `USERPROFILE` (Windows), not from `os.homedir()`.
+  Not verified: the debug and release windows in a running webview, on any platform. The run modes are in
+  [docs/rust-shell.md](../rust-shell.md); they were checked by their plan and by the dev server answering,
+  not by opening the window.
 - **Not started:** phases 3 to 9.
 
 The row gate now reads rows that the TypeScript repositories wrote at schema 32, and it
 upgrades a database that release 0.9.5-beta wrote. The migrations of that release are read
 from git and run as they ran then. The TypeScript upgrade of a copy is the reference, and
 Rust's export of the same file must match it collection by collection, with the same user
-version. The fingerprints cover the other releases only for their schema. The releases from
-0.5.0-beta to 0.9.0-beta and from 1.0.0 to 1.0.2 still need fixtures, so phase 2 stays open
-until they are covered.
+version. The fingerprints cover the other releases only for their schema. The nine tagged
+lines from 0.5.0-beta to 1.0.2 are now upgraded from fixtures that their own code wrote (see
+[Phase 2 closure](#phase-2-closure-cut-gaps-and-decisions)). Phase 2 stays open until the
+realism condition and the CI wiring are met.
+
+### Phase 2 closure: cut, gaps and decisions
+
+Decisions for closing phase 2:
+
+1. **Public open path.** `Store::open_with` is the open that application code uses. It takes the
+   diagnostic sink and the operation observer, and records the operations that the last run
+   left running, which the runtime open does not do. `Store::open` is the same open with the
+   default options.
+   `Database::open_runtime` keeps `pub` visibility for now: the runtime suites and the
+   statistics and diagnostics accessors need it, and `Store` does not expose those yet. It
+   becomes crate-private with phase 6. `crates/noct-db/tests/store.rs` pins the difference: a
+   change set awaiting a decision is recorded by `Store::open` and not by `open_runtime`. The
+   parity probe of the spike found this divergence in 1.0.1 and 1.0.2 while it opened the file
+   through the runtime. The repository gate opens through `Store::open`. TypeScript was not
+   changed.
+2. **Realism is a condition of public release, not of merge.** The release-line seeds use each
+   release's own API with fixed synthetic values. Project-index and change-set rows are written
+   through the repositories. They are not produced by the real indexer (`ProjectIndexService`,
+   not exercised here) or by a real agent run. Before any public release, the TypeScript and
+   Rust comparison must run on a copy of the maintainer's real data, inside `target/`, and the
+   copy is never committed. The backups that the runtime writes before a migration
+   (`nocturne.db.backup-*`) are a suitable input.
+3. **Pinned release lines.** `scripts/fixtures/release-lines.json` pins the commit and the
+   SHA-256 of the TypeScript sources (`electron/` and `shared/`) of each of the nine lines.
+   `scripts/verify-row-gate.mjs` checks the pins before it compiles anything, so a moved tag or
+   an edited source stops the gate. The pins are recomputed with
+   `node scripts/release-lines.mjs --pin`, and the diff is reviewed like any other change.
+4. **Gate in CI.** The gate runs locally with `node scripts/verify-row-gate.mjs`. Merging phase 2
+   into `main` requires the gate to pass in CI. The CI job must check out with
+   `fetch-depth: 0` and fetch the tags, because the pins resolve tag commits. Until that job
+   exists, the local run is the gate.
+5. **No upgrade is registered as unsupported.** All nine lines reach the reference schema and
+   the same rows in Rust. If a line diverges later, the divergence is recorded here before the
+   test is relaxed.
+
+**Cut: migrations 5 to 32.** Migration 1 runs on every upgrade and is outside the cut. The
+objects are those of the migration inventory (`migrations.ts`).
+
+| Migration | Schema and data it touches | How the gate covers it |
+| --- | --- | --- |
+| 5, 13 | `suggestions`: columns added; M13 fills defaults | M13 defaults check; row digests |
+| 6 | `workspaces.authorized` | M6 check; row digests |
+| 7 | indexes on artifacts, conversations, suggestion decisions, workspaces | Schema equality |
+| 8 | `brain_memories`, its FTS table and trigger | Schema only: no release at that schema holds memories |
+| 9 | `provider_configs` | Row digests on 0.9.0 and later |
+| 10 | `model_catalog`, `workspace_model_bindings` | Schema only: the release lines do not seed them |
+| 11, 12, 32 | `conversations.codex_thread_id` added, then dropped | Drop check; the threads are written by 0.5 to 0.8 and by 0.9.5 and later |
+| 14 | `suggestions` statuses and `suggestion_decisions` | M14 checks; row digests |
+| 15 | `brain_memory_history`, one entry per existing memory | M15 check on 0.9.0 |
+| 16 | six `project_index_*` tables | Schema only: no release at that schema holds project data |
+| 17 to 24 | validation runs, executions, checkpoints, change sets, changes, hunks, policy columns | Schema equality; rows from 1.0.1 and 1.0.2 |
+| 25 | semantic index tables and FTS, rebuilt from the units | Schema only: no release at schema 24 holds semantic units |
+| 26, 27 | engineering intelligence tables and `signal_states_json` | Schema only: no legacy release holds them |
+| 28 to 30 | change decision operations, interrupted operations, workspace evidence | Schema only |
+| 31 | `project_index_imports` and `project_index_exports`, rebuilt as workspace-scoped | M31 checks on 1.0.1; row digests |
+| 32 | `settings` (vendor keys deleted), `changes` (origins rewritten and column rebuilt), `provider_configs` (type rewritten), `conversations` | M32 checks; row digests |
+
+The tables that no migration in the cut touches (`messages`, `artifacts`, `approval_audit`,
+`workspace_memory`) are preserved. Their rows are compared between the TypeScript and Rust
+upgrades, and no expectation names their values.
+
+**Gaps, accepted.** Schema equality covers the migrations marked "schema only", because no
+release at that schema version holds the data that the migration reads or rebuilds. The
+release lines do not seed `model_catalog` and `workspace_model_bindings`, so their rows are
+not compared; this is a gap to close if a seed becomes possible.
+
+**Operation observer (call sites in phase 6).** `crates/noct-db/src/observer.rs` defines:
+
+- `OperationMetric { operation, duration_ms, failed }` and the `OperationObserver` trait.
+- `CATALOG`, the 54 operation names the TypeScript runtime reports: the 15 reads measured in
+  `Database.ts`, the 38 repository transactions in `electron/database`, and the default
+  `transaction`. `crates/noct-db/tests/observer.rs` checks the catalog against those sources.
+- The warning policy of `electron/main.ts`: a failed operation, or one of at least 50 ms, is
+  written to the diagnostic sink as `persistence.operation`. The policy applies with or
+  without an observer.
+- Containment: a panic in the observer or in the sink is caught, and the result of the
+  operation is returned unchanged. A panicking operation is reported as failed, and its panic
+  propagates. `Database::measure` is the entry point.
+
+No operation calls `Database::measure` yet, so no path pays for the observer today.
 
 ## Open decisions
 

@@ -1,0 +1,189 @@
+{
+  "source": "electron/ipc/registerSettingsIpc.ts (settingsSchema, zod)",
+  "valid": [
+    {
+      "input": {},
+      "output": {}
+    },
+    {
+      "input": {
+        "theme": "dark"
+      },
+      "output": {
+        "theme": "dark"
+      }
+    },
+    {
+      "input": {
+        "theme": "light"
+      },
+      "output": {
+        "theme": "light"
+      }
+    },
+    {
+      "input": {
+        "language": "pt-BR"
+      },
+      "output": {
+        "language": "pt-BR"
+      }
+    },
+    {
+      "input": {
+        "language": "en"
+      },
+      "output": {
+        "language": "en"
+      }
+    },
+    {
+      "input": {
+        "approvalPolicy": "untrusted"
+      },
+      "output": {
+        "approvalPolicy": "untrusted"
+      }
+    },
+    {
+      "input": {
+        "approvalPolicy": "on-request"
+      },
+      "output": {
+        "approvalPolicy": "on-request"
+      }
+    },
+    {
+      "input": {
+        "diagnosticMode": true
+      },
+      "output": {
+        "diagnosticMode": true
+      }
+    },
+    {
+      "input": {
+        "diagnosticMode": false
+      },
+      "output": {
+        "diagnosticMode": false
+      }
+    },
+    {
+      "input": {
+        "approvalPolicy": "untrusted",
+        "diagnosticMode": true,
+        "theme": "light",
+        "language": "en"
+      },
+      "output": {
+        "approvalPolicy": "untrusted",
+        "diagnosticMode": true,
+        "theme": "light",
+        "language": "en"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "input": null
+    },
+    {
+      "input": []
+    },
+    {
+      "input": "dark"
+    },
+    {
+      "input": 42
+    },
+    {
+      "input": true
+    },
+    {
+      "input": {
+        "theme": "blue"
+      }
+    },
+    {
+      "input": {
+        "language": "fr"
+      }
+    },
+    {
+      "input": {
+        "approvalPolicy": "always"
+      }
+    },
+    {
+      "input": {
+        "diagnosticMode": "true"
+      }
+    },
+    {
+      "input": {
+        "diagnosticMode": 1
+      }
+    },
+    {
+      "input": {
+        "theme": null
+      }
+    },
+    {
+      "input": {
+        "diagnosticMode": null
+      }
+    },
+    {
+      "input": {
+        "language": null
+      }
+    },
+    {
+      "input": {
+        "approvalPolicy": null
+      }
+    },
+    {
+      "input": {
+        "theme": "Dark"
+      }
+    },
+    {
+      "input": {
+        "theme": " dark"
+      }
+    },
+    {
+      "input": {
+        "unknown": true
+      }
+    },
+    {
+      "input": {
+        "theme": "dark",
+        "extra": 1
+      }
+    },
+    {
+      "input": {
+        "approvalPolicy": [
+          "untrusted"
+        ]
+      }
+    },
+    {
+      "input": {
+        "diagnosticMode": []
+      }
+    },
+    {
+      "input": {
+        "__proto__": {
+          "theme": "dark"
+        }
+      }
+    }
+  ]
+}

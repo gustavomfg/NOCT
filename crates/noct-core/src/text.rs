@@ -19,6 +19,10 @@ pub fn collapse_js_whitespace(text: &str) -> String {
     out
 }
 
+/// JavaScript `\s` as the body of a regex character class, matching [`is_js_whitespace`]. Rust's `\s`
+/// would match U+0085 and miss U+FEFF, so a pattern that follows JavaScript spells the class out.
+pub const JS_WHITESPACE_CLASS: &str = r"\t\n\x{0B}\x{0C}\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}";
+
 /// JavaScript's `\s` and `String#trim` set. It differs from Rust's `char::is_whitespace`:
 /// it includes U+FEFF and omits U+0085.
 pub fn is_js_whitespace(c: char) -> bool {

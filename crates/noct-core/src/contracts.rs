@@ -41,8 +41,12 @@ pub struct Workspace {
     pub favorite: bool,
     pub authorized: bool,
     pub availability: WorkspaceAvailability,
-    /// Optional in TypeScript (`availabilityMessage?: string`): omitted when absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Optional in TypeScript (`availabilityMessage?: string`): omitted when absent, and `null` is refused.
+    #[serde(
+        default,
+        deserialize_with = "crate::wire::present",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub availability_message: Option<String>,
     pub created_at: String,
     pub last_opened_at: String,

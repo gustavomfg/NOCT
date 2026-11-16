@@ -30,7 +30,7 @@ const WORKSPACE: &str = "/work/engineering";
 const OTHER: &str = "/work/other";
 
 fn open(name: &str) -> Database {
-    let db = Database::open(&scratch(name)).expect("open database");
+    let db = Database::open_runtime(&scratch(name)).expect("open database");
     db.connection()
         .execute_batch(&format!(
             "INSERT INTO workspaces(path,name,created_at,last_opened_at) VALUES \

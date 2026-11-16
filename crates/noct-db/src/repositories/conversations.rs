@@ -95,6 +95,30 @@ impl<'a> Conversations<'a> {
         })
     }
 
+    /// The rows that come after `after` in the order `updated_at DESC, id DESC`, at most `limit` of them.
+    /// `after` is the key of the last row of the previous page, or `None` for the first page. Keys are
+    /// compared as text, so they are ordered the way the stored ISO timestamps sort. The order is total,
+    /// because `id` is unique, so a walk through the pages visits every row once even when timestamps tie.
+    pub fn page_after(
+        &self,
+        after: Option<(&str, &str)>,
+        limit: usize,
+    ) -> Result<Vec<ConversationRow>> {
+        let (updated_at, id) = match after {
+            Some((updated_at, id)) => (Some(updated_at), Some(id)),
+            None => (None, None),
+        };
+        conversations(
+            self.conn,
+            &format!(
+                "SELECT {CONVERSATION_COLUMNS} FROM conversations \
+                 WHERE ?1 IS NULL OR updated_at < ?1 OR (updated_at = ?1 AND id < ?2) \
+                 ORDER BY updated_at DESC, id DESC LIMIT ?3"
+            ),
+            params![updated_at, id, to_i64(limit)],
+        )
+    }
+
     pub fn get(&self, id: &str) -> Result<Option<ConversationRow>> {
         let row = self
             .conn

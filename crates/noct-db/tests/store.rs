@@ -2,7 +2,10 @@
 //! the reconciliation at open, the conversation that opens its workspace, and the assistant
 //! turn that is stored whole or not at all.
 
+use std::path::Path;
+
 use noct_core::limits::persistence::METADATA_CHARACTERS;
+use noct_db::runtime::{Database, OpenOptions};
 use noct_db::store::Store;
 use noct_db::store::{AssistantTurn, TurnArtifact};
 use rusqlite::params;
@@ -60,6 +63,107 @@ fn opening_records_the_operations_the_last_run_left_running() {
         count(&again, "SELECT COUNT(*) FROM interrupted_operations"),
         1
     );
+}
+
+/// Leaves a database whose completed execution has a change set still waiting for a decision.
+fn leave_a_change_set_pending(directory: &Path) {
+    let store = Store::open(directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/alpha")
+        .expect("conversation")
+        .id;
+    let connection = store.connection();
+    connection
+        .execute(
+            "INSERT INTO executions(id,workspace,conversation_id,prompt,mode,status,decision,started_at,finished_at) \
+             VALUES('exec-1','/work/alpha',?1,'Tarefa','build','completed','pending',?2,?2)",
+            params![conversation, AT],
+        )
+        .expect("completed execution");
+    for (id, phase) in [("cp-before", "before"), ("cp-after", "after")] {
+        connection
+            .execute(
+                "INSERT INTO checkpoints(id,execution_id,workspace,phase,status,captured_at,root_path) \
+                 VALUES(?1,'exec-1','/work/alpha',?2,'ready',?3,'/work/alpha')",
+                params![id, phase, AT],
+            )
+            .expect("checkpoint");
+    }
+    connection
+        .execute(
+            "INSERT INTO change_sets(id,execution_id,before_checkpoint_id,after_checkpoint_id,status,created_at,updated_at) \
+             VALUES('cs-1','exec-1','cp-before','cp-after','pending',?1,?1)",
+            params![AT],
+        )
+        .expect("change set");
+    store.close().expect("close");
+}
+
+/// The public path reconciles a change set still waiting for a decision. The runtime-level
+/// open does not: it migrates and maintains the file, nothing more. This is the divergence
+/// the parity run found in 1.0.1 and 1.0.2, so the contract is pinned here.
+#[test]
+fn the_public_open_records_pending_decisions_and_the_runtime_open_does_not() {
+    let directory = scratch("store-reconcile-decision");
+    leave_a_change_set_pending(&directory);
+
+    let runtime = Database::open_runtime(&directory).expect("runtime open");
+    let recorded: i64 = runtime
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM interrupted_operations WHERE kind='awaiting-decision'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count");
+    assert_eq!(recorded, 0, "the runtime open must not reconcile");
+    runtime.close().expect("close");
+
+    let public = Store::open(&directory).expect("public open");
+    assert_eq!(
+        count(
+            &public,
+            "SELECT COUNT(*) FROM interrupted_operations WHERE kind='awaiting-decision'"
+        ),
+        1
+    );
+    public.close().expect("close");
+}
+
+#[test]
+fn opening_with_options_reconciles_like_the_default_open() {
+    let directory = scratch("store-reconcile-options");
+    leave_a_change_set_pending(&directory);
+
+    let store = Store::open_with(&directory, OpenOptions::default()).expect("open with options");
+    assert_eq!(
+        count(
+            &store,
+            "SELECT COUNT(*) FROM interrupted_operations WHERE kind='awaiting-decision'"
+        ),
+        1
+    );
+    store.close().expect("close");
+}
+
+#[test]
+fn opening_with_options_refuses_a_newer_schema_and_keeps_the_file() {
+    let directory = scratch("store-open-with-newer-schema");
+    let path = directory.join("nocturne.db");
+    {
+        let connection = rusqlite::Connection::open(&path).expect("create the file");
+        connection
+            .pragma_update(None, "user_version", 33)
+            .expect("a newer schema");
+    }
+    let before = std::fs::read(&path).expect("file bytes");
+
+    let error = Store::open_with(&directory, OpenOptions::default())
+        .err()
+        .expect("a newer schema is refused");
+
+    assert!(error.to_string().contains("schema 33"), "{error}");
+    assert_eq!(std::fs::read(&path).expect("file bytes"), before);
 }
 
 #[test]

@@ -12,18 +12,17 @@ use icu_normalizer::ComposingNormalizer;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+use crate::text::JS_WHITESPACE_CLASS;
+
 /// The search tokens a retrieval keeps, as the TypeScript repository does.
 const SEARCH_TOKENS: usize = 12;
-
-/// JavaScript `\s`. Rust `\s` would match U+0085 and miss U+FEFF, so the class is spelled out.
-const JS_WHITESPACE: &str = r"\t\n\x{0B}\x{0C}\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}";
 
 /// The private-use character a UTF-16 surrogate pair becomes, so that one astral character
 /// counts as two units. It is never whitespace and never part of a credential pattern.
 const UNIT: &str = "\u{E000}\u{E000}";
 
 static CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
-    let space = JS_WHITESPACE;
+    let space = JS_WHITESPACE_CLASS;
     let non_space = format!("[^{space}]");
     Regex::new(&format!(
         "authorization[{space}]*[:=][{space}]*(?:bearer[{space}]+)?{non_space}{{8,}}\

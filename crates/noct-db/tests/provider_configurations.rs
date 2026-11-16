@@ -33,7 +33,7 @@ fn message(error: Error) -> String {
 }
 
 fn open(name: &str) -> Database {
-    Database::open(&scratch(name)).expect("open database")
+    Database::open_runtime(&scratch(name)).expect("open database")
 }
 
 #[test]

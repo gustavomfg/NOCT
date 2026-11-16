@@ -111,7 +111,7 @@ fn keyed<T: Serialize>(ids: &[String], read: impl Fn(&str) -> Result<T>) -> Valu
 #[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
 fn rust_returns_the_rows_the_typescript_repositories_wrote() {
     let directory = copy_typescript_database("row-gate-typescript-database");
-    let db = Database::open(&directory).expect("open the TypeScript database");
+    let db = Database::open_runtime(&directory).expect("open the TypeScript database");
     let conn = db.connection();
     let expected = expected();
 
@@ -531,7 +531,7 @@ fn reconciles_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before reconciliation");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
 
     OperationRecovery::new(db.connection())
         .reconcile()
@@ -570,7 +570,7 @@ fn evidence_matches_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the stale mark");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let evidence = WorkspaceEvidence::new(db.connection());
 
     let text = fs::read_to_string(gate_directory().join("evidence-expected.json"))
@@ -618,7 +618,7 @@ fn reconciles_suggestions_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the review");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
 
     let text = fs::read_to_string(gate_directory().join("suggestion-expected.json"))
@@ -668,7 +668,7 @@ fn removes_changed_files_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the change");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
 
     let text = fs::read_to_string(gate_directory().join("change-expected.json"))
@@ -793,7 +793,7 @@ fn applies_semantic_writes_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the writes");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
     let index = SemanticIndex::new(conn);
 
@@ -1137,7 +1137,7 @@ fn applies_engineering_writes_like_the_typescript_repository() {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the writes");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let conn = db.connection();
     let store = EngineeringIntelligence::new(conn);
 
@@ -1313,6 +1313,243 @@ fn upgrades_legacy_databases_like_the_typescript_repository() {
     }
 }
 
+/// Every release line of `scripts/release-lines.mjs`: the legacy database that release wrote, and
+/// the reference that the current TypeScript code upgrades from a copy of it. The Rust upgrade of
+/// the same legacy file must reach the same schema and the same rows, and each migration must have
+/// the effect the manifest names, on the reference and on the Rust result alike.
+#[test]
+#[ignore = "needs NOCT_ROW_GATE_DIR; run node scripts/verify-row-gate.mjs"]
+fn upgrades_every_release_line_like_the_typescript_reference() {
+    let manifest = gate_json("release-lines/manifest.json");
+    let clock_cells = manifest["clockCells"].as_array().expect("clock cells");
+    let expectations = manifest["expectations"].as_array().expect("expectations");
+    let mut failures = Vec::new();
+
+    for line in manifest["lines"].as_array().expect("lines") {
+        let tag = line["tag"].as_str().expect("tag");
+        let legacy = gate_directory().join(line["legacy"].as_str().expect("legacy path"));
+        let reference = gate_directory().join(line["reference"].as_str().expect("reference path"));
+
+        let candidate_directory = scratch(&format!("row-gate-release-{tag}"));
+        fs::copy(&legacy, candidate_directory.join("nocturne.db")).expect("copy the legacy file");
+        let store = Store::open(&candidate_directory).expect("open and upgrade the legacy copy");
+        let candidate = release_snapshot(store.connection(), clock_cells);
+        failures.extend(expectation_failures(
+            store.connection(),
+            tag,
+            expectations,
+            "Rust",
+        ));
+        store.close().expect("close the upgraded copy");
+
+        let reference_directory = scratch(&format!("row-gate-release-{tag}-reference"));
+        fs::copy(&reference, reference_directory.join("nocturne.db")).expect("copy the reference");
+        let reference_connection =
+            Connection::open(reference_directory.join("nocturne.db")).expect("open the reference");
+        let reference_snapshot = release_snapshot(&reference_connection, clock_cells);
+        failures.extend(expectation_failures(
+            &reference_connection,
+            tag,
+            expectations,
+            "TypeScript",
+        ));
+
+        failures.extend(compare_releases(tag, &reference_snapshot, &candidate));
+    }
+    assert!(
+        failures.is_empty(),
+        "release lines differ from the TypeScript upgrade:\n{}",
+        failures.join("\n")
+    );
+}
+
+/// The schema and the rows of a database, read with the same SQL on both sides. A row is one
+/// string per row, built by SQLite from `quote()` of every column, so the comparison never depends
+/// on how Rust or Node read a value. Clock cells are compared by presence only.
+struct ReleaseSnapshot {
+    user_version: i64,
+    schema: Vec<(String, String, Option<String>)>,
+    tables: Vec<(String, Vec<String>)>,
+}
+
+fn release_snapshot(conn: &Connection, clock_cells: &[Value]) -> ReleaseSnapshot {
+    let user_version = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .expect("user version");
+    let schema: Vec<(String, String, Option<String>)> = conn
+        .prepare(
+            "SELECT type, name, sql FROM sqlite_master \
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
+        )
+        .expect("schema statement")
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .expect("schema")
+        .collect::<rusqlite::Result<_>>()
+        .expect("schema rows");
+    let mut tables = Vec::new();
+    for (kind, name, _) in &schema {
+        if kind != "table" {
+            continue;
+        }
+        let columns: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info(?1) ORDER BY name")
+            .expect("columns statement")
+            .query_map([name.as_str()], |row| row.get(0))
+            .expect("columns")
+            .collect::<rusqlite::Result<_>>()
+            .expect("column rows");
+        let cells: Vec<String> = columns
+            .iter()
+            .map(|column| release_cell(name, column, clock_cells))
+            .collect();
+        let sql = format!(
+            "SELECT {} AS line FROM \"{name}\" ORDER BY line",
+            cells.join(" || char(31) || ")
+        );
+        let rows: Vec<String> = conn
+            .prepare(&sql)
+            .expect("row statement")
+            .query_map([], |row| row.get(0))
+            .expect("rows")
+            .collect::<rusqlite::Result<_>>()
+            .expect("row values");
+        tables.push((name.clone(), rows));
+    }
+    ReleaseSnapshot {
+        user_version,
+        schema,
+        tables,
+    }
+}
+
+fn release_cell(table: &str, column: &str, clock_cells: &[Value]) -> String {
+    let quoted = format!("quote(\"{column}\")");
+    for clock in clock_cells {
+        if clock["table"].as_str() != Some(table) || clock["column"].as_str() != Some(column) {
+            continue;
+        }
+        let conditions: Vec<String> = clock["when"]
+            .as_object()
+            .map(|when| {
+                when.iter()
+                    .map(|(key, value)| {
+                        let literal = value.as_str().expect("clock condition").replace('\'', "''");
+                        format!("\"{key}\" = '{literal}'")
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let condition = if conditions.is_empty() {
+            "1".to_string()
+        } else {
+            conditions.join(" AND ")
+        };
+        return format!("CASE WHEN {condition} THEN '<clock>' ELSE {quoted} END");
+    }
+    quoted
+}
+
+fn expectation_failures(
+    conn: &Connection,
+    tag: &str,
+    expectations: &[Value],
+    side: &str,
+) -> Vec<String> {
+    expectations
+        .iter()
+        .filter(
+            |expectation| match expectation.get("tags").and_then(Value::as_array) {
+                None => true,
+                Some(tags) => tags.iter().any(|candidate| candidate.as_str() == Some(tag)),
+            },
+        )
+        .filter_map(|expectation| {
+            let name = expectation["name"].as_str().expect("expectation name");
+            let sql = expectation["sql"].as_str().expect("expectation sql");
+            let equals = expectation["equals"].as_str().expect("expectation value");
+            match conn.query_row(sql, [], |row| row.get::<_, i64>(0)) {
+                Ok(value) if value.to_string() == equals => None,
+                Ok(value) => Some(format!(
+                    "{tag} ({side}) {name}: gives {value}, expected {equals}"
+                )),
+                Err(error) => Some(format!("{tag} ({side}) {name}: {error}")),
+            }
+        })
+        .collect()
+}
+
+fn compare_releases(
+    tag: &str,
+    reference: &ReleaseSnapshot,
+    candidate: &ReleaseSnapshot,
+) -> Vec<String> {
+    let mut differences = Vec::new();
+    let expected_version = noct_core::limits::DATABASE_SCHEMA_VERSION as i64;
+    for (side, snapshot) in [("TypeScript", reference), ("Rust", candidate)] {
+        if snapshot.user_version != expected_version {
+            differences.push(format!(
+                "{tag} ({side}): user_version {} instead of {expected_version}",
+                snapshot.user_version
+            ));
+        }
+    }
+    if reference.schema != candidate.schema {
+        differences.push(format!(
+            "{tag}: the schema differs from the TypeScript upgrade: {}",
+            first_schema_difference(&reference.schema, &candidate.schema)
+        ));
+    }
+    for ((name, expected_rows), (_, actual_rows)) in reference.tables.iter().zip(&candidate.tables)
+    {
+        if expected_rows != actual_rows {
+            differences.push(format!(
+                "{tag}: table {name} differs: TypeScript has {} rows, Rust has {}; {}",
+                expected_rows.len(),
+                actual_rows.len(),
+                first_row_difference(expected_rows, actual_rows)
+            ));
+        }
+    }
+    differences
+}
+
+/// The first row at which two outputs of one table differ. Both sides sort their rows with the
+/// same SQL collation, so the first position that differs is where a row is missing or changed.
+fn first_row_difference(reference: &[String], candidate: &[String]) -> String {
+    let index = (0..reference.len().max(candidate.len()))
+        .find(|&index| reference.get(index) != candidate.get(index))
+        .expect("the outputs differ");
+    format!(
+        "row {} is {} in TypeScript and {} in Rust",
+        index + 1,
+        show_row(reference.get(index)),
+        show_row(candidate.get(index))
+    )
+}
+
+fn show_row(row: Option<&String>) -> String {
+    match row {
+        Some(row) => format!("[{}]", row.replace('\u{1f}', " | ")),
+        None => "absent".to_string(),
+    }
+}
+
+fn first_schema_difference(
+    reference: &[(String, String, Option<String>)],
+    candidate: &[(String, String, Option<String>)],
+) -> String {
+    match reference.iter().zip(candidate).find(|(a, b)| a != b) {
+        Some(((kind, name, _), (other_kind, other_name, _))) => {
+            format!("TypeScript has {kind} {name}, Rust has {other_kind} {other_name}")
+        }
+        None => format!(
+            "{} objects in TypeScript, {} in Rust",
+            reference.len(),
+            candidate.len()
+        ),
+    }
+}
+
 fn gate_json(name: &str) -> Value {
     let text = fs::read_to_string(gate_directory().join(name)).expect(name);
     serde_json::from_str(&text).expect(name)
@@ -1328,7 +1565,7 @@ fn backup_scenario(name: &str, document: &Value, scope: ImportScope) -> Value {
         directory.join("nocturne.db"),
     )
     .expect("copy the database saved before the imports");
-    let db = Database::open(&directory).expect("open the copy");
+    let db = Database::open_runtime(&directory).expect("open the copy");
     let before = backup_export(db.connection());
     let data: ImportData = serde_json::from_value(document.clone()).expect("import document");
     let refused = Backup::new(db.connection()).import(&data, scope).is_err();

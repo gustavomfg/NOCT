@@ -1,8 +1,8 @@
-//! The options of `Database::open_with`: the injected diagnostic sink receives the warnings of the database.
+//! The options of `Database::open_runtime_with`: the injected diagnostic sink receives the warnings of the database.
 
 use std::sync::{Arc, Mutex};
 
-use noct_db::diagnostics::DiagnosticSink;
+use noct_db::diagnostics::{Diagnostic, DiagnosticSink};
 use noct_db::{Database, OpenOptions};
 
 mod common;
@@ -13,11 +13,11 @@ use common::scratch;
 struct Recording(Mutex<Vec<String>>);
 
 impl DiagnosticSink for Recording {
-    fn warn(&self, event: &'static str, message: &str) {
+    fn record(&self, diagnostic: &Diagnostic<'_>) {
         self.0
             .lock()
             .expect("recording lock")
-            .push(format!("{event}: {message}"));
+            .push(format!("{}: {}", diagnostic.category, diagnostic.message));
     }
 }
 
@@ -25,7 +25,7 @@ impl DiagnosticSink for Recording {
 fn the_database_reports_to_the_injected_sink() {
     let directory = scratch("open-options-sink");
     let recording = Arc::new(Recording::default());
-    let database = Database::open_with(
+    let database = Database::open_runtime_with(
         &directory,
         OpenOptions {
             diagnostics: recording.clone(),

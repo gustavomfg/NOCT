@@ -35,7 +35,7 @@ use crate::repositories::workspace_evidence::WorkspaceEvidence;
 use crate::repositories::workspace_memory::WorkspaceMemory;
 use crate::repositories::workspace_model_bindings::ModelBindings;
 use crate::repositories::workspaces::Workspaces;
-use crate::runtime::Database;
+use crate::runtime::{Database, OpenOptions};
 use crate::{Result, transaction};
 
 /// The database of the application, with its repositories.
@@ -64,12 +64,18 @@ pub struct TurnArtifact<'a> {
 }
 
 impl Store {
-    /// Opens the database and records the operations that the last run left running. Running
-    /// it again on the same database changes nothing.
-    pub fn open(data_directory: &Path) -> Result<Self> {
-        let database = Database::open(data_directory)?;
+    /// Opens the database with the given options and records the operations that the last run
+    /// left running. The options carry the diagnostic sink and the operation observer of the
+    /// application. Running it again on the same database changes nothing.
+    pub fn open_with(data_directory: &Path, options: OpenOptions) -> Result<Self> {
+        let database = Database::open_runtime_with(data_directory, options)?;
         OperationRecovery::new(database.connection()).reconcile()?;
         Ok(Self { database })
+    }
+
+    /// Opens the database with the default options. See [`Store::open_with`].
+    pub fn open(data_directory: &Path) -> Result<Self> {
+        Self::open_with(data_directory, OpenOptions::default())
     }
 
     pub fn data_directory(&self) -> &Path {

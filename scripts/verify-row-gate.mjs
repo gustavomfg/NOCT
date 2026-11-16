@@ -5,16 +5,17 @@
 //
 // The TypeScript repositories (electron/database, shared/) are compiled to CommonJS
 // under node_modules/.cache and run to seed a database and record the rows they return.
-// Both go to a temporary directory, which is removed afterwards. No database is committed,
-// as AGENTS.md requires. Then `crates/noct-db/tests/row_gate.rs` opens the same file in
-// Rust and compares every row.
+// Both go to a temporary directory under target/, which is removed afterwards. No database is
+// committed, as AGENTS.md requires. Then `crates/noct-db/tests/row_gate.rs` opens the same file in
+// Rust and compares every row. The release lines of `scripts/release-lines.mjs` are written to
+// the same directory and compared by the same test run.
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
+import { writeReleaseLines } from './release-lines.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const ts = createRequire(path.join(root, 'package.json'))('typescript')
@@ -1069,7 +1070,8 @@ const { SemanticIndexRepository } = createRequire(path.join(buildDirectory, 'pro
 const { EngineeringIntelligenceRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/EngineeringIntelligenceRepository.js')
 const BetterSqlite3 = createRequire(path.join(root, 'package.json'))('better-sqlite3')
 
-const gateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-row-gate-'))
+fs.mkdirSync(path.join(root, 'target'), { recursive: true })
+const gateDirectory = fs.mkdtempSync(path.join(root, 'target', 'row-gate-'))
 try {
   const expected = seed(LocalDatabase, gateDirectory)
   // The parity scenarios change rows the row gate does not expect, so they run on a copy.
@@ -1089,6 +1091,7 @@ try {
   const engineeringWrite = engineeringWriteParity(BetterSqlite3, EngineeringIntelligenceRepository, gateDirectory)
   const backupImport = backupImportParity(LocalDatabase, gateDirectory)
   const legacyUpgrade = legacyUpgradeParity(BetterSqlite3, LocalDatabase, gateDirectory)
+  writeReleaseLines(gateDirectory, LocalDatabase)
   for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(gateDirectory, `nocturne.db${suffix}`), { force: true })
   fs.writeFileSync(path.join(gateDirectory, 'expected.json'), `${JSON.stringify(expected, null, 2)}\n`)
   fs.writeFileSync(path.join(gateDirectory, 'reconcile-expected.json'), `${JSON.stringify(reconciled, null, 2)}\n`)

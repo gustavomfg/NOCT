@@ -56,6 +56,9 @@ jobs:
           # The daemon reads the login password from stdin. A line feed is an empty password. Without
           # it, the daemon asks for a password through a prompt that a headless runner cannot show,
           # and the first write fails with SecureStorageUnavailable.
+          # The $(...) below must expand inside the private session, not in this shell, so the
+          # single quotes are intended. shellcheck reports them as SC2016 for this command only.
+          # shellcheck disable=SC2016
           dbus-run-session -- bash -c '
             set -euo pipefail
             eval "$(printf '\''\n'\'' | gnome-keyring-daemon --daemonize --login --components=secrets)"

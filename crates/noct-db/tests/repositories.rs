@@ -21,7 +21,7 @@ fn tick() {
 }
 
 fn open(name: &str) -> Database {
-    Database::open(&scratch(name)).expect("open database")
+    Database::open_runtime(&scratch(name)).expect("open database")
 }
 
 fn title(conversations: &Conversations<'_>, id: &str) -> String {
@@ -316,6 +316,63 @@ fn adding_a_message_moves_its_conversation_to_the_top() {
         .add_message(&older.id, MessageRole::User, "again", None)
         .unwrap();
     assert_eq!(ids(&conversations.list().unwrap()), [older.id, newer.id]);
+}
+
+/// Walks the keyset pages of `size` rows from the first page to the end.
+fn walk(conversations: &Conversations<'_>, size: usize) -> Vec<String> {
+    let mut seen = Vec::new();
+    let mut after: Option<(String, String)> = None;
+    loop {
+        let rows = conversations
+            .page_after(
+                after.as_ref().map(|(at, id)| (at.as_str(), id.as_str())),
+                size,
+            )
+            .unwrap();
+        let Some(last) = rows.last() else {
+            return seen;
+        };
+        after = Some((last.updated_at.clone(), last.id.clone()));
+        seen.extend(rows.iter().map(|row| row.id.clone()));
+    }
+}
+
+#[test]
+fn keyset_pages_visit_every_conversation_once_in_the_list_order() {
+    let db = open("conversation-keyset");
+    let conversations = Conversations::new(db.connection());
+    for _ in 0..5 {
+        conversations.create("/work/alpha").unwrap();
+        tick();
+    }
+    let all = ids(&conversations.list().unwrap());
+
+    for size in [1, 2, 3, 5, 10] {
+        assert_eq!(walk(&conversations, size), all, "pages of {size}");
+    }
+}
+
+/// Equal timestamps are broken by identifier, in descending order, so the walk is still a total order.
+#[test]
+fn equal_timestamps_are_ordered_by_identifier_for_the_pages() {
+    let db = open("conversation-keyset-ties");
+    let conversations = Conversations::new(db.connection());
+    for _ in 0..4 {
+        conversations.create("/work/alpha").unwrap();
+    }
+    db.connection()
+        .execute(
+            "UPDATE conversations SET updated_at = '2026-01-01T00:00:00.000Z'",
+            [],
+        )
+        .unwrap();
+    let mut expected = ids(&conversations.list().unwrap());
+    expected.sort();
+    expected.reverse();
+
+    for size in [1, 3, 10] {
+        assert_eq!(walk(&conversations, size), expected, "pages of {size}");
+    }
 }
 
 #[test]
