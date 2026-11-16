@@ -15,7 +15,7 @@ use noct_core::semantic_index::{
     SemanticIndexRun, SemanticRunKind, SemanticRunStatus, SemanticUnit, SemanticUnitKind,
     SemanticUnitLocation, SemanticUnitStatus,
 };
-use noct_db::diagnostics::DiagnosticSink;
+use noct_db::diagnostics::{Diagnostic, DiagnosticSink};
 use noct_db::repositories::project_index::ProjectIndex;
 use noct_db::repositories::semantic_index::{PersistedSemanticUnit, SemanticIndex};
 use noct_db::runtime::DATABASE_FILE_NAME;
@@ -36,11 +36,11 @@ const EVENT: &str = "persistence.statistics";
 struct Recording(Mutex<Vec<String>>);
 
 impl DiagnosticSink for Recording {
-    fn warn(&self, event: &'static str, message: &str) {
+    fn record(&self, diagnostic: &Diagnostic<'_>) {
         self.0
             .lock()
             .expect("recording lock")
-            .push(format!("{event}: {message}"));
+            .push(format!("{}: {}", diagnostic.category, diagnostic.message));
     }
 }
 

@@ -220,11 +220,11 @@ mod tests {
     struct Recording(Mutex<Vec<String>>);
 
     impl DiagnosticSink for Recording {
-        fn warn(&self, event: &'static str, message: &str) {
+        fn record(&self, diagnostic: &crate::diagnostics::Diagnostic<'_>) {
             self.0
                 .lock()
                 .expect("recording lock")
-                .push(format!("{event}: {message}"));
+                .push(format!("{}: {}", diagnostic.category, diagnostic.message));
         }
     }
 

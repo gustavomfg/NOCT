@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use noct_db::Error;
-use noct_db::diagnostics::DiagnosticSink;
+use noct_db::diagnostics::{Diagnostic, DiagnosticSink};
 use noct_db::observer::{
     CATALOG, OPERATION_EVENT, OperationMetric, OperationObserver, SLOW_OPERATION_MS,
 };
@@ -47,11 +47,11 @@ impl OperationObserver for Panicking {
 struct Warnings(Mutex<Vec<(String, String)>>);
 
 impl DiagnosticSink for Warnings {
-    fn warn(&self, event: &'static str, message: &str) {
-        self.0
-            .lock()
-            .expect("warnings")
-            .push((event.to_string(), message.to_string()));
+    fn record(&self, diagnostic: &Diagnostic<'_>) {
+        self.0.lock().expect("warnings").push((
+            diagnostic.category.to_string(),
+            diagnostic.message.to_string(),
+        ));
     }
 }
 
