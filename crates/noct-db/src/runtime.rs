@@ -84,7 +84,7 @@ pub struct Database {
 impl Database {
     /// Runtime-level open: migrates `nocturne.db` inside `data_directory` to the supported
     /// schema and runs the startup maintenance. It does **not** reconcile interrupted
-    /// operations; application code opens the database through [`Store::open`], which does.
+    /// operations; application code opens the database through [`Store::open_with`], which does.
     /// Fails without modifying the schema when the file was written by a newer version.
     pub fn open_runtime(data_directory: &Path) -> Result<Self> {
         Self::open_runtime_with(data_directory, OpenOptions::default())

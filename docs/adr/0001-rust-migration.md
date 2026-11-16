@@ -318,8 +318,10 @@ realism condition and the CI wiring are met.
 
 Decisions for closing phase 2:
 
-1. **Public open path.** `Store::open` is the open that application code uses. It records the
-   operations that the last run left running, which the runtime open does not do.
+1. **Public open path.** `Store::open_with` is the open that application code uses. It takes the
+   diagnostic sink and the operation observer, and records the operations that the last run
+   left running, which the runtime open does not do. `Store::open` is the same open with the
+   default options.
    `Database::open_runtime` keeps `pub` visibility for now: the runtime suites and the
    statistics and diagnostics accessors need it, and `Store` does not expose those yet. It
    becomes crate-private with phase 6. `crates/noct-db/tests/store.rs` pins the difference: a
