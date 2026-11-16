@@ -1,0 +1,5 @@
+# The application starts from an external script, not Trunk's inline module. The shell's
+# Content-Security-Policy (crates/noct-app/tauri.conf.json) forbids inline scripts, so the inline module
+# would never run and the window would stay empty. bootstrap.js does the same steps as Trunk's module.
+[build]
+pattern_script = '<script src="{base}bootstrap.js" data-js="{js}" data-wasm="{wasm}"></script>'
