@@ -138,8 +138,15 @@ is held by `crates/noct-app/tests/shell_policy.rs`, which fails if a
 `style-src-attr` or `style-src-elem` directive appears, and by
 `scripts/check-shell-csp.mjs`, which renders the built UI under the policy. The
 split form (`style-src-elem 'self'` with `style-src-attr 'unsafe-inline'`) passed
-the same check and was not adopted. Reopening it, or any run-time style value, is
-a decision for phase 7 and must pass that check before it is accepted.
+the same check and was not adopted.
+
+**Decision (closed):** the policy stays `style-src 'self'`. The phase 7 UI expresses
+its look with CSS classes and the `data-theme` attribute, and sets no inline style of
+any kind: no `style` attribute, no `<style>` element, no Leptos `style:` directive,
+no `attr:style`, and no `.style(...)` call. A value that would need an inline style is
+expressed as a class or a `data-` attribute chosen in advance. The guard
+`the_interface_sets_no_inline_style` in `crates/noct-app/tests/shell_policy.rs` scans
+`crates/noct-ui/src` and `crates/noct-ui/index.html` for those forms.
 
 ### Progress
 

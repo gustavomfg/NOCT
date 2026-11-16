@@ -5,6 +5,8 @@
 //! that the policy renders the built UI.
 
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use tauri::utils::config::Csp;
 
@@ -44,6 +46,43 @@ fn styles_come_from_the_app_and_no_inline_style_is_granted() {
     assert_eq!(policy["style-src"], ["'self'"]);
     assert!(!policy.contains_key("style-src-attr"));
     assert!(!policy.contains_key("style-src-elem"));
+}
+
+/// The interface sets no inline style, because the policy grants none: a `style` attribute, a `<style>`
+/// element, or a Leptos style directive would be refused by the webview. Classes and `data-theme` carry the
+/// look instead (ADR 0001). The sources of the interface and its page are scanned for those forms.
+#[test]
+fn the_interface_sets_no_inline_style() {
+    let interface = Path::new(env!("CARGO_MANIFEST_DIR")).join("../noct-ui");
+    let mut files = vec![interface.join("index.html")];
+    collect_rust_sources(&interface.join("src"), &mut files);
+    assert!(
+        files.len() >= 2,
+        "the scan must reach the interface sources, found {files:?}"
+    );
+
+    const INLINE_STYLE: [&str; 5] = ["style=", "<style", "attr:style", "style:", ".style("];
+    for file in &files {
+        let text = fs::read_to_string(file).expect("the interface source is readable");
+        for pattern in INLINE_STYLE {
+            assert!(
+                !text.contains(pattern),
+                "{} sets inline style with `{pattern}`",
+                file.display()
+            );
+        }
+    }
+}
+
+fn collect_rust_sources(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory).expect("the interface source directory is readable") {
+        let path = entry.expect("a directory entry is readable").path();
+        if path.is_dir() {
+            collect_rust_sources(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
 }
 
 #[test]
