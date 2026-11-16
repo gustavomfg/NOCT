@@ -2,12 +2,18 @@
 //! it is built. A window declared in `tauri.conf.json` would exist before any policy could be set.
 
 use tauri::webview::NewWindowResponse;
+use tauri::window::Color;
 use tauri::{App, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::navigation;
 
 /// The label the capability in `capabilities/default.json` grants to.
 pub const MAIN_WINDOW_LABEL: &str = "main";
+
+/// The colour the window and its webview paint before the interface does. It is the `backgroundColor` of the
+/// Electron window (`electron/main.ts`). The window is opaque: it asks for no transparency, so the desktop
+/// does not show through it, and the interface paints over this colour.
+pub const WINDOW_BACKGROUND: Color = Color(0x0b, 0x0b, 0x0e, 0xff);
 
 /// Opens the main window on the packaged frontend. Its navigation is limited to the application
 /// (see `navigation::is_app_url`), and every request for a new window is denied.
@@ -23,6 +29,8 @@ pub fn create_main_window<R: Runtime>(app: &App<R>) -> tauri::Result<WebviewWind
         .title("NOCT")
         .inner_size(1280.0, 800.0)
         .min_inner_size(960.0, 640.0)
+        .transparent(false)
+        .background_color(WINDOW_BACKGROUND)
         .on_navigation(move |url| navigation::is_app_url(url, dev_server.as_ref()))
         .on_new_window(|_, _| NewWindowResponse::Deny)
         .build()
