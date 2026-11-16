@@ -8,3 +8,4 @@ publish.workspace = true
 
 [dependencies]
 leptos = { version = "0.8.23", features = ["csr"] }
+noct-core = { path = "../noct-core" }

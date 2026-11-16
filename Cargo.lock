@@ -2858,6 +2858,7 @@ name = "noct-ui"
 version = "1.0.5"
 dependencies = [
  "leptos",
+ "noct-core",
 ]
 
 [[package]]
