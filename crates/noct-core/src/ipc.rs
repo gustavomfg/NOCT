@@ -186,3 +186,98 @@ pub mod settings {
         saved
     }
 }
+
+/// The pages of conversations. `conversations_list` takes a [`ConversationPageRequest`] and returns a
+/// [`ConversationPage`]. The order is `updatedAt` descending, then `id` descending, and a cursor is the key
+/// of the last conversation of the page before it. The unpaginated list is not exposed as a command.
+pub mod conversations {
+    use serde::de;
+    use serde::{Deserialize, Deserializer, Serialize};
+    use serde_json::{Map, Value};
+
+    use crate::contracts::Conversation;
+
+    /// The bounds of a page. These are contract bounds of the Rust shell, with no TypeScript counterpart:
+    /// the TypeScript conversation page is `COLLECTION_PAGE_LIMITS.conversations`, 100 in `shared/constants.ts`.
+    pub const PAGE_LIMIT_MIN: u64 = 1;
+    pub const PAGE_LIMIT_MAX: u64 = 500;
+    /// The longest value of a cursor field, in characters. Timestamps and identifiers are far shorter.
+    pub const CURSOR_CHARACTERS_MAX: usize = 128;
+
+    const REQUEST_FIELDS: &[&str] = &["limit", "cursor"];
+
+    /// The key of the last conversation of a page. The next page holds the conversations after it.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    pub struct ConversationCursor {
+        pub updated_at: String,
+        pub id: String,
+    }
+
+    /// A request for one page. `limit` is required; `cursor` is absent for the first page, and an explicit
+    /// `null` is refused, as the other optional fields of the contracts are.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ConversationPageRequest {
+        pub limit: usize,
+        pub cursor: Option<ConversationCursor>,
+    }
+
+    impl<'de> Deserialize<'de> for ConversationPageRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut limit = None;
+            let mut cursor = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "limit" => limit = Some(limit_of::<D::Error>(value)?),
+                    "cursor" => cursor = Some(cursor_of::<D::Error>(value)?),
+                    _ => return Err(de::Error::unknown_field(&key, REQUEST_FIELDS)),
+                }
+            }
+            let limit = limit.ok_or_else(|| de::Error::missing_field("limit"))?;
+            Ok(Self { limit, cursor })
+        }
+    }
+
+    /// A JSON integer from `PAGE_LIMIT_MIN` to `PAGE_LIMIT_MAX`. A fraction, a string or a negative number
+    /// is refused, because `as_u64` returns nothing for them.
+    fn limit_of<E: de::Error>(value: Value) -> Result<usize, E> {
+        value
+            .as_u64()
+            .filter(|limit| (PAGE_LIMIT_MIN..=PAGE_LIMIT_MAX).contains(limit))
+            .and_then(|limit| usize::try_from(limit).ok())
+            .ok_or_else(|| {
+                E::custom(format!(
+                    "limit must be an integer from {PAGE_LIMIT_MIN} to {PAGE_LIMIT_MAX}"
+                ))
+            })
+    }
+
+    fn cursor_of<E: de::Error>(value: Value) -> Result<ConversationCursor, E> {
+        if value.is_null() {
+            return Err(E::custom("cursor must be an object, not null"));
+        }
+        let cursor: ConversationCursor = serde_json::from_value(value).map_err(E::custom)?;
+        for text in [&cursor.updated_at, &cursor.id] {
+            let length = text.chars().count();
+            if length == 0 || length > CURSOR_CHARACTERS_MAX {
+                return Err(E::custom(format!(
+                    "cursor fields have from 1 to {CURSOR_CHARACTERS_MAX} characters"
+                )));
+            }
+        }
+        Ok(cursor)
+    }
+
+    /// One page of conversations, in order. `next_cursor` is present exactly when `has_more` is true.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ConversationPage {
+        pub items: Vec<Conversation>,
+        pub has_more: bool,
+        pub next_cursor: Option<ConversationCursor>,
+    }
+}
