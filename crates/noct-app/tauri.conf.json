@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NOCT",
+  "version": "1.0.5",
+  "identifier": "com.nocturne.codex",
+  "build": {
+    "frontendDist": "../noct-ui/dist",
+    "devUrl": "http://localhost:8080",
+    "beforeDevCommand": "cd ../noct-ui && trunk serve --port 8080",
+    "beforeBuildCommand": "cd ../noct-ui && trunk build --release"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "NOCT",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

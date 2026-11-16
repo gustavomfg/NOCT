@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/noct-app", "crates/noct-core", "crates/noct-db", "crates/noct-native", "crates/noct-secrets", "crates/noct-ui"]
+
+[workspace.package]
+version = "1.0.5"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+libc = "0.2.191"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order", "raw_value"] }
+tauri = "2.12.5"
+tauri-build = "2.7.4"
+rusqlite = { version = "0.42.0", features = ["bundled", "backup"] }
+thiserror = "2.0.21"
+time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }
+sha2 = "0.10.9"
+uuid = { version = "1.29.2", features = ["v4"] }
+# Unicode tables for the suggestion identity (NFKD and general categories). Only the compiled
+# tables are enabled: the default features would also add the UTF-16 and UTF-8 iterators.
+icu_normalizer = { version = "2.4.0", default-features = false, features = ["compiled_data"] }
+icu_properties = "2.4.0"
+# Brain memory credential filter and search tokens. The lockfile already resolves this version.
+regex = "1.13.1"
+# Provider credential vault: XChaCha20-Poly1305 envelope for the secrets file, the OS random source
+# for keys and nonces, and zeroing of key material. getrandom and zeroize are already in the lockfile.
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc", "zeroize"] }
+getrandom = "0.3.4"
+zeroize = "1.9.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

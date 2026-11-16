@@ -1,0 +1,55 @@
+# Dependency policy for the Rust workspace, checked by `cargo deny check` in
+# `.github/workflows/rust-audit.yml`. Every ignored advisory states why it is accepted. Each one is
+# tied to an upstream crate, and is reviewed when that crate changes.
+
+[graph]
+# The platforms NOCT ships, and the WebAssembly target of the renderer.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "wasm32-unknown-unknown",
+]
+
+[advisories]
+# Unsound advisories are reported too, not only vulnerabilities. RUSTSEC-2024-0429 is one of them, and
+# the entry below accepts it with its reason.
+unsound = "all"
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste is a compile-time procedural macro used by leptos, through either_of and tachys, in noct-ui. It is not linked into the shipped binaries. Revisit when leptos drops it." },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is a compile-time procedural macro used by glib-macros, through gtk 0.18 on Linux, which Tauri 2 requires. Revisit with the Tauri GTK4 migration." },
+    { id = "RUSTSEC-2024-0429", reason = "glib 0.18 is unsound in VariantStrIter, returned by array_iter_str. glib is reached only through the GTK 0.18 bindings that Tauri 2 requires on Linux. NOCT does not call the iterator, and no crate in the locked dependency graph calls it either (searched in the registry sources of the lockfile). Revisit with the Tauri GTK4 migration." },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained. It is the D-Bus wire layer of zbus 5, used by secret-service 5.2 in the Linux keyring backend, zbus-secret-service-keyring-store 1.0.1. The latest versions of those crates still depend on zbus 5. Revisit when the keyring backend moves to zbus 6." },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained. It is part of zbus 5, used by the Linux keyring backend (see RUSTSEC-2026-0370). Revisit when the keyring backend moves to zbus 6." },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is unmaintained. Its derive macros are part of zbus 5, used by the Linux keyring backend (see RUSTSEC-2026-0370). Revisit when the keyring backend moves to zbus 6." },
+]
+
+[licenses]
+# Licenses accepted in the dependency graph. Copyleft licenses are not on the list.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# The workspace crates are path dependencies, which carry no version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

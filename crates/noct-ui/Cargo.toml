@@ -1,0 +1,10 @@
+[package]
+name = "noct-ui"
+description = "NOCT interface in Leptos (CSR, compiled to WebAssembly with trunk)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+leptos = { version = "0.8.23", features = ["csr"] }

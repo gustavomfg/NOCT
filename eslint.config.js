@@ -7,7 +7,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
   {
-    ignores: ['dist/**', 'dist-electron/**', 'node_modules/**', 'release/**', 'test-results/**', 'playwright-report/**'],
+    ignores: ['dist/**', 'dist-electron/**', 'node_modules/**', 'release/**', 'test-results/**', 'playwright-report/**', 'target/**', 'crates/noct-ui/dist/**'],
   },
   eslint.configs.recommended,
   {
@@ -38,5 +38,10 @@ export default [
   {
     files: ['scripts/**/*.{js,mjs,cjs}', '*.{config.js,config.mjs,config.cjs}'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // This spike drives the browser; its page.evaluate callbacks run in the page.
+    files: ['scripts/check-leptos-spike.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 ]
