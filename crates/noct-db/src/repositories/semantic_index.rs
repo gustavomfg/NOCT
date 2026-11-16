@@ -1013,15 +1013,18 @@ mod plan_tests {
     }
 }
 
-/// Synthetic benchmark of the embedding listings at 50 thousand and 200 thousand indexed embeddings.
-/// It is ignored by default, because it takes minutes. It prints lines starting with `BENCH` and
-/// asserts no timing, so it cannot fail on a slow machine. Run it in release mode:
+/// Synthetic benchmarks of the embedding listings. They are ignored by default, because they take
+/// minutes. They print lines starting with `BENCH` and assert no timing, so they cannot fail on a slow
+/// machine. Run them in release mode:
 ///
 /// `cargo test --release -p noct-db --lib benchmark_tests -- --ignored --nocapture`
 ///
-/// The criterion is fixed before the numbers are read. The page walk is a problem when its time at
-/// 200 thousand rows is at least 8 times its time at 50 thousand. Linear growth gives 4 and quadratic
-/// growth gives 16. Each page of the walk sorts the whole space, so the walk should grow quadratically.
+/// The criteria are fixed before the numbers are read.
+/// - One workspace: the page walk is a problem when its time at 200 thousand rows is at least 8 times
+///   its time at 50 thousand. Linear growth gives 4 and quadratic growth gives 16.
+/// - Several workspaces: the other workspaces are a cost to a listing when the listing of one
+///   workspace, over the same number of its rows, takes at least 2 times longer in a table of 10
+///   workspaces than in a table of one.
 #[cfg(test)]
 mod benchmark_tests {
     use std::time::{Duration, Instant};
@@ -1033,19 +1036,36 @@ mod benchmark_tests {
     use super::*;
     use crate::repositories::project_index::ProjectIndex;
 
-    const WORKSPACE: &str = "/work/bench";
     const AT: &str = "2026-01-01T00:00:00.000Z";
     /// Units per file. Each file is replaced in one call, as the indexer does.
     const UNITS_PER_FILE: usize = 200;
     /// A small vector keeps the size of the database close to its row count.
     const DIMENSIONS: i64 = 8;
-    /// The ratio at which growth is counted as super-linear.
+    /// The ratio at which growth with the row count is counted as super-linear.
     const PROBLEM_RATIO: f64 = 8.0;
+    /// The ratio at which the other workspaces are counted as a cost to a listing.
+    const NEIGHBOUR_RATIO: f64 = 2.0;
+    /// Rows per workspace in the several-workspace scenarios.
+    const ROWS_PER_WORKSPACE: usize = 20_000;
+    /// The workspace whose listings are timed. Every scenario times the same number of its rows.
+    const SELECTED: usize = 0;
+
+    fn workspace_path(workspace: usize) -> String {
+        format!("/work/bench-{workspace:02}")
+    }
 
     fn database() -> Connection {
         let mut connection = Connection::open_in_memory().expect("memory database");
         crate::migrations::migrate_latest(&mut connection, 0).expect("schema");
         connection
+    }
+
+    fn sqlite_version() -> String {
+        Connection::open_in_memory()
+            .and_then(|connection| {
+                connection.query_row("SELECT sqlite_version()", [], |row| row.get::<_, String>(0))
+            })
+            .expect("version")
     }
 
     fn space() -> SemanticEmbeddingSpace {
@@ -1057,9 +1077,9 @@ mod benchmark_tests {
         }
     }
 
-    fn project_file(relative_path: &str) -> ProjectIndexFile {
+    fn project_file(workspace: &str, relative_path: &str) -> ProjectIndexFile {
         ProjectIndexFile {
-            workspace: WORKSPACE.to_string(),
+            workspace: workspace.to_string(),
             relative_path: relative_path.to_string(),
             classification: DiscoveryFileClassification::Source,
             language: "TypeScript".to_string(),
@@ -1081,30 +1101,49 @@ mod benchmark_tests {
         }
     }
 
-    /// An indexed unit with an embedding. The identifier is unique across the workspace, and the
-    /// vector is synthetic.
-    fn persisted(relative_path: &str, n: usize) -> PersistedSemanticUnit {
-        let line = (n % UNITS_PER_FILE) as i64 + 1;
+    /// The identifier of a synthetic unit: a 64-bit mix of its key. Every step of the mix is a
+    /// bijection, so distinct keys give distinct identifiers. The identifiers of all workspaces
+    /// interleave in identifier order, as random UUIDs do in the application.
+    fn identifier(key: u64) -> String {
+        let mut z = key.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        format!("{z:016x}")
+    }
+
+    /// An indexed unit with a synthetic vector, on line `line` of its file.
+    fn persisted(
+        workspace: &str,
+        relative_path: &str,
+        line: usize,
+        id: String,
+    ) -> PersistedSemanticUnit {
+        let start_line = line as i64 + 1;
+        let vector = (0..DIMENSIONS)
+            .map(|d| ((start_line + d) % 97) as f64 / 97.0)
+            .collect();
+        let symbol = format!("symbol {id}");
+        let text = format!("texto sintetico {id}");
         PersistedSemanticUnit {
             unit: SemanticUnit {
-                id: format!("u{n:08}"),
-                workspace: WORKSPACE.to_string(),
+                workspace: workspace.to_string(),
                 relative_path: relative_path.to_string(),
                 kind: SemanticUnitKind::Symbol,
                 language: Some("TypeScript".to_string()),
                 symbol_id: None,
-                symbol_name: Some(format!("s{n}")),
+                symbol_name: Some(symbol),
                 location: SemanticUnitLocation {
-                    start_line: line,
+                    start_line,
                     start_column: 1,
-                    end_line: line,
+                    end_line: start_line,
                     end_column: 2,
                     start_offset: None,
                     end_offset: None,
                 },
                 source_hash: "a".repeat(64),
                 chunk_hash: "b".repeat(64),
-                normalized_text: format!("texto sintetico {n}"),
+                normalized_text: text,
                 chunk_strategy_version: "symbols-v2".to_string(),
                 embedding_space: Some(space()),
                 status: SemanticUnitStatus::Indexed,
@@ -1112,47 +1151,51 @@ mod benchmark_tests {
                 created_at: AT.to_string(),
                 updated_at: AT.to_string(),
                 indexed_at: None,
+                id,
             },
-            embedding: Some(
-                (0..DIMENSIONS)
-                    .map(|d| ((n as i64 + d) % 97) as f64 / 97.0)
-                    .collect(),
-            ),
+            embedding: Some(vector),
         }
     }
 
-    fn populate(connection: &Connection, rows: usize) {
+    /// Indexes `rows` embeddings in one workspace, in files of `UNITS_PER_FILE`, as the indexer does:
+    /// each file is replaced in one call.
+    fn populate(connection: &Connection, workspace: usize, rows: usize) {
+        let path = workspace_path(workspace);
         connection
             .execute(
                 "INSERT INTO workspaces(path,name,created_at,last_opened_at) VALUES (?1,'bench',?2,?2)",
-                params![WORKSPACE, AT],
+                params![path, AT],
             )
             .expect("workspace");
         let project = ProjectIndex::new(connection);
         let index = SemanticIndex::new(connection);
         for file in 0..rows / UNITS_PER_FILE {
-            let path = format!("src/f{file:06}.ts");
+            let relative_path = format!("src/f{file:06}.ts");
             project
-                .upsert_file(&project_file(&path))
+                .upsert_file(&project_file(&path, &relative_path))
                 .expect("project file");
             let units: Vec<PersistedSemanticUnit> = (0..UNITS_PER_FILE)
-                .map(|line| persisted(&path, file * UNITS_PER_FILE + line))
+                .map(|line| {
+                    let row = (file * UNITS_PER_FILE + line) as u64;
+                    let key = workspace as u64 * 1_000_000 + row;
+                    persisted(&path, &relative_path, line, identifier(key))
+                })
                 .collect();
             index
-                .replace_file_units(WORKSPACE, &path, &units)
+                .replace_file_units(&path, &relative_path, &units)
                 .expect("units");
         }
     }
 
-    /// The time of one full read of the space, by the page walk and by the single pass.
+    /// The time of one full read of a workspace, by the page walk and by the single pass.
     struct Timing {
         pages: usize,
         paged: Duration,
         single: Duration,
     }
 
-    /// Walks the space by pages of the maximum size, and returns the number of pages read.
-    fn walk_by_pages(index: &SemanticIndex, rows: usize) -> usize {
+    /// Walks a workspace by pages of the maximum size, and returns the number of pages read.
+    fn walk_by_pages(index: &SemanticIndex, workspace: &str, rows: usize) -> usize {
         let space = space();
         let filters = SemanticSearchFilters::default();
         let mut after: Option<String> = None;
@@ -1160,7 +1203,7 @@ mod benchmark_tests {
         loop {
             let page = index
                 .list_indexed_embeddings(
-                    WORKSPACE,
+                    workspace,
                     &space,
                     &filters,
                     after.as_deref(),
@@ -1178,17 +1221,17 @@ mod benchmark_tests {
         pages
     }
 
-    fn time_both(connection: &Connection, rows: usize) -> Timing {
+    fn time_both(connection: &Connection, workspace: &str, rows: usize) -> Timing {
         let index = SemanticIndex::new(connection);
         let started = Instant::now();
-        let pages = walk_by_pages(&index, rows);
+        let pages = walk_by_pages(&index, workspace, rows);
         let paged = started.elapsed();
 
         let mut passed = 0;
         let started = Instant::now();
         index
             .for_each_indexed_embedding(
-                WORKSPACE,
+                workspace,
                 &space(),
                 &SemanticSearchFilters::default(),
                 |_| {
@@ -1220,73 +1263,116 @@ mod benchmark_tests {
         println!("BENCH plan {label}: {}", details.join(" | "));
     }
 
-    fn print_plans(connection: &Connection, state: &str) {
+    fn print_plans(connection: &Connection, workspace: &str, state: &str) {
         let space = space();
         let filters = SemanticSearchFilters::default();
-        let after = format!("u{:08}", 100_000);
+        let after = identifier(SELECTED as u64 * 1_000_000 + 100);
         let cursor = UnitPosition {
             start_line: 100,
             start_column: 1,
-            id: "u00000100".to_string(),
+            id: after.clone(),
         };
         print_plan(
             connection,
             &format!("{state}, embeddings page, first"),
-            embeddings_query(WORKSPACE, &space, &filters, None, 501).expect("query"),
+            embeddings_query(workspace, &space, &filters, None, 501).expect("query"),
         );
         print_plan(
             connection,
             &format!("{state}, embeddings page, identifier cursor"),
-            embeddings_query(WORKSPACE, &space, &filters, Some(&after), 501).expect("query"),
+            embeddings_query(workspace, &space, &filters, Some(&after), 501).expect("query"),
         );
         print_plan(
             connection,
             &format!("{state}, embeddings single pass"),
-            embeddings_scan_query(WORKSPACE, &space, &filters).expect("query"),
+            embeddings_scan_query(workspace, &space, &filters).expect("query"),
         );
         print_plan(
             connection,
             &format!("{state}, file page, source cursor"),
-            file_units_query(WORKSPACE, "src/f000000.ts", Some(&cursor), 501),
+            file_units_query(workspace, "src/f000000.ts", Some(&cursor), 501),
         );
     }
 
-    /// Populates a database with `rows` embeddings, times the listings before and after `ANALYZE`,
-    /// and prints the plans of both states. The application runs `PRAGMA optimize` when it closes a
-    /// database, so both states occur in practice.
-    fn measure(rows: usize) -> (Timing, Timing) {
-        let connection = database();
-        populate(&connection, rows);
-        print_plans(&connection, &format!("{rows} rows, no statistics"));
-        let before = time_both(&connection, rows);
+    /// The statistics `ANALYZE` stored for the table, or `none` when there are none yet.
+    fn statistics(connection: &Connection) -> String {
+        let Ok(mut statement) =
+            connection.prepare("SELECT idx, stat FROM sqlite_stat1 WHERE tbl='semantic_units'")
+        else {
+            return "none (no sqlite_stat1 table)".to_string();
+        };
+        let rows = statement
+            .query_map([], |row| {
+                Ok(format!(
+                    "{} {}",
+                    row.get::<_, Option<String>>(0)?
+                        .unwrap_or_else(|| "table".to_string()),
+                    row.get::<_, String>(1)?
+                ))
+            })
+            .expect("statistics")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("statistics rows");
+        if rows.is_empty() {
+            "none (no rows for semantic_units)".to_string()
+        } else {
+            rows.join("; ")
+        }
+    }
+
+    /// Times the listings of the selected workspace before and after `ANALYZE`, and prints the plans
+    /// of both states and the time `ANALYZE` took. The application runs `PRAGMA optimize` when it
+    /// closes a database, so both states occur in practice.
+    fn measure(connection: &Connection, label: &str, selected: usize) -> (Timing, Timing) {
+        let workspace = workspace_path(SELECTED);
+        print_plans(connection, &workspace, &format!("{label}, no statistics"));
+        let before = time_both(connection, &workspace, selected);
+        let started = Instant::now();
         connection.execute_batch("ANALYZE").expect("analyze");
-        print_plans(&connection, &format!("{rows} rows, after ANALYZE"));
-        let after = time_both(&connection, rows);
+        println!(
+            "BENCH {label} analyze_ms={:.0}",
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+        print_plans(connection, &workspace, &format!("{label}, after ANALYZE"));
+        let after = time_both(connection, &workspace, selected);
         (before, after)
     }
 
-    fn report(rows: usize, state: &str, timing: &Timing) {
+    /// One workspace of `rows` embeddings, measured before and after `ANALYZE`.
+    fn one_workspace(rows: usize) -> (Timing, Timing) {
+        let connection = database();
+        populate(&connection, SELECTED, rows);
+        measure(&connection, &format!("{rows} rows, 1 workspace"), rows)
+    }
+
+    fn report(table_rows: usize, state: &str, timing: &Timing) {
         println!(
-            "BENCH rows={rows} state={state} pages={} paged_ms={:.0} single_pass_ms={:.0}",
+            "BENCH table_rows={table_rows} state={state} pages={} paged_ms={:.0} single_pass_ms={:.0}",
             timing.pages,
             timing.paged.as_secs_f64() * 1000.0,
             timing.single.as_secs_f64() * 1000.0,
         );
     }
 
+    fn ratio(large: &Duration, small: &Duration) -> f64 {
+        large.as_secs_f64() / small.as_secs_f64()
+    }
+
+    /// The page walk grows with the number of rows of the space. One workspace at two sizes.
     #[test]
     #[ignore = "benchmark: run in release mode with --ignored --nocapture"]
     fn embedding_listings_at_fifty_and_two_hundred_thousand_rows() {
-        let small_measure = measure(50_000);
-        let large_measure = measure(200_000);
+        println!("BENCH sqlite {}", sqlite_version());
+        let small_measure = one_workspace(50_000);
+        let large_measure = one_workspace(200_000);
         for (state, small, large) in [
             ("no statistics", &small_measure.0, &large_measure.0),
             ("after ANALYZE", &small_measure.1, &large_measure.1),
         ] {
             report(50_000, state, small);
             report(200_000, state, large);
-            let paged = large.paged.as_secs_f64() / small.paged.as_secs_f64();
-            let single = large.single.as_secs_f64() / small.single.as_secs_f64();
+            let paged = ratio(&large.paged, &small.paged);
+            let single = ratio(&large.single, &small.single);
             println!("BENCH ratio {state}: paged={paged:.2} single_pass={single:.2}");
             let verdict = if paged >= PROBLEM_RATIO {
                 "problem, the page walk grows super-linearly"
@@ -1295,5 +1381,126 @@ mod benchmark_tests {
             };
             println!("BENCH verdict {state}: {verdict}");
         }
+    }
+
+    /// The listing of one workspace of 20 thousand rows, alone and among ten workspaces of the same
+    /// size. The selected rows are the same in both, so a difference is the cost of the other rows.
+    #[test]
+    #[ignore = "benchmark: run in release mode with --ignored --nocapture"]
+    fn a_workspace_listing_alone_and_among_ten_workspaces() {
+        let alone = one_workspace(ROWS_PER_WORKSPACE);
+        let connection = database();
+        for workspace in 0..10 {
+            populate(&connection, workspace, ROWS_PER_WORKSPACE);
+        }
+        let among = measure(
+            &connection,
+            "200000 rows, 10 workspaces",
+            ROWS_PER_WORKSPACE,
+        );
+        for (state, alone_timing, among_timing) in [
+            ("no statistics", &alone.0, &among.0),
+            ("after ANALYZE", &alone.1, &among.1),
+        ] {
+            report(ROWS_PER_WORKSPACE, &format!("{state}, alone"), alone_timing);
+            report(
+                10 * ROWS_PER_WORKSPACE,
+                &format!("{state}, among ten"),
+                among_timing,
+            );
+            let paged = ratio(&among_timing.paged, &alone_timing.paged);
+            let single = ratio(&among_timing.single, &alone_timing.single);
+            println!("BENCH neighbours {state}: paged={paged:.2} single_pass={single:.2}");
+            let verdict = if paged >= NEIGHBOUR_RATIO || single >= NEIGHBOUR_RATIO {
+                "problem, the other workspaces cost the listing"
+            } else {
+                "no problem measured, the other workspaces do not cost the listing"
+            };
+            println!("BENCH neighbours verdict {state}: {verdict}");
+        }
+    }
+
+    /// Whether `PRAGMA optimize`, which the application runs when it closes a database, stores
+    /// statistics after a large indexing round, whether it refreshes them when the table grows, and
+    /// what an explicit `ANALYZE` costs and changes. The statistics and the listing of the selected
+    /// workspace are printed at each step.
+    #[test]
+    #[ignore = "benchmark: run in release mode with --ignored --nocapture"]
+    fn pragma_optimize_after_indexing_rounds() {
+        let connection = database();
+        let selected = workspace_path(SELECTED);
+        for workspace in 0..10 {
+            populate(&connection, workspace, ROWS_PER_WORKSPACE);
+        }
+        println!(
+            "BENCH round 1, 200000 rows, statistics before optimize: {}",
+            statistics(&connection)
+        );
+        let started = Instant::now();
+        connection
+            .execute_batch("PRAGMA optimize")
+            .expect("optimize");
+        println!(
+            "BENCH round 1: optimize_ms={:.0}, statistics: {}",
+            started.elapsed().as_secs_f64() * 1000.0,
+            statistics(&connection)
+        );
+        let optimized = time_both(&connection, &selected, ROWS_PER_WORKSPACE);
+        report(200_000, "round 1, after optimize", &optimized);
+
+        for workspace in 10..20 {
+            populate(&connection, workspace, ROWS_PER_WORKSPACE);
+        }
+        println!(
+            "BENCH round 2, 400000 rows, statistics before optimize: {}",
+            statistics(&connection)
+        );
+        let stale = time_both(&connection, &selected, ROWS_PER_WORKSPACE);
+        report(400_000, "round 2, stale statistics", &stale);
+        let started = Instant::now();
+        connection
+            .execute_batch("PRAGMA optimize")
+            .expect("optimize");
+        println!(
+            "BENCH round 2: optimize_ms={:.0}, statistics: {}",
+            started.elapsed().as_secs_f64() * 1000.0,
+            statistics(&connection)
+        );
+        let started = Instant::now();
+        connection.execute_batch("ANALYZE").expect("analyze");
+        println!(
+            "BENCH round 2: analyze_ms={:.0}, statistics: {}",
+            started.elapsed().as_secs_f64() * 1000.0,
+            statistics(&connection)
+        );
+        print_plans(&connection, &selected, "round 2, after ANALYZE");
+        let exact = time_both(&connection, &selected, ROWS_PER_WORKSPACE);
+        report(400_000, "round 2, after ANALYZE", &exact);
+    }
+
+    /// `PRAGMA optimize` alone, on one large workspace: whether the statistics it stores are enough
+    /// for the page walk, the case that grew quadratically without statistics.
+    #[test]
+    #[ignore = "benchmark: run in release mode with --ignored --nocapture"]
+    fn pragma_optimize_on_one_large_workspace() {
+        let connection = database();
+        let selected = workspace_path(SELECTED);
+        populate(&connection, SELECTED, 200_000);
+        let started = Instant::now();
+        connection
+            .execute_batch("PRAGMA optimize")
+            .expect("optimize");
+        println!(
+            "BENCH 1 workspace, 200000 rows: optimize_ms={:.0}, statistics: {}",
+            started.elapsed().as_secs_f64() * 1000.0,
+            statistics(&connection)
+        );
+        print_plans(
+            &connection,
+            &selected,
+            "200000 rows, 1 workspace, after PRAGMA optimize",
+        );
+        let optimized = time_both(&connection, &selected, 200_000);
+        report(200_000, "1 workspace, after PRAGMA optimize", &optimized);
     }
 }
