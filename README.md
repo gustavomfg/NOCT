@@ -1,193 +1,344 @@
-# NOCT
+# NOCT: state of the Rust migration
 
 [Português do Brasil](README.pt-BR.md)
 
-> A local-first desktop workspace for understanding, reviewing and evolving real software projects with the AI you choose.
+> This is the branch `migration/rust`. It holds the work that moves NOCT's desktop shell and local persistence
+> from Electron and TypeScript to Rust. It is not a release. The stable product is the Electron application on
+> `main` (version 1.0.5), and its README is on `main`.
 
-NOCT is free software under the MIT license. It keeps a project's
-workspace, conversations, engineering findings and durable knowledge together.
-It is a desktop engineering workspace, not an IDE, an autonomous replacement
-for a developer, or an official product of any AI vendor. It does not depend on
-a specific AI, company or CLI: download it, connect an API or local model,
-choose the model for your workspace and start working.
+This file describes the branch as it was checked on 2026-11-16, against the code of commit `db68422`. Each statement
+names what was checked. Anything that was not checked is listed as not checked.
 
-It addresses the context fragmentation of prompt-only tools: project state,
-review evidence, decisions and approved knowledge remain connected instead of
-being reconstructed in every conversation.
+## 1. What NOCT is and what the migration does
 
-![NOCT workspace with the active AI, conversation and agent panel](docs/images/workspace-overview.png)
+NOCT is a local desktop engineering workspace. It keeps the state of a developer's project and coordinates the
+developer with AI providers that the user selects. The developer keeps the approval and the judgement. The
+application records plans, approvals and validation results (`AGENTS.md`, "Product identity").
 
-Screenshots show the current interface in Portuguese with demonstration data.
-The request stays in the center, with plans and approvals alongside it.
-Project context can be collapsed; Analyze, Implement and Document say what each
-mode does to the project before you send.
+The migration replaces three parts of the Electron application:
 
-## What it does
+- the Electron main process and IPC, with a Tauri 2 shell in Rust (`noct-app`);
+- the TypeScript persistence layer, with a SQLite layer in Rust (`noct-db`) that opens the same schema, version 32;
+- the React renderer, with a Leptos interface compiled to WebAssembly (`noct-ui`), which reuses the CSS of the
+  Electron interface.
 
-- **Workspaces:** explicitly select and authorize a project directory; moved or
-  restored workspaces remain unauthorized until selected again.
-- **Review Mode:** read-only analysis with evidence-backed suggestions and
-  reconciliation of new, persistent and resolved findings.
-- **Build Mode:** agent-assisted changes inside the authorized workspace with
-  any tool-capable model, with command approvals, progress, a visible diff and
-  guarded rollback when its preconditions are met.
-- **Docs Mode:** preview, compare and apply incremental Markdown updates with
-  confirmation, concurrency checks and atomic writes.
-- **Second Brain and Awareness:** local, structured memories with approval,
-  scope, freshness and an explanation of the context selected for each run.
-- **Conversations and Git:** persistent conversations, paginated histories,
-  workspace Git status and commit preparation.
-- **Provider layer:** Google Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI,
-  Ollama, LM Studio or any endpoint that implements chat completions. Nocturne
-  depends on no AI vendor, CLI or subscription.
+The provider credentials move to a Rust vault (`noct-secrets`) that keeps the secrets in the operating system
+credential store. The architecture decisions are in [ADR 0001](docs/adr/0001-rust-migration.md) and
+[ADR 0002](docs/adr/0002-envelope-provider-credentials.md).
 
-The developer remains responsible for intent, approval, review and the final
-change to a project.
+What this branch does not do yet:
 
-## Supported release artifacts
+- it does not replace the Electron application on `main`;
+- it produces no installer or signed package;
+- it does not call any AI provider;
+- it does not show conversations in the interface;
+- no window has been checked on Windows or on macOS (section 3).
 
-[Download the stable v1.0.5 release](https://github.com/gustavomfg/NOCT/releases/tag/v1.0.5).
+## 2. Current state
 
-Official release validation currently covers:
+### Phases
 
-| Platform | Artifact configured by the build |
+The status comes from the progress section of ADR 0001 and from the code. Where the two disagree, the table says so,
+and section 10 lists the conflict.
+
+| Phase | Scope in the ADR | Status | What the repository shows |
+| --- | --- | --- | --- |
+| 0. Foundation | Workspace, `noct-native` (Linux), limits in `noct-core`, Tauri shell | **Done** on the branch | The ADR's evidence section. The workspace builds on Linux, Windows and macOS in CI. |
+| 1. Contracts | `shared/` to `noct-core` | In progress | Contract modules exist in `noct-core`, and a guard reads `shared/constants.ts`. The ADR records no completion. |
+| 2. Persistence | `electron/database` and `persistence` to `noct-db` | In progress | Done: the runtime, migrations 1 to 32, the repositories, and the closure items (public open path, nine release-line fixtures, operation observer catalog). Open: the check on a copy of real data before any public release, and the observer has no call sites yet (phase 6). |
+| 3. Native rollback | macOS (APFS clone) and Windows backends | In progress, Linux only | `crates/noct-native/src/linux.rs` is the only backend. The repository has no macOS or Windows backend. |
+| 4. Workspace services | Indexer, change control, validation, engineering | **Pending** | Contracts and repositories for these areas exist under phase 2. The services, such as `ProjectIndexService`, are not ported. The ADR says "not started". |
+| 5. AI | `electron/ai`, `security` | In progress | Done: the credential vault in `noct-secrets`. Its round trip with the operating system store passes in CI on three systems. Not ported: the provider adapters and the tool loop. The Rust crates contain no HTTP client for providers. |
+| 6. IPC and shell | `electron/ipc`, `main.ts`, `runtime` to Tauri | In progress | The first slice is done: four commands, granted only to the `main` window. Checked in a running window only by the manual settings check in section 3. |
+| 7. UI | `src/` to Leptos | In progress | The settings area, the project list in the sidebar, the glass layer and the themes. Checked in Chromium with a mocked shell. Not checked in a real window. |
+| 8. Updates and packaging | `electron/updates`, `electron-builder`, release workflows | **Pending** | Blocked. See below. |
+| 9. Retirement | Remove `electron/`, TypeScript, Vite, npm and the Node requirement | **Pending** | Depends on phase 8 and on the phases before it. |
+
+Phase 0 is the only phase marked done as a whole. In phase 2 and phase 5, the closure items and the vault are done, and
+the rest of each phase is open.
+
+### What blocks phase 8
+
+The ADR's criterion for phase 8 is "signed packages validated on three platforms". In the repository:
+
+- **No packaging is configured.** `bundle.active` is `false` in `crates/noct-app/tauri.conf.json`.
+- **No updater.** No updater crate is in `Cargo.lock`.
+- **No signing configuration** exists in the Rust crates or in `tauri.conf.json`.
+- **No holder for the signing keys.** ADR 0001, open decision 1, is not decided.
+- **No equivalent of the Electron fuses and ASAR integrity.** The ADR records this as a gap that "needs an explicit
+  decision".
+- **The shell has not run in a window on Windows or macOS**, so the criterion "validated on three platforms" cannot be
+  met yet.
+- **The minimum platform versions are not stated.** ADR 0001, decision 4, asks for them in `docs/compatibility.md`.
+  That file has no entry for WebKitGTK, WebView2 or WKWebView.
+
+## 3. Verification
+
+The results below are for commit `db68422`, the code this README describes. This README adds no code. The checks on
+this machine ran on Linux. Nothing was run on Windows or macOS by hand.
+
+### What CI covers
+
+| Check | Linux (`ubuntu-latest`) | Windows (`windows-latest`) | macOS (`macos-latest`) |
+| --- | --- | --- | --- |
+| Workspace builds, and `cargo test --workspace --no-fail-fast` passes (ignored tests excluded) | Passed, `db68422` | Passed, `db68422` | Passed, `db68422` |
+| Release shell builds with the interface embedded (the job checks that the wasm file name is in the binary) | Passed, `db68422` | Passed, `db68422` | Passed, `db68422` |
+| Operating system keyring round trip, `os_store` (latest run, on `1d89435`) | Passed | Passed | Passed |
+| Permissions of the Tauri manifests match the committed files | CI only | not run | not run |
+| Output differential against TypeScript, nine release lines | CI only | not run | not run |
+| Chromium: Content-Security-Policy, and the settings and interface (14 scenarios, mocked shell) | CI only | not run | not run |
+| Log redaction fixture and IPC contract samples, against TypeScript and zod | CI only | not run | not run |
+| Launcher tests (`node --test scripts/run-rust-shell.test.mjs`) | CI only | not run | not run |
+| Row gate: 10 tests against the databases of the TypeScript repositories | Passed, `db68422` (Ubuntu only) | not run | not run |
+| Dependency policy (`cargo deny check`, `cargo audit`) | `rust-audit.yml` (`ubuntu-24.04`) | not run | not run |
+
+The keyring round trip and the dependency policy are separate workflows. The keyring workflow runs only when the
+secrets crate, the lockfile or its own file changes, so its latest run is on an earlier commit.
+
+### Seen in a real window
+
+| Platform | What was seen | Where it is recorded |
+| --- | --- | --- |
+| Linux, WebKitGTK | Dev mode and release mode were opened by hand. Both showed the settings area with its default values, and `settings_get` ran end to end. This was the interface before the current layout. | `docs/rust-shell.md`, "Manual check, Linux (WebKitGTK)" |
+| Windows, WebView2 | Nothing. | none |
+| macOS, WKWebView | Nothing. | none |
+
+Not seen in any window, on any platform:
+
+- the sidebar with real workspaces, and the current layout;
+- the minimum window size as the window manager enforces it;
+- the navigation policy in a running webview;
+- any command other than `settings_get` and `workspaces_list` called from a window;
+- the cost of the glass layer, which was not measured;
+- the warning for a data folder outside the user's profile, on a real Windows profile.
+
+### What CI does not cover
+
+- No job opens a window. A window is checked by hand.
+- The Chromium checks, the output differential and the row gate run on Linux only.
+- Windows applies no file ACL to the data folder (section 6).
+- The native rollback workflow, `native-rollback-validation.yml`, runs on `main` and `stabilization/native-rollback-v1`.
+  It does not run on this branch, so the Windows and macOS rollback behaviour is not tested here.
+
+## 4. How to run
+
+### Requirements
+
+- Rust 1.97.1, which `rust-toolchain.toml` pins, with the `wasm32-unknown-unknown` target.
+- trunk 0.22.1: `cargo install --locked trunk@0.22.1`.
+- Node.js 24 (`>=24.18 <25`) and npm 11, with `npm ci` at the repository root. Node runs the launcher, the fixture
+  option and the checks that compare with TypeScript.
+- On Linux, the system packages that CI installs for Tauri: `build-essential`, `libssl-dev`, `libwebkit2gtk-4.1-dev`,
+  `libgtk-3-dev`, `libxdo-dev`, `librsvg2-dev` and `libayatana-appindicator3-dev`.
+- The fixture option needs the release tags in the clone, so use a full clone with its tags.
+
+### Commands
+
+The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absolute path>` or
+`--from-fixture <release tag>`, which cannot be combined, and `--check`.
+
+| Command | What it does | Run for this README |
+| --- | --- | --- |
+| `node scripts/run-rust-shell.mjs dev --check` | Prints the plan of the development mode and checks the tools. Starts nothing. | Yes. Passed. |
+| `node scripts/run-rust-shell.mjs release --check` | The same plan for the release mode. | Yes. Passed. |
+| `node scripts/run-rust-shell.mjs dev --data-dir <empty temporary folder> --check` | The same plan with the data folder given. | Yes. Passed. |
+| `node scripts/run-rust-shell.mjs release --from-fixture v1.0.2 --check` | Copies the v1.0.2 release database to a new folder under `target/shell-fixtures/`, prints the path, and starts nothing. | Yes. Passed. The copy stays there until it is deleted. |
+| `cargo build -p noct-app --release --features custom-protocol` | Builds the release shell with the interface embedded. | Yes. Passed. |
+| `node scripts/run-rust-shell.mjs dev` | Starts `trunk serve` on port 1420 and runs `cargo run -p noct-app`. This opens the window. | Not run. The checks for this README do not open windows. The same mode was opened by hand on Linux (section 3). |
+| `node scripts/run-rust-shell.mjs release` | Runs `trunk build --release` and the release build, then opens the window. | Not run, for the same reason. Its build step was run as shown above. |
+| `node scripts/run-rust-shell.mjs dev\|release --data-dir <absolute path>` | Opens the shell on that folder, which it sets as `NOCT_DATA_DIR`. | Not run. It opens a window. |
+| `node scripts/run-rust-shell.mjs dev\|release --from-fixture <tag>` | Opens the shell on a copy of a pinned release database. The tags are the nine in `scripts/fixtures/release-lines.json`. | Not run. It opens a window. The copy step ran with `--check`. |
+
+> **Never point the shell at a data folder that holds real data.** Without `--data-dir`, the shell uses its default
+> data folder, and that is where the data of a real user of the Rust shell is kept. For tests, use `--data-dir` with an
+> empty folder that you create for the test and delete afterwards. Or use `--from-fixture`: it copies a database into
+> `target/` and never opens the original. On Windows, a data folder outside the user's profile is written to the log as
+> a warning, and the shell still opens it.
+
+## 5. Architecture by crate
+
+| Crate | Responsibility |
 | --- | --- |
-| Windows 10/11 | x64 NSIS installer (`.exe`) |
-| Linux desktop | AppImage and `tar.gz` (the published build architecture applies) |
-| macOS | DMG and updater ZIP (the published build architecture applies) |
+| `noct-app` | The Tauri 2 shell. It opens the data folder and the log, registers the four commands, sets the window policy, and checks workspace access. |
+| `noct-core` | The contracts, limits and types that mirror `shared/`, and the log redaction. |
+| `noct-db` | SQLite persistence: the runtime, the migrations 1 to 32, the repositories, backups and recovery snapshots, atomic writes, the file log and the operation observer. |
+| `noct-native` | A separate rollback worker binary for filesystem operations. It has a Linux backend only. |
+| `noct-secrets` | The provider credential vault: an encrypted document, a non-secret index, and a master key in the operating system credential store. The shell does not open it yet. |
+| `noct-ui` | The Leptos interface, compiled to WebAssembly by Trunk. The Geist fonts are vendored under the SIL Open Font License 1.1. |
 
-Unsigned package validation runs on Linux, Windows and macOS. Stable releases
-publish the configured targets for all three platforms: Linux has a protected
-GPG-signed checksum manifest, while Windows and macOS currently publish
-checksums without platform signing/notarization. See
-[installation](docs/installation.md) and [updates](docs/updates.md).
+## 6. Security model
 
-## Choose your AI
+### In place
 
-1. Open **Settings → AI** (or click the AI chip below the message box).
-2. Click **Connect an AI** and pick a service: an API key (Gemini, OpenRouter,
-   DeepSeek, Groq, Mistral, xAI), a local runtime (Ollama, LM Studio) or
-   **Other** for any endpoint that implements chat completions (vLLM,
-   llama.cpp, LiteLLM, your own server).
-3. Choose the model for the current workspace. The chip in the composer shows
-   which service and model the next run will use.
+- **Webview policy.** `withGlobalTauri` is `false`. The Content-Security-Policy is
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
+  Chromium checks it (`scripts/check-shell-csp.mjs`). No webview has enforced it yet.
+- **Commands.** Four commands, `settings_get`, `settings_set`, `workspaces_list` and `conversations_list`, are declared in
+  `crates/noct-app/build.rs`. `crates/noct-app/capabilities/default.json` grants them to the `main` window only. Tests
+  with Tauri's mock runtime refuse a command that is not granted and a request from a second window.
+- **Navigation.** The main window accepts navigation only to the packaged interface, and to the development server in
+  debug builds (`crates/noct-app/src/navigation.rs`, with its tests). This is not verified in a running webview.
+- **Browser permissions.** The webview grants nothing beyond `core:default` (ADR 0001, security table). Not verified in a
+  running webview.
+- **Credentials.** The database holds only a UUID reference for each provider configuration. The vault encrypts the
+  credentials with XChaCha20-Poly1305 and keeps the master key in the operating system credential store (ADR 0002). The
+  shell does not open the vault, so no credential reaches the interface.
+- **Logs.** Lines are redacted before they are queued for the file log (`crates/noct-core/src/log_redaction.rs`). The
+  redaction fixture is compared with TypeScript on Linux in CI.
+- **Local files.** On Unix, the database, its backups, the logs and the atomic writes are created with mode `0600`, and
+  the folders with `0700`. On Windows, no ACL is applied (see the list below).
+- **Restored workspaces.** A restored backup sets `authorized` to `0`. The workspace must be selected again before the
+  shell trusts it (`crates/noct-db/src/repositories/backup.rs`).
 
-![API providers available in Settings → AI](docs/images/ai-providers.png)
+### Still missing
 
-<details>
-<summary>Local runtimes, custom endpoints and the active model</summary>
+- **Provider allowlist.** The request for this README names one, but the repository defines none, so none is written
+  here. The Electron product has these rules: remote Chat Completions providers must use HTTPS, reject redirects and check
+  every resolved address before connecting; plain HTTP is allowed only for loopback services (`docs/security.md`). The
+  Electron child-process environment has its own allowlist (`electron/runtime/childEnvironment.ts`). The Rust branch has
+  no provider client, so none of these rules is ported. Which policy is meant is a decision for the owner.
+- **Windows ACL.** The data folder gets no DACL. Setting one needs `windows-sys` as a direct dependency, which the owner
+  has not approved. The owner decided that it waits for the vault integration, with the owner present. The analysis is in
+  `docs/rust-windows-file-permissions.md`.
+- **Electron fuses and ASAR integrity.** Tauri has no equivalent. ADR 0001 marks this as a gap that needs a decision.
+- **Workspace access check.** It approximates `access(R_OK | X_OK)` without a native call. Its tests do not cover ACLs,
+  other users or group access (`docs/rust-shell.md`, "Known approximations").
+- **npm dependencies.** `npm ci` reported 13 moderate findings from `npm audit` (no high or critical). I did not review
+  them in this round.
 
-Ollama, LM Studio and custom endpoints use the same connection flow.
+## 7. Compatibility and rollback
 
-![Local runtime choices in Settings → AI](docs/images/local-models.png)
+- **Schema.** The schema version is 32 (`shared/constants.ts`, `crates/noct-core/src/limits.rs`), and a parity test
+  checks the two. This branch adds no migration after 32. The last migration in
+  `crates/noct-db/src/migrations/generated.rs` is 32, as it is in the TypeScript migrations.
+- **Databases already at 32.** They open with no schema change. The row gate checks the rows that the Rust code reads
+  and writes against the TypeScript repositories.
+- **Older databases.** The nine pinned release lines run from 0.5.0-beta to 1.0.2. When the Rust runtime opens an older
+  database, it writes a backup first, keeps up to three, and then runs the migrations inside transactions. The row gate
+  and the output differential compare the result with TypeScript for each line.
+- **Newer databases.** The runtime refuses a schema newer than 32 before it changes anything.
+- **Rollback to the Electron application.** Both implementations use schema 32, so a file written by one should open in
+  the other. This branch does not test it. The row gate reads files that TypeScript wrote, and compares Rust's writes
+  with TypeScript's expected results. No test opens a file written by Rust with the TypeScript code.
+- **Provider credentials are not migrated.** ADR 0001, decision 6, proposes that users enter their provider keys again
+  once, after the migration. That is pending confirmation.
+- **Not the same rollback.** `noct-native` rolls back filesystem operations. It does not roll back the database.
 
-The active connection shows the provider and model bound to the workspace.
+## 8. Tests and CI
 
-![OpenRouter and its selected model in AI settings](docs/images/ai-connections.png)
+### Run for this README (Linux, commit `db68422`)
 
-</details>
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | Passed |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Passed |
+| `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passed |
+| `cargo test --workspace --no-fail-fast` | 423 passed, 0 failed, 17 ignored |
+| `node --test scripts/run-rust-shell.test.mjs` | 7 passed |
+| `node scripts/verify-row-gate.mjs` | 10 passed, exit 0 |
+| `node scripts/generate-output-differential.mjs`, then `cargo test -p noct-app --test output_differential -- --ignored` | 1 passed |
+| `trunk build --release` in `crates/noct-ui` | Passed |
+| `node scripts/check-shell-csp.mjs` | Passed |
+| `node scripts/check-shell-ui.mjs` | 14 of 14 scenarios passed |
+| `node scripts/generate-log-redaction-fixture.mjs --check` | Passed |
+| `node scripts/generate-ipc-samples.mjs --check` | Passed |
+| `cargo deny check` | Passed (advisories, bans, licenses, sources) |
+| `cargo audit` | No vulnerability. Six warnings, all listed with a reason in `deny.toml`: five unmaintained crates and one unsound crate, `glib` (RUSTSEC-2024-0429) |
+| `npm ci` | Installed. Reported 13 moderate npm audit findings. |
 
-Review, Build and Docs all run through the selected model. Nocturne gives the
-model a small set of workspace tools executed in the main process:
-`list_directory`, `read_file` and `search_text` in every mode, plus
-`write_file`, `edit_file` and `run_command` in Build only. Every path is
-constrained to the authorized root, generated directories and likely secret
-files (`.env`, keys, credentials) are refused, every command waits for your
-approval and runs without a shell, and every Build change is captured
-BEFORE/AFTER for review and rollback. Settings → AI can also ask for approval
-before each file change. Build needs a model that supports function calling;
-Review and Docs fall back to the context Nocturne selected when a chat-only
-model rejects tools.
+Not run here, with the reason:
 
-Subscription login is not offered: consumer plans do not expose a supported
-login for third-party apps. Use an API key, an aggregator such as OpenRouter (one
-key for models from many vendors) or a local model. See
-[providers](docs/providers.md).
+- `cargo test -p noct-secrets --test os_store -- --ignored --nocapture`. It writes a test entry to the operating system
+  credential store of the machine where it runs. It uses its own service name and does not touch the master key of an
+  installed application (ADR 0002). CI runs it on each system instead.
+- The semantic index benchmarks and the semantic statistics measurement, which are ignored tests (listed below). They are
+  measurements, with no budget set, and they are not part of any gate.
 
-Provider API credentials are encrypted by the operating-system secure storage,
-kept in the main process and excluded from backups and diagnostics.
+### Ignored tests
 
-On Linux, a working, unlocked Secret Service or KWallet is required to save API
-keys. Nocturne detects installed keyrings on Hyprland and similar desktops.
-See [connection troubleshooting](docs/providers.md#connection-troubleshooting).
+| Test | Count | How it runs | Why it is ignored | Run here? |
+| --- | --- | --- | --- | --- |
+| `crates/noct-db/tests/row_gate.rs` | 10 | `node scripts/verify-row-gate.mjs` | It needs `NOCT_ROW_GATE_DIR`, which the script sets | Yes, 10 passed |
+| `crates/noct-app/tests/output_differential.rs` | 1 | `node scripts/generate-output-differential.mjs`, then the test with `--ignored` | It needs the release-line bases | Yes, passed |
+| `crates/noct-secrets/tests/os_store.rs` | 1 | `cargo test -p noct-secrets --test os_store -- --ignored --nocapture` | It needs the operating system credential store | No, see above |
+| Benchmarks in `crates/noct-db/src/repositories/semantic_index.rs` | 4 | Release mode, `--ignored --nocapture` | They are measurements | No |
+| `crates/noct-db/tests/semantic_statistics.rs` | 1 | Release mode, `--ignored --nocapture` | It is a measurement | No |
 
-## Local data and recovery
+### Workflows on `migration/rust`
 
-Conversations, settings, model catalog data and structured knowledge are stored
-in a local SQLite database. Workspace context files use bounded, atomic writes.
-The application validates the database, creates snapshots before destructive
-data operations and can quarantine a corrupt database before restoring a valid
-candidate with user confirmation. Backups do not include project files or
-provider credentials. These mechanisms reduce recovery risk; they are not a
-promise of absolute durability against every hardware or filesystem failure.
+| Workflow | Runs on pushes to `migration/rust` | Runners | What it runs |
+| --- | --- | --- | --- |
+| `rust-shell-validation.yml` | Yes, and manual dispatch. No pull request trigger. | `ubuntu-latest`, `windows-latest`, `macos-latest` | Build, workspace tests, release build with the interface embedded. The Linux-only steps are listed below. |
+| `row-gate.yml` | Yes. Also on pull requests to `main`, and manual dispatch. | `ubuntu-latest` | The row gate. It is not a required check: making it required is a repository setting. |
+| `rust-audit.yml` | Yes. Also on pull requests, a schedule and manual dispatch. | `ubuntu-24.04` | `cargo deny check` and `cargo audit`. |
+| `keyring-round-trip.yml` | Yes, when `crates/noct-secrets/**`, `Cargo.toml`, `Cargo.lock` or the workflow change. | `ubuntu-24.04`, `windows-latest`, `macos-latest` | The unit tests, and the `os_store` round trip with the real store on each system. |
 
-Read [backup and recovery](docs/backup-and-recovery.md) before moving or
-restoring a workspace.
+The other workflows do not run on a push to this branch. `package-validation.yml` (named "CI · source, renderer and
+packages") and `dependency-security.yml` run on pushes to `main`, on pull requests and on manual dispatch.
+`native-rollback-validation.yml` runs on pushes to `main` and `stabilization/native-rollback-v1`. `stable-release.yml`
+runs on version tags. `updater-rehearsal.yml` and `packaged-recovery.yml` run on manual dispatch only.
 
-## Security and privacy
+### Steps that run only on Linux
 
-The renderer runs with isolation, sandboxing and no Node.js integration. Native
-capabilities cross named preload APIs and validated IPC handlers. Workspace paths
-are contained and rechecked, Review remains read-only, and remote providers use
-HTTPS with address validation. Nocturne is local-first, but selected prompts,
-context, attachments and the output of tools the model calls are sent to the
-provider the user chooses; a local runtime such as Ollama keeps them on the
-machine. See
-[security](docs/security.md), [privacy](docs/privacy.md) and
-[SECURITY.md](SECURITY.md).
+In `rust-shell-validation.yml`, these steps have `if: matrix.os == 'ubuntu-latest'`:
 
-## Requirements for development
+- the Linux packages for Tauri, Node 24, `npm ci`, and the release-line bases and TypeScript outputs for the differential;
+- the regeneration of the Tauri permissions, which fails on any difference from the committed files;
+- the output differential against TypeScript;
+- the Chromium installation, and the Chromium checks of the Content-Security-Policy and of the interface;
+- the log redaction fixture and the IPC contract samples;
+- the launcher tests.
 
-- Node.js `>=24.18 <25`
-- npm `>=11 <12`
-- native build tooling compatible with `better-sqlite3`
+The Windows and macOS jobs run the build, the workspace tests and the release build with the interface embedded.
 
-```bash
-npm ci
-npm run dev
-```
+## 9. Code signing, and what it means for installers
 
-The full command list is in [development](docs/development.md).
+- This branch has no code signing: no certificate, no notarization and no signed updater artifact.
+- `bundle.active` is `false`, so this branch produces no installer.
+- A binary built from this branch is unsigned. Windows and macOS have no publisher identity to check for it. The only way
+  to check where it came from is to build it from the commit yourself.
+- The Electron product on `main` has its own policy. Its README states that Linux checksums are GPG-signed and that
+  Windows and macOS packages are published without platform signing or notarization. That policy does not apply to this
+  branch yet, and the choice of who holds the signing keys is open (ADR 0001, open decision 1).
 
-## Current status
+## 10. Documentation index and next steps
 
-The `v1.0.5` stable release uses `gustavomfg/NOCT` as its publication and
-updater repository. A version tag starts the GitHub-hosted release workflow,
-which validates the source, all platform inventories and published assets.
-Linux checksums are GPG-signed; Windows and macOS remain unsigned, and macOS
-remains unnotarized under the current policy.
+### Documents for the migration
 
-Known limitations: agents depend on the model's function-calling quality,
-commands run on the host without an OS sandbox (approval is the boundary), and a
-run stops after a bounded number of tool steps. Dedicated native adapters for other protocols, marketplace, cloud collaboration and
-multi-agent orchestration are not part of this release contract.
+- [ADR 0001: Rust migration](docs/adr/0001-rust-migration.md). Phases, progress, security invariants and open decisions.
+  Its status is "Proposed".
+- [ADR 0002: envelope encryption of provider credentials](docs/adr/0002-envelope-provider-credentials.md). Accepted.
+  It partly supersedes decision 6 of ADR 0001.
+- [Running the Rust shell locally](docs/rust-shell.md). The run modes, what is verified, the manual check, the gaps in CI,
+  and the known approximations.
+- [Row gate in CI](docs/rust-row-gate-workflow.md). The workflow, its decisions, and what is not verified.
+- [Windows file permissions](docs/rust-windows-file-permissions.md). The analysis, the warning, and the ACL that is not
+  implemented.
+- [Documentation index](docs/README.md). The other documents. The user guides in it describe the Electron product. For
+  example, `docs/security.md` describes Electron IPC.
+- [`AGENTS.md`](AGENTS.md). Contributor rules and the validation commands.
 
-## Documentation
+### Next steps
 
-- [Documentation index](docs/README.md) · [Português](docs/README.pt-BR.md)
-- [Installation](docs/installation.md) · [Português](docs/installation.pt-BR.md)
-- [Getting started](docs/getting-started.md) · [Português](docs/getting-started.pt-BR.md)
-- [Providers](docs/providers.md) · [Português](docs/providers.pt-BR.md)
-- [Configuration](docs/configuration.md) · [Português](docs/configuration.pt-BR.md)
-- [Review, Build and Docs modes](docs/modes.md) · [Português](docs/modes.pt-BR.md)
-- [Second Brain and Awareness](docs/second-brain.md) · [Português](docs/second-brain.pt-BR.md)
-- [Backup and recovery](docs/backup-and-recovery.md) · [Português](docs/backup-and-recovery.pt-BR.md)
-- [Updates](docs/updates.md) · [Português](docs/updates.pt-BR.md)
-- [Security](docs/security.md) · [Português](docs/security.pt-BR.md)
-- [Privacy](docs/privacy.md) · [Português](docs/privacy.pt-BR.md)
-- [Troubleshooting](docs/troubleshooting.md) · [Português](docs/troubleshooting.pt-BR.md)
-- [Development](docs/development.md) · [Português](docs/development.pt-BR.md)
-- [Architecture](docs/architecture.md) · [Português](docs/architecture.pt-BR.md)
-- [1.0.5 release notes](docs/releases/v1.0.5.md) · [Português](docs/releases/v1.0.5.pt-BR.md)
-- [GitHub Actions and releases](docs/github-actions.md)
-- [1.0.2 historical release readiness](docs/release-readiness-1.0.2.md)
-- [1.0.1 historical release notes](docs/releases/v1.0.1.md) · [Português](docs/releases/v1.0.1.pt-BR.md)
-- [Release-candidate checklist](docs/release-rc-checklist.md) · [Português](docs/release-rc-checklist.pt-BR.md)
-- [1.0.1 historical release readiness](docs/release-readiness-1.0.md)
+1. **Owner.** Define the provider allowlist, or confirm the Electron provider policy as the rule for Rust (section 6).
+2. **Owner, with the owner present.** Decide on `windows-sys` and on the Windows ACL, during the vault integration.
+3. **Real windows.** Open the shell on Windows (WebView2) and macOS (WKWebView). On Linux, check the current layout and
+   the sidebar with real workspaces, using `--from-fixture`, and check the minimum window size.
+4. **Phase 2.** Connect the operation observer to the phase 6 call sites. Before any public release, run the TypeScript and
+   Rust comparison on a copy of real data, kept under `target/` and never committed.
+5. **Phase 3.** Write the macOS (APFS clone) and Windows rollback backends.
+6. **Phase 5.** Port the provider adapters and the tool loop.
+7. **Phase 8 decisions.** Who holds the signing keys. How the Electron fuses and ASAR integrity are replaced. The minimum
+   platform versions, which go in `docs/compatibility.md`.
+8. **Repository setting, owner.** Decide whether the row gate becomes a required check on `main`. It has passed on this
+   branch.
 
-English is the canonical public source. Portuguese translations use the
-`.pt-BR.md` suffix and preserve headings, commands, paths and technical names.
+### Conflicts between the sources
 
-## License
-
-NOCT is distributed under the [MIT License](LICENSE).
+- ADR 0001 says "not started: phases 3 to 9". The code has the vault, the contracts and repositories of the services, a
+  Linux rollback backend and the first slice of the shell. This README follows the code and the ADR's own "done" lines.
+- ADR 0001 lists "CI wiring for the gate" as remaining in phase 2. `row-gate.yml` now provides it, though the job is not
+  required.
+- ADR 0001 is "Proposed", while ADR 0002 is "Accepted" and partly supersedes it.
+- ADR 0001, decision 4, asks for the minimum platform versions in `docs/compatibility.md`. The file has none.
+- The request for this README names a "provider allowlist". No source in the repository defines one (section 6).
