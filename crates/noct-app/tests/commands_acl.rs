@@ -17,12 +17,15 @@ fn probe() -> &'static str {
     "probe ran"
 }
 
-fn request(command: &str, body: Value) -> InvokeRequest {
+/// A request from the page of `window`, so its origin is the one the access control list names for the
+/// application on this platform: `tauri://localhost`, or `http://tauri.localhost` on Windows, where the webview
+/// serves custom protocols over http. A fixed origin would be refused on Windows.
+fn request(window: &WebviewWindow<MockRuntime>, command: &str, body: Value) -> InvokeRequest {
     InvokeRequest {
         cmd: command.to_string(),
         callback: CallbackFn(0),
         error: CallbackFn(1),
-        url: "tauri://localhost".parse().expect("the URL is valid"),
+        url: window.url().expect("the window has the URL of its page"),
         body: InvokeBody::Json(body),
         headers: Default::default(),
         invoke_key: INVOKE_KEY.to_string(),
@@ -62,28 +65,39 @@ fn the_main_window_runs_the_granted_commands() {
     let app = app_with_commands(&scratch);
     let main = window(&app, "main");
 
-    let settings = ok_json(get_ipc_response(&main, request("settings_get", json!({}))));
+    let settings = ok_json(get_ipc_response(
+        &main,
+        request(&main, "settings_get", json!({})),
+    ));
     assert_eq!(settings["approvalPolicy"], "on-request");
     assert_eq!(settings["theme"], "dark");
     assert_eq!(settings["language"], "pt-BR");
 
     let updated = ok_json(get_ipc_response(
         &main,
-        request("settings_set", json!({ "input": { "theme": "light" } })),
+        request(
+            &main,
+            "settings_set",
+            json!({ "input": { "theme": "light" } }),
+        ),
     ));
     assert_eq!(updated["theme"], "light");
 
     assert_eq!(
         ok_json(get_ipc_response(
             &main,
-            request("workspaces_list", json!({}))
+            request(&main, "workspaces_list", json!({}))
         )),
         json!([])
     );
     assert_eq!(
         ok_json(get_ipc_response(
             &main,
-            request("conversations_list", json!({ "input": { "limit": 10 } }))
+            request(
+                &main,
+                "conversations_list",
+                json!({ "input": { "limit": 10 } })
+            )
         )),
         json!({ "items": [], "hasMore": false, "nextCursor": null })
     );
@@ -110,7 +124,7 @@ fn conversations_list_refuses_page_requests_outside_the_contract() {
     ] {
         let error = error_of(get_ipc_response(
             &main,
-            request("conversations_list", input.clone()),
+            request(&main, "conversations_list", input.clone()),
         ));
         assert_eq!(error["code"], "invalid-input", "{input} is refused");
     }
@@ -125,6 +139,7 @@ fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let _ = get_ipc_response(
         &main,
         request(
+            &main,
             "settings_set",
             json!({ "input": { "diagnosticMode": true } }),
         ),
@@ -149,12 +164,15 @@ fn settings_set_refuses_arguments_outside_the_contract() {
     ] {
         let error = error_of(get_ipc_response(
             &main,
-            request("settings_set", input.clone()),
+            request(&main, "settings_set", input.clone()),
         ));
         assert_eq!(error["code"], "invalid-input", "{input} is refused");
     }
 
-    let untouched = ok_json(get_ipc_response(&main, request("settings_get", json!({}))));
+    let untouched = ok_json(get_ipc_response(
+        &main,
+        request(&main, "settings_get", json!({})),
+    ));
     assert_eq!(
         untouched["theme"], "dark",
         "a refused update writes nothing"
@@ -167,7 +185,7 @@ fn a_missing_argument_is_refused() {
     let app = app_with_commands(&scratch);
     let main = window(&app, "main");
 
-    assert!(get_ipc_response(&main, request("settings_set", json!({}))).is_err());
+    assert!(get_ipc_response(&main, request(&main, "settings_set", json!({}))).is_err());
 }
 
 #[test]
@@ -181,7 +199,7 @@ fn a_command_that_no_capability_grants_is_refused() {
         .expect("the mock application builds");
     let main = window(&app, "main");
 
-    let response = get_ipc_response(&main, request("probe", json!({})));
+    let response = get_ipc_response(&main, request(&main, "probe", json!({})));
 
     assert_refused_by_the_acl(response);
 }
@@ -192,7 +210,7 @@ fn a_window_outside_the_capability_is_refused_even_for_a_granted_command() {
     let app = app_with_commands(&scratch);
     let other = window(&app, "secondary");
 
-    let response = get_ipc_response(&other, request("settings_get", json!({})));
+    let response = get_ipc_response(&other, request(&other, "settings_get", json!({})));
 
     assert_refused_by_the_acl(response);
 }
