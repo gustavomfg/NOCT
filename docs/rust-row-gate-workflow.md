@@ -1,6 +1,7 @@
 # Running the row gate in CI before the merge to main
 
-Status: proposal. No workflow is changed by this document.
+Status: implemented as `.github/workflows/row-gate.yml`. It runs on Ubuntu and is not a required check: making it required
+is a setting of the repository, and the owner makes it.
 
 ## What the gate checks
 
@@ -32,10 +33,12 @@ No database is committed and no secret is used: the data is synthetic and stays 
 
 ## Current state, measured
 
-- Run locally on Linux at `e2913ad`, with the repository's own `node_modules`: the ten tests passed, the script exited
-  with 0, and it took about 13 seconds. No temporary folder was left behind.
-- No workflow runs it. `cargo test --workspace` does not run it either, because the tests are `#[ignore]`.
-- `rust-shell-validation.yml` runs on pushes to `migration/rust` and on manual dispatch. Nothing runs on `main`.
+- Run locally on Linux with the repository's own `node_modules`, at `e2913ad` and again with the commits that add the
+  workflow: the ten tests passed, the script exited with 0, and it took about 13 seconds. No temporary folder was left.
+- Before `row-gate.yml`, no workflow ran it. `cargo test --workspace` does not run it either, because the tests are
+  `#[ignore]`.
+- `rust-shell-validation.yml` runs on pushes to `migration/rust` and on manual dispatch. `row-gate.yml` runs on pushes to
+  `main` and `migration/rust`, on pull requests to `main`, and on manual dispatch.
 
 ## What CI needs
 
@@ -47,16 +50,16 @@ No database is committed and no secret is used: the data is synthetic and stays 
   `fetch-tags: true`, as the shell job already sets.
 - **No secrets, no caches to trust.** The job reads only the repository.
 
-## Proposed job
+## The job (option A, implemented)
 
-Option A (recommended): a new file, `.github/workflows/row-gate.yml`, which leaves the shell workflow unchanged.
+A new file, `.github/workflows/row-gate.yml`, which leaves the shell workflow unchanged.
 
 - Triggers: `push` to `main` and `migration/rust`, `pull_request` targeting `main`, and `workflow_dispatch`.
 - `permissions: contents: read`. `concurrency` with the group `row-gate-${{ github.ref }}` and
   `cancel-in-progress: true`, as the shell workflow does.
 - One job on `ubuntu-latest` with `timeout-minutes: 30`.
 - Steps: checkout with `persist-credentials: false`, `fetch-depth: 0` and `fetch-tags: true`; `setup-node` with
-  Node 24; `npm ci`; `node scripts/verify-row-gate.mjs`.
+  Node 24; `npm ci`; a check that `rustc` is the toolchain pinned in `rust-toolchain.toml`; `node scripts/verify-row-gate.mjs`.
 - Actions: the two that are already pinned by SHA in `rust-shell-validation.yml` (`actions/checkout` and
   `actions/setup-node`, both v6). No new third-party action is needed.
 
@@ -77,15 +80,20 @@ file's triggers and its matrix, and it is about persistence parity, not about th
 - A row that differs fails the Rust test with the expected and the actual value.
 - A moved tag, or sources that differ from their pinned digest, stop the script with the name of the tag.
 
-## Decisions for the owner
+## Decisions
 
-- Option A or Option B.
-- Only Ubuntu, as proposed, or also Windows and macOS? The gate's logic does not depend on the operating system, but
-  the paths and the native module do, and none of it runs there today.
-- Make the check required on `main` once it has run green, or only report it?
-- Which events: the three above, or only the pull request?
+Decided by the owner:
+
+- Option A: a separate workflow, not a job of the shell workflow.
+- Ubuntu only, with the checks above.
+- Not a required check. Making it required on `main` is the owner's setting, and it is not in the code.
+
+Recorded as proposed:
+
+- The events are the ones above. The shell workflow keeps its own triggers.
 
 ## Not verified
 
 - The duration on a cold GitHub runner. The local figure above is from a warm machine with `node_modules` installed.
-- A run of the proposed workflow. It exists only as this proposal until the owner approves it.
+- Whether `row-gate.yml` runs green on GitHub: the result is in the report of the commit that adds it.
+- Windows and macOS: the gate has not been run there, and no job runs it there.
