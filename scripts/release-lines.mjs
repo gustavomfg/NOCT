@@ -284,6 +284,20 @@ export function writeReleaseLines(gateDirectory, CurrentLocalDatabase) {
   )
 }
 
+// The fixture database of one pinned release line, written into `directory` with the synthetic data of
+// `seedLine`: the file that the release itself leaves behind. The shell starts from a copy of it through
+// `scripts/run-rust-shell.mjs --from-fixture`. Returns the path of the database file.
+export function writeFixture(tag, directory) {
+  const line = readPins().lines.find((candidate) => candidate.tag === tag)
+  if (!line) throw new Error(`${tag} is not a pinned release line`)
+  const buildDirectory = materialize(line)
+  const { LocalDatabase } = createRequire(path.join(buildDirectory, 'index.cjs'))('./electron/database/Database.js')
+  seedLine(LocalDatabase, tag, directory)
+  const file = path.join(directory, 'nocturne.db')
+  removeSidecars(file)
+  return file
+}
+
 // Recomputes the commit and source digest of every line. Run by hand; the diff is reviewed.
 export function pin() {
   const pins = readPins()
