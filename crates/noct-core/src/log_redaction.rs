@@ -60,11 +60,11 @@ static KEY_VALUE_SENSITIVE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Provider keys and private key headers, matched case-sensitively in the text as it is. The headers
-/// cover every algorithm (`BEGIN RSA PRIVATE KEY` included); `scripts/generate-log-redaction-fixture.mjs`
+/// cover every algorithm and `ENCRYPTED PRIVATE KEY`; `scripts/generate-log-redaction-fixture.mjs`
 /// records where that differs from TypeScript.
 static SENSITIVE_TOKENS: LazyLock<Regex> = LazyLock::new(|| {
     compile(&format!(
-        r"sk-[a-zA-Z0-9]{{20,}}|pk-[a-zA-Z0-9]{{20,}}|gh[opsu]_[a-zA-Z0-9]{{36,}}|glpat-[a-zA-Z0-9_-]{{20,}}|npm_[a-zA-Z0-9]{{36,}}|AKIA[0-9A-Z]{{16}}|eyJ[a-zA-Z0-9_-]{{10,}}\.[a-zA-Z0-9_-]{{10,}}\.[a-zA-Z0-9_-]{{10,}}|-----BEGIN[{ws}]+(?:(?:RSA|DSA|EC|OPENSSH)[{ws}]+)?PRIVATE[{ws}]+KEY-----|-----BEGIN[{ws}]+(?:RSA|DSA|EC|OPENSSH)[{ws}]+KEY-----",
+        r"sk-[a-zA-Z0-9]{{20,}}|pk-[a-zA-Z0-9]{{20,}}|gh[opsu]_[a-zA-Z0-9]{{36,}}|glpat-[a-zA-Z0-9_-]{{20,}}|npm_[a-zA-Z0-9]{{36,}}|AKIA[0-9A-Z]{{16}}|eyJ[a-zA-Z0-9_-]{{10,}}\.[a-zA-Z0-9_-]{{10,}}\.[a-zA-Z0-9_-]{{10,}}|-----BEGIN[{ws}]+(?:(?:RSA|DSA|EC|OPENSSH|ENCRYPTED)[{ws}]+)?PRIVATE[{ws}]+KEY-----|-----BEGIN[{ws}]+(?:RSA|DSA|EC|OPENSSH)[{ws}]+KEY-----",
         ws = JS_WHITESPACE_CLASS,
     ))
 });

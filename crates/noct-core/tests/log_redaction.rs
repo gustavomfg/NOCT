@@ -49,7 +49,7 @@ fn every_intentional_divergence_is_recorded_with_its_reason() {
             }
         }
     }
-    assert_eq!(recorded, 4, "the private key divergences");
+    assert_eq!(recorded, 5, "the private key divergences");
 }
 
 #[test]
@@ -130,6 +130,7 @@ fn every_private_key_algorithm_header_is_redacted() {
         "-----BEGIN EC PRIVATE KEY-----",
         "-----BEGIN OPENSSH PRIVATE KEY-----",
         "-----BEGIN RSA KEY-----",
+        "-----BEGIN ENCRYPTED PRIVATE KEY-----",
     ] {
         assert_eq!(redact_text(header), "[REDACTED-TOKEN]", "{header}");
     }

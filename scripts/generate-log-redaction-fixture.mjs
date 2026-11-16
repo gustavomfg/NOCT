@@ -39,6 +39,7 @@ const TEXT = [
   '-----BEGIN EC PRIVATE KEY-----',
   '-----BEGIN OPENSSH PRIVATE KEY-----',
   '-----BEGIN RSA KEY-----',
+  '-----BEGIN ENCRYPTED PRIVATE KEY-----',
   '-----BEGIN PUBLIC KEY-----',
   'password: senha-sem-aspas',
   'message="mensagem com dados"',
@@ -100,11 +101,16 @@ const PRIVATE_KEY_DIVERGENCE = {
   rustOutput: '[REDACTED-TOKEN]',
   reason: 'TypeScript needs KEY right after the algorithm, so RSA, DSA, EC and OPENSSH private key headers are not redacted there.',
 }
+const ENCRYPTED_PRIVATE_KEY_DIVERGENCE = {
+  rustOutput: '[REDACTED-TOKEN]',
+  reason: 'TypeScript does not match ENCRYPTED PRIVATE KEY headers, so they reach the log unchanged. The port redacts them.',
+}
 const DIVERGENCES = new Map([
   ['-----BEGIN RSA PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
   ['-----BEGIN DSA PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
   ['-----BEGIN EC PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
   ['-----BEGIN OPENSSH PRIVATE KEY-----', PRIVATE_KEY_DIVERGENCE],
+  ['-----BEGIN ENCRYPTED PRIVATE KEY-----', ENCRYPTED_PRIVATE_KEY_DIVERGENCE],
 ])
 
 function textCase(input, redactLogText) {

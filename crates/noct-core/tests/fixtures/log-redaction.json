@@ -66,6 +66,12 @@
       "output": "[REDACTED-TOKEN]"
     },
     {
+      "input": "-----BEGIN ENCRYPTED PRIVATE KEY-----",
+      "output": "-----BEGIN ENCRYPTED PRIVATE KEY-----",
+      "rustOutput": "[REDACTED-TOKEN]",
+      "divergence": "TypeScript does not match ENCRYPTED PRIVATE KEY headers, so they reach the log unchanged. The port redacts them."
+    },
+    {
       "input": "-----BEGIN PUBLIC KEY-----",
       "output": "-----BEGIN PUBLIC KEY-----"
     },
