@@ -28,6 +28,13 @@ pub fn command_handler<R: Runtime>()
     ]
 }
 
+/// The context of the shell, generated from `tauri.conf.json`. Every caller takes it from here, and only this
+/// function calls `generate_context!`: on macOS the macro embeds the property list under one global symbol, so a
+/// test binary that links this crate and generates the context again does not link.
+pub fn context<R: Runtime>() -> tauri::Context<R> {
+    tauri::generate_context!()
+}
+
 /// Runs the shell: opens the persistence in the data directory, then the main window.
 pub fn run() {
     tauri::Builder::default()
@@ -42,6 +49,6 @@ pub fn run() {
             window::create_main_window(app)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context())
         .expect("error while running the NOCT shell");
 }

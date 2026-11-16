@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 
 use tauri::utils::config::Csp;
 
-/// The context of the shell, with the runtime `main.rs` runs it on.
+/// The context of the shell, with the runtime `main.rs` runs it on. It comes from the library, which generates
+/// it once: see `noct_app::context`.
 fn context() -> tauri::Context<tauri::Wry> {
-    tauri::generate_context!()
+    noct_app::context()
 }
 
 /// The directives of the shipped policy, each with its source list.

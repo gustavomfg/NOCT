@@ -35,7 +35,7 @@ fn app_with_commands(scratch: &Scratch) -> App<MockRuntime> {
     mock_builder()
         .manage(persistence)
         .invoke_handler(noct_app::command_handler())
-        .build(tauri::generate_context!())
+        .build(noct_app::context())
         .expect("the mock application builds")
 }
 
@@ -177,7 +177,7 @@ fn a_command_that_no_capability_grants_is_refused() {
     let app = mock_builder()
         .manage(persistence)
         .invoke_handler(tauri::generate_handler![probe])
-        .build(tauri::generate_context!())
+        .build(noct_app::context())
         .expect("the mock application builds");
     let main = window(&app, "main");
 
