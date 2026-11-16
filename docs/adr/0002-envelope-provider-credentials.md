@@ -158,20 +158,58 @@ measurements, the method and their limits are in [`docs/perf/semantic-index-quer
 
 ### Decision
 
-Option C: no schema change. `ANALYZE semantic_units` refreshes the statistics in two cases:
+Option C: no NOCT schema change and no `user_version` change. The first `ANALYZE` makes SQLite create its
+internal tables `sqlite_stat1` and `sqlite_stat4`. The TypeScript build already creates `sqlite_stat1` through
+`PRAGMA optimize`.
 
-1. At the end of a large indexing round, when the round wrote at least 10,000 units.
-2. When a database is opened and `sqlite_stat1` has no rows for `semantic_units`. The analysis runs in the
-   background and is not on the open path.
+`ANALYZE semantic_units` runs in three places. None of them fails the caller. A failure is written to the
+diagnostic log, and the operation goes on.
 
-`PRAGMA optimize` stays at close. It does not replace these refreshes.
+1. **End of a large round.** A round that ends (completed, failed or cancelled) with at least 10,000 indexed units
+   analyzes the table after the round is recorded. The update still succeeds when the analysis fails.
+2. **Open.** When the table has at least 10,000 rows and its statistics are missing or do not describe it, the
+   analysis runs in the background, on its own connection. It waits at most `statistics_busy_timeout` for a lock
+   (5 seconds by default, `OpenOptions`).
+3. **Close.** The same check runs on the main connection before `PRAGMA optimize`. The optimize and the WAL
+   checkpoint run even when the check fails, and the optimize is reported first when both fail. Two tests cover
+   this. `the_checkpoint_runs_when_the_optimize_fails` (unit, `runtime.rs`) makes the optimize fail on a read-only
+   connection and checks that the checkpoint still copies every frame of the log. It does not cover a checkpoint
+   that is blocked by another connection; `busy` is reported and not tested. `a_failed_refresh_at_close_is_logged_and_the_next_open_recovers`
+   (integration) checks the log entry and that the next open recovers.
+
+The check compares the statistics with the table. It does not test for missing statistics only. It reads the row
+count of `semantic_units` and the first two figures of the stored statistics of
+`idx_semantic_units_workspace_status`. The stored row count and the stored rows per workspace must each be within
+10% of the table's: the row count, and the rows divided by the number of distinct workspaces. A sampled analysis
+keeps the total right and the per-workspace figure wrong: 1,409 rows per workspace against 10,000 at the smallest
+measured size. A check on the total alone misses it. The tests `opening_a_database_with_sampled_statistics_analyzes_it`
+and `opening_a_database_sampled_across_ten_workspaces_analyzes_it` fail when it is used.
+
+The check runs at every open, and it does not analyze at every open. An analysis costs 11 ms at 10,000 rows, 46 ms
+at 50,000 and 170 ms at 200,000, and it writes to the database each time. The check costs under 2 ms at 200,000
+rows. The figures are in the performance note.
+
+The check covers the sampled estimates that `PRAGMA optimize` stores. The TypeScript build runs the same
+statement at close (`electron/database/DatabaseRuntime.ts:112`). A database closed by that build was not opened
+here, so its figures are not confirmed. The check reads the workspace figure only. The figure of the
+(workspace, status) prefix is not checked.
+
+The thresholds are judgements, not budgets: 10,000 rows, and a 10% tolerance. The performance note records their
+limits.
+
+### Schema version
+
+The schema version is 32 everywhere it is held: `shared/constants.ts:1`, `crates/noct-core/src/limits.rs:9`, and
+the last migration, `electron/database/migrations.ts:727` (`version: 32`). Both runtimes refuse a database whose
+`user_version` is above that constant: the Electron runtime at `electron/database/DatabaseRuntime.ts:33`, and the
+Rust runtime at `crates/noct-db/src/runtime.rs:95`. No source file holds 33 as the schema version.
 
 ### Deferred
 
-The index `(workspace, status, id)` is evaluated and is not in the schema. It goes into a versioned migration,
-in Rust and in TypeScript with fingerprints, only after the Electron build no longer reads the database. A
-versioned migration before that would make Electron refuse the database
-(`electron/database/DatabaseRuntime.ts`, `DATABASE_SCHEMA_VERSION`). The measured effect is in the performance note.
+The index `(workspace, status, id)` is evaluated and is not in the schema. It would be migration 33, the next one
+after version 32. It goes into a versioned migration, in Rust and in TypeScript with fingerprints, only after the
+Electron build no longer reads the database. Electron refuses a database at version 33
+(`electron/database/DatabaseRuntime.ts:33`). The measured effect is in the performance note.
 
 ## Fuses and ASAR
 

@@ -21,6 +21,7 @@ Reproduce, from the repository root:
 cargo test --release -p noct-db --lib embedding_listings_at_fifty_and_two_hundred_thousand_rows -- --ignored --nocapture
 cargo test --release -p noct-db --lib a_workspace_listing_alone_and_among_ten_workspaces -- --ignored --nocapture
 cargo test --release -p noct-db --lib pragma_optimize -- --ignored --nocapture --test-threads=1
+cargo test --release -p noct-db --test semantic_statistics measure_statistics_by_size -- --ignored --nocapture
 ```
 
 Each line of output is prefixed with `BENCH`. The tests are in `crates/noct-db/src/repositories/semantic_index.rs`
@@ -88,6 +89,39 @@ Two more facts, from the `sqlite3` command-line tool (3.54.0), on the same kind 
 So `PRAGMA optimize` does not replace `ANALYZE` after a large indexing round. On a database that has never been
 analyzed, it stores the estimates that keep the slow plan for one large workspace.
 
+### Checking the statistics, and refreshing them
+
+The rule in `crates/noct-db/src/statistics.rs` runs at open and at close. It refreshes the statistics only when the
+table is large and the stored figures do not describe it. Measured with one workspace, release build, one run:
+
+| Rows | `PRAGMA optimize` alone: stored rows per workspace | `COUNT(*)` | `COUNT(DISTINCT workspace)` | `ANALYZE`, exact |
+|---|---|---|---|---|
+| 10,000 | 1,409 (exact: 10,000) | 18 µs | 18 µs | 11.4 ms |
+| 50,000 | 1,409 (exact: 50,000) | 35 µs | 15 µs | 45.8 ms |
+| 200,000 | 1,409 (exact: 200,000) | 1.5 ms | 28 µs | 169.5 ms |
+
+The table total stored by `PRAGMA optimize` is right at every size. The per-workspace figure is not. A check on the
+total alone would accept these estimates, so the rule compares both figures with the table, within 10%. An
+analysis at every open would cost 11 to 170 ms and write to the database each time. The check reads only, and it
+costs 18 µs to 1.5 ms. That is why it is a check and not an analysis.
+
+Detection, one test per state (`crates/noct-db/tests/semantic_statistics.rs`):
+
+| State of the database | Result | Test |
+|---|---|---|
+| No statistics, 10,000 rows | Analyzed in the background | `opening_a_database_without_statistics_analyzes_it_in_the_background` |
+| No statistics, 9,999 rows | Not analyzed (below the threshold) | `opening_a_small_database_without_statistics_starts_no_analysis` |
+| Exact, fresh | Not analyzed | `opening_a_database_with_exact_statistics_starts_no_analysis` |
+| Sampled by `PRAGMA optimize`, one workspace, 10,000 rows | Analyzed | `opening_a_database_with_sampled_statistics_analyzes_it` |
+| Sampled by `PRAGMA optimize`, ten workspaces, 10,000 rows | Analyzed | `opening_a_database_sampled_across_ten_workspaces_analyzes_it` |
+| Exact, uneven workspaces (9,000 and 3,000 rows) | Not analyzed | `opening_a_database_with_exact_uneven_workspaces_starts_no_analysis` |
+| Exact, then the table doubled without close | Analyzed | `opening_a_database_whose_statistics_predate_a_doubling_analyzes_it` |
+
+When the rule is replaced by a total-only check (a temporary mutation, reverted), the two sampled rows fail and the
+others pass. So the per-workspace comparison is what detects the sampled estimates.
+
+The thresholds are judgements: 10,000 rows, and 10%. Neither was measured against a real workload.
+
 ## Criteria
 
 These thresholds were set in the benchmark code (`PROBLEM_RATIO` and `NEIGHBOUR_RATIO` in `benchmark_tests`):
@@ -119,3 +153,8 @@ longer reads the database. See the ADR.
 - One run per configuration. No repetitions and no variance figures.
 - No real user database was measured.
 - The `ANALYZE` cost is measured on this machine only.
+- The 10,000-unit threshold for a large round is a judgement. It was not measured, and it is not a budget.
+- A database closed by the TypeScript build should hold the sampled estimates of `PRAGMA optimize`, as the Rust
+  tests reproduce on a Rust-written database. That was not measured on a database the TypeScript build closed.
+- The check reads the workspace figure only. The figure of the (workspace, status) prefix is not checked.
+- The 10% tolerance is a judgement. The check costs were measured once, on this machine.
