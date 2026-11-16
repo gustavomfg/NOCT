@@ -7,7 +7,9 @@
 //!   cargo test -p noct-app --test output_differential -- --ignored
 //!
 //! The test is ignored by default, as the row gate is, because it needs those bases. Without them it fails:
-//! nothing is skipped silently.
+//! nothing is skipped silently. Two readings are compared for each base: the legacy file, which Rust
+//! upgrades when it opens it, against the reading TypeScript takes after its own upgrade (`base`); and the
+//! copy that the TypeScript repositories wrote values into, against its reading (`written`).
 
 mod common;
 
@@ -43,15 +45,14 @@ fn gate_directory() -> PathBuf {
     }
 }
 
-fn read_expected(gate: &Path) -> Value {
-    let file = gate.join("expected.json");
-    let text = fs::read_to_string(&file).unwrap_or_else(|_| {
+fn read_json(file: &Path) -> Value {
+    let text = fs::read_to_string(file).unwrap_or_else(|_| {
         panic!(
             "{} is missing: run node scripts/generate-output-differential.mjs",
             file.display()
         )
     });
-    serde_json::from_str(&text).expect("expected.json is JSON")
+    serde_json::from_str(&text).expect("the file is JSON")
 }
 
 /// Replaces the gate directory by `<gate>` in every string, as the generator does.
@@ -70,25 +71,25 @@ fn relocate(value: Value, gate: &str) -> Value {
     }
 }
 
-/// A copy of the database the TypeScript side read, in a scratch directory of this test.
-fn copy_of_base(gate: &Path, tag: &str) -> Scratch {
-    let source = gate.join("read").join(tag);
-    let scratch = Scratch::new(&format!("differential-{tag}"));
+/// A scratch copy of the database files in `from`, which the test may open and change.
+fn copy_database(from: &Path, tag: &str, reading: &str) -> Scratch {
+    let scratch = Scratch::new(&format!("differential-{reading}-{tag}"));
     for name in DATABASE_FILES {
-        let from = source.join(name);
-        if from.exists() {
-            fs::copy(&from, scratch.path().join(name)).expect("the database is copied");
+        let source = from.join(name);
+        if source.exists() {
+            fs::copy(&source, scratch.path().join(name)).expect("the database is copied");
         }
     }
     assert!(
         scratch.path().join("nocturne.db").is_file(),
-        "the base of {tag} is missing in {}",
-        source.display()
+        "the {reading} database of {tag} is missing in {}",
+        from.display()
     );
     scratch
 }
 
-/// The four outputs of the first slice for the database in `scratch`, as the commands return them.
+/// The four outputs of the first slice for the database in `scratch`, as the commands return them. Opening
+/// the store upgrades a database of an older schema, as it does for the application.
 fn rust_outputs(scratch: &Scratch) -> Value {
     let persistence = bootstrap::open(scratch.path()).expect("the shell opens the copy");
     let store = persistence.store.lock().expect("the store is not poisoned");
@@ -107,7 +108,8 @@ fn rust_outputs(scratch: &Scratch) -> Value {
 #[ignore = "needs the release-line bases; run node scripts/generate-output-differential.mjs"]
 fn every_release_line_returns_the_same_outputs_in_rust_as_in_typescript() {
     let gate = gate_directory();
-    let expected = read_expected(&gate);
+    let expected = read_json(&gate.join("expected.json"));
+    let manifest = read_json(&gate.join("release-lines").join("manifest.json"));
 
     let tags: Vec<&str> = expected["tags"]
         .as_array()
@@ -118,21 +120,37 @@ fn every_release_line_returns_the_same_outputs_in_rust_as_in_typescript() {
     assert_eq!(tags, TAGS, "the bases are the nine release lines");
 
     let lines = expected["lines"].as_array().expect("the lines are a list");
+    let legacy_files = manifest["lines"]
+        .as_array()
+        .expect("the manifest lists the bases");
     assert_eq!(lines.len(), TAGS.len(), "one line per base");
+    assert_eq!(legacy_files.len(), TAGS.len(), "one legacy base per line");
 
     let gate_text = fs::canonicalize(&gate)
         .expect("the gate directory exists")
         .to_string_lossy()
         .into_owned();
-    for (line, tag) in lines.iter().zip(TAGS) {
+    for ((line, legacy), tag) in lines.iter().zip(legacy_files).zip(TAGS) {
         assert_eq!(line["tag"], tag, "lines follow the order of the bases");
-        let scratch = copy_of_base(&gate, tag);
-        let actual = relocate(rust_outputs(&scratch), &gate_text);
-        let mut wanted = line.clone();
-        wanted
-            .as_object_mut()
-            .expect("a line is an object")
-            .remove("tag");
-        assert_eq!(actual, wanted, "{tag}: Rust and TypeScript outputs differ");
+        assert_eq!(legacy["tag"], tag, "the manifest follows the same order");
+
+        let legacy_directory = gate
+            .join(legacy["legacy"].as_str().expect("the legacy path"))
+            .parent()
+            .expect("the legacy file has a folder")
+            .to_path_buf();
+        let upgraded = copy_database(&legacy_directory, tag, "legacy");
+        assert_eq!(
+            relocate(rust_outputs(&upgraded), &gate_text),
+            line["base"],
+            "{tag}: the legacy file, upgraded in Rust, reads differently from TypeScript"
+        );
+
+        let written = copy_database(&gate.join("read").join(tag), tag, "written");
+        assert_eq!(
+            relocate(rust_outputs(&written), &gate_text),
+            line["written"],
+            "{tag}: the copy written by TypeScript reads differently in Rust"
+        );
     }
 }

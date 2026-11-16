@@ -5,11 +5,12 @@
 //   node scripts/generate-output-differential.mjs
 //
 // The bases come from `scripts/release-lines.mjs`: each line writes its own synthetic database with its
-// own code, and the current TypeScript code upgrades a copy of it. On that copy, the TypeScript
-// repositories write a few values that are not defaults. Then the current TypeScript code reads the
-// settings, the workspaces with their availability, and the conversations, and writes the result to
-// `target/output-differential/expected.json`. `crates/noct-app/tests/output_differential.rs` opens the
-// same copies in Rust and compares. Everything is generated on each run and nothing is committed: the
+// own code, and the current TypeScript code upgrades a copy of it. The current TypeScript code reads the
+// settings, the workspaces with their availability, and the conversations of that copy (`base`). Then
+// the TypeScript repositories write a few values that are not defaults on the copy, and the same reading
+// is taken again (`written`). Both go to `target/output-differential/expected.json`.
+// `crates/noct-app/tests/output_differential.rs` upgrades the legacy file in Rust and compares `base`, and
+// opens the written copy and compares `written`. Everything is generated on each run and nothing is committed: the
 // conversation identifiers and the timestamps differ from run to run. Paths are written relative to the
 // gate directory.
 import fs from 'node:fs'
@@ -132,8 +133,10 @@ export function generate() {
     fs.copyFileSync(path.join(gateDirectory, line.reference), path.join(readDirectory, 'nocturne.db'))
     const database = new LocalDatabase(readDirectory)
     try {
+      const base = relocate(readOutputs(database, inspectWorkspaceScope), gate)
       addReadingState(database, readDirectory)
-      return { tag: line.tag, ...relocate(readOutputs(database, inspectWorkspaceScope), gate) }
+      const written = relocate(readOutputs(database, inspectWorkspaceScope), gate)
+      return { tag: line.tag, base, written }
     } finally {
       database.close()
     }
