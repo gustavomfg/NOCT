@@ -47,38 +47,49 @@ installation's database by default.
 | `trunk serve --port 1420` answers with the page and `bootstrap.js` | Verified locally with HTTP requests, without opening the shell |
 | `trunk build --release` and the release shell with `custom-protocol` compile | Verified locally; the release binary contains the embedded interface |
 | Test feature of Tauri stays out of the normal build | Verified: `cargo tree -p noct-app -e normal` lists Tauri without `test`; the release binary has no test mock |
-| **The window opens and shows the skeleton** (NOCT, "0 toques", "Tocar", "0 caracteres") | **Verified by hand on Linux with WebKitGTK.** Mode and exact command: see [Manual check](#manual-check-linux-webkitgtk) |
-| The window is opaque in the colour of the Electron window | Verified by a test of the constant (`crates/noct-app/tests/window.rs`). **Its appearance after the change is not verified** (see [Window appearance](#window-appearance)) |
-| The settings area reads `settings_get` | Verified in Chromium with a mocked shell (`scripts/check-shell-ui.mjs`, in CI) and by the contract cases in `cargo test -p noct-ui`. **Not verified in a running webview** |
-| Navigation policy in a running webview | **Not verified** in a running webview |
-| Content-Security-Policy enforced by a webview | Verified in Chromium only (`scripts/check-shell-csp.mjs`, `scripts/check-shell-ui.mjs`). WebKitGTK, WebView2 and WKWebView are not verified for policy violations |
-| The real IPC call from the page to the shell in a running window | **Not verified.** Tauri's mock runtime covers the commands; no window has called them yet |
-| The release window (embedded interface) in a running window | **Not verified** |
-| Windows (WebView2) and macOS (WKWebView) | **Not verified** |
+| **Dev mode**: the window opens and shows the settings area with the default values, on Linux with WebKitGTK | **Verified by hand.** Command in [Manual check](#manual-check-linux-webkitgtk) |
+| **Release mode** (embedded interface): the window opens and shows the same settings area, on Linux with WebKitGTK | **Verified by hand.** Command in [Manual check](#manual-check-linux-webkitgtk) |
+| `settings_get` end to end on Linux, in both modes: interface, `invoke`, access control list, command, store, contract, screen | **Verified by hand**, in a real webview, with the values of a scratch data folder |
+| The window is opaque in the colour of the Electron window | Verified by a test of the constant (`crates/noct-app/tests/window.rs`). A thin border with the desktop in the margins remains after the change; it is treated as the desktop's window decoration (see [Window appearance](#window-appearance)) |
+| The settings area with a mocked shell, under the shipped policy, in Chromium | Verified in CI (`scripts/check-shell-ui.mjs`) and by the contract cases in `cargo test -p noct-ui` |
+| The mock follows the Tauri version named in Cargo.lock | Verified by a test (`crates/noct-app/tests/shell_ui_mock.rs`) that fails on a mismatch |
+| Navigation policy in a running webview | **Not verified** |
+| Content-Security-Policy enforced by a webview | Verified in Chromium only (`scripts/check-shell-csp.mjs`, `scripts/check-shell-ui.mjs`). No policy violation was recorded in the manual check, but no console log was taken either |
+| Commands other than `settings_get` called from a window | **Not verified** |
+| WebView2 (Windows) | **Not verified** |
+| WKWebView (macOS) | **Not verified** |
+| Release shell with `custom-protocol` built and run on Windows and macOS | **Not verified, and not in CI** (see [Gaps in CI](#gaps-in-ci)) |
 
 ## Manual check, Linux (WebKitGTK)
 
-On Linux with WebKitGTK, the window opened and showed the skeleton: "NOCT", "0 toques", the "Tocar" button and
-"0 caracteres". The record does not say which mode ran (`dev`, `release`, or both), and it does not give the
-exact command. Until that is recorded, only this sentence is verified, for the mode that was run:
+The check was done by hand on Linux with WebKitGTK, with the scratch data folder `/tmp/noct-teste`. Both
+modes were run:
 
-- `node scripts/run-rust-shell.mjs dev` (debug shell, `trunk serve` on port 1420)
-- `node scripts/run-rust-shell.mjs release` (release shell, embedded interface)
+| Mode | Exact command | Result |
+| --- | --- | --- |
+| dev | `node scripts/run-rust-shell.mjs dev --data-dir /tmp/noct-teste` | The window opened and showed the settings area with the default values |
+| release | `node scripts/run-rust-shell.mjs release --data-dir /tmp/noct-teste` | The window opened with the embedded assets and showed the same settings area as dev |
 
-Add `--data-dir <absolute path to a scratch folder>` when the data folder must not be the default one.
+The values shown in both modes were: Tema "NOCT escuro", Idioma "Português (Brasil)", Segurança do agente
+"Comandos sempre exigem aprovação", Diagnóstico "Inativo", and Pandoc "Não informado". The earlier check, whose
+mode was not recorded, saw the skeleton: "NOCT", "0 toques", the "Tocar" button and "0 caracteres".
+
+This covers one chain, end to end, in a real webview: the interface calls `settings_get` through `invoke`, the
+access control list allows it, the command reads the store, the reply matches the contract, and the screen shows
+it. It covers Linux only, with WebKitGTK only.
 
 ## Window appearance
 
-On Linux the window showed rounded corners and the desktop in its margins. That was not intended. The shell
+On Linux the window first showed rounded corners and the desktop in its margins. That was not intended. The shell
 asks for no transparency and no custom frame. tao gives the window an alpha channel only when `transparent`
 is set, and wry clears the WebKit background only in that case (`wry-0.57.2/src/webkitgtk/mod.rs`). The
 Electron window is opaque, with `backgroundColor: '#0b0b0e'` (`electron/main.ts`).
 
 The main window now sets `transparent(false)` and `background_color` to `#0b0b0e`, the Electron colour
-(`crates/noct-app/src/window.rs`, `WINDOW_BACKGROUND`). **The appearance after this change is not verified.**
-If the rounded corners or the margins remain, the cause is the window decoration of the desktop (the GTK
-frame or the compositor), not the shell's background. Removing that decoration changes the title bar, so it
-is a separate decision.
+(`crates/noct-app/src/window.rs`, `WINDOW_BACKGROUND`). After the change, a thin border with the desktop in the
+margins and rounded corners remains, much smaller than before. The person who checked treats it as the
+desktop's window decoration, not the application's. The shell does not draw that frame and does not ask for it,
+so no change is made here. Removing the decoration would change the title bar, which is a separate decision.
 
 ## The settings area
 
@@ -89,15 +100,28 @@ is checked against the contract of `noct-core` (`crates/noct-core/tests/fixtures
 reply that does not match is an error, not a default. The area shows a loading state, the settings, or the
 shell's error with "Tentar novamente".
 
-- **Verified:** the contract cases in Rust (`cargo test -p noct-ui`), and five browser scenarios with a
-  mocked shell under the shipped policy (`node scripts/check-shell-ui.mjs`, run in CI): ready, loading
-  then ready, error then retry, a reply outside the contract, and a page outside the shell. The check also
-  fails when an inline style is added (tested by inserting one).
-- **Not verified:** the call through the shell's real IPC in a running webview. The mock reproduces the
-  shape of `__TAURI_INTERNALS__.invoke` as Tauri 2.12.5 defines it; a change in Tauri would not be caught by
-  the mock, only by the window.
+- **Verified by hand on Linux, in both modes:** the values above, from `settings_get` in a real webview.
+- **Verified in Chromium with a mocked shell** under the shipped policy (`node scripts/check-shell-ui.mjs`,
+  run in CI): ready, loading then ready, error then retry, a reply outside the contract, and a page outside
+  the shell. The check also fails when an inline style is added (tested by inserting one).
+- **Not verified:** the same call on Windows (WebView2) and macOS (WKWebView), and any command other than
+  `settings_get`.
+- **The mock follows Tauri 2.12.5.** `scripts/check-shell-ui.mjs` declares `MOCKED_TAURI_VERSION`, and
+  `crates/noct-app/tests/shell_ui_mock.rs` fails when Cargo.lock names another version of Tauri. Before
+  updating the constant, check the mock's `invoke` against the new `scripts/core.js` of that version.
 - **Style:** classes only. The policy grants no inline style, so `crates/noct-ui/shell.css` uses the Nocturne
   tokens and the existing `error-card` and `settings-section` classes.
+
+## Gaps in CI
+
+These are not changed by this document. The workflow is not modified here.
+
+- `.github/workflows/rust-shell-validation.yml` runs on `ubuntu-latest` only. No job builds or runs the shell on
+  Windows or macOS.
+- No job compiles the release shell with `custom-protocol` (`cargo build -p noct-app --release --features
+  custom-protocol`), on any system. The workflow builds the interface in release (`trunk build --release`) and
+  the shell in debug (`cargo build -p noct-app`, `cargo test --workspace`).
+- The release check above, by hand, is not in CI.
 
 ## Known approximations
 
