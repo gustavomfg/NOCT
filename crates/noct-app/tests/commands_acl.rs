@@ -1005,6 +1005,87 @@ fn brain_delete_is_granted_and_checks_its_request() {
     assert_eq!(gone["code"], "unknown-memory");
 }
 
+/// The artifact delete command is granted to the main window. It deletes an artifact of a conversation, refuses an extra
+/// field, and reports a second delete as `unknown-artifact`.
+#[test]
+fn artifacts_delete_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("artifacts-delete-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+    ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "ai_save_assistant",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "content": "Pronto.",
+                "metadata": { "files": [{ "path": "src/app.ts" }] },
+            } }),
+        ),
+    ));
+    let artifact_id = app
+        .state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .artifacts()
+        .list(&conversation_id)
+        .expect("listed")[0]
+        .id
+        .clone();
+
+    let extra = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "artifacts_delete",
+            json!({ "input": { "conversationId": conversation_id.clone(), "artifactId": artifact_id.clone(), "force": true } }),
+        ),
+    ));
+    assert_eq!(extra["code"], "invalid-input");
+
+    let reply = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "artifacts_delete",
+            json!({ "input": { "conversationId": conversation_id.clone(), "artifactId": artifact_id.clone() } }),
+        ),
+    ));
+    assert_eq!(reply["deleted"], true);
+
+    let gone = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "artifacts_delete",
+            json!({ "input": { "conversationId": conversation_id, "artifactId": artifact_id } }),
+        ),
+    ));
+    assert_eq!(gone["code"], "unknown-artifact");
+    assert_eq!(gone["message"], "Artefato não encontrado ou já removido.");
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

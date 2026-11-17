@@ -722,3 +722,63 @@ fn a_refused_memory_delete_leaves_the_memory_in_place() {
         "the memory is still there"
     );
 }
+
+#[test]
+fn a_refused_artifact_delete_leaves_the_artifact_in_place() {
+    let directory = scratch("store-artifact-delete-refused");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/alpha")
+        .expect("conversation")
+        .id;
+    let diagram = json!({ "language": "mermaid" });
+    let turn = AssistantTurn {
+        conversation_id: &conversation,
+        workspace: "/work/alpha",
+        content: "Resposta",
+        metadata: None,
+        markdown_title: "Resposta · 2026",
+        artifacts: &[TurnArtifact {
+            kind: "diagram",
+            title: "Diagrama",
+            file_path: None,
+            content: Some("graph TD"),
+            metadata: Some(&diagram),
+        }],
+    };
+    store.save_assistant_turn(&turn).expect("turn");
+    // The turn stores its Markdown copy as an artifact too, so the diagram is found by its kind.
+    let listed = store.artifacts().list(&conversation).expect("artifacts");
+    let artifact = listed
+        .iter()
+        .find(|artifact| artifact.kind == "diagram")
+        .expect("the diagram is stored")
+        .id
+        .clone();
+    let before = listed.len();
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_artifact_delete BEFORE DELETE ON artifacts
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .artifacts()
+        .delete(&artifact, &conversation)
+        .expect_err("the refused delete is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert_eq!(
+        store
+            .artifacts()
+            .list(&conversation)
+            .expect("artifacts")
+            .len(),
+        before,
+        "nothing is removed"
+    );
+}

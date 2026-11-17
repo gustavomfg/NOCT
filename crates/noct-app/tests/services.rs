@@ -16,6 +16,7 @@ use noct_core::contracts::Role;
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
 use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::ai::SaveAssistantRequest;
+use noct_core::ipc::artifacts::ArtifactDeleteRequest;
 use noct_core::ipc::brain::BrainMemoryDeleteRequest;
 use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::ConversationPageRequest;
@@ -1782,6 +1783,100 @@ fn brain_delete_removes_a_memory_of_the_project_once_and_never_one_of_another_pr
         &store,
         &[],
         &request("3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", &memory.id),
+    );
+    assert!(matches!(missing, Err(CommandError::UnknownConversation)));
+}
+
+#[test]
+fn artifact_delete_removes_one_artifact_of_the_conversation_and_leaves_the_file_in_the_folder() {
+    let scratch = Scratch::new("artifact-delete");
+    let project = scratch.path().join("project");
+    std::fs::create_dir_all(project.join("src")).expect("the folder is created");
+    let file = project.join("src").join("app.ts");
+    std::fs::write(&file, "export {};\n").expect("the file is written");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store.workspaces().touch(&path).expect("saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let other = services::conversation_create(&store, &[], &path).expect("created");
+    for id in [&conversation.id, &other.id] {
+        services::ai_save_assistant(
+            &store,
+            &[],
+            &SaveAssistantRequest {
+                conversation_id: id.clone(),
+                content: "Pronto.".to_string(),
+                metadata: Some(json!({ "files": [{ "path": "src/app.ts" }] })),
+            },
+        )
+        .expect("the reply is saved");
+    }
+    // A reply stores its Markdown copy as an artifact too, so the file artifact is found by its path.
+    let file_artifact = |conversation_id: &str| -> String {
+        store
+            .artifacts()
+            .list(conversation_id)
+            .expect("listed")
+            .into_iter()
+            .find(|artifact| artifact.file_path.as_deref() == Some("src/app.ts"))
+            .expect("the reply has a file artifact")
+            .id
+    };
+    let mine = file_artifact(&conversation.id);
+    let theirs = file_artifact(&other.id);
+    let before = store
+        .artifacts()
+        .list(&conversation.id)
+        .expect("listed")
+        .len();
+
+    let request = |conversation_id: &str, artifact_id: &str| ArtifactDeleteRequest {
+        conversation_id: conversation_id.to_string(),
+        artifact_id: artifact_id.to_string(),
+    };
+    let elsewhere = services::artifact_delete(&store, &[], &request(&conversation.id, &theirs));
+    assert!(
+        matches!(elsewhere, Err(CommandError::UnknownArtifact)),
+        "another conversation's artifact is not found"
+    );
+    assert_eq!(file_artifact(&other.id), theirs, "it is kept");
+
+    let deleted = services::artifact_delete(&store, &[], &request(&conversation.id, &mine))
+        .expect("the artifact is deleted");
+    assert!(deleted.deleted);
+    assert_eq!(
+        store
+            .artifacts()
+            .list(&conversation.id)
+            .expect("listed")
+            .len(),
+        before - 1,
+        "only the one artifact is removed"
+    );
+    assert!(
+        store
+            .artifacts()
+            .list(&conversation.id)
+            .expect("listed")
+            .iter()
+            .all(|artifact| artifact.id != mine),
+        "the removed artifact is gone"
+    );
+    assert!(
+        file.exists(),
+        "the file the artifact names stays in the project folder"
+    );
+
+    let again = services::artifact_delete(&store, &[], &request(&conversation.id, &mine));
+    assert!(
+        matches!(again, Err(CommandError::UnknownArtifact)),
+        "a second delete finds nothing"
+    );
+    let missing = services::artifact_delete(
+        &store,
+        &[],
+        &request("3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", &theirs),
     );
     assert!(matches!(missing, Err(CommandError::UnknownConversation)));
 }

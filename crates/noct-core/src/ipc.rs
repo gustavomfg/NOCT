@@ -693,6 +693,58 @@ pub mod brain {
 }
 
 /// The reply of the suggestion commands.
+/// The requests of the artifact commands.
+pub mod artifacts {
+    use serde::de;
+    use serde::{Deserialize, Deserializer, Serialize};
+    use serde_json::{Map, Value};
+
+    use super::brain::uuid_field;
+
+    /// The request of `artifacts_delete`: an artifact of a conversation, both UUIDs. The object is strict, as
+    /// `artifacts.delete` checks it.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ArtifactDeleteRequest {
+        pub conversation_id: String,
+        pub artifact_id: String,
+    }
+
+    const DELETE_FIELDS: &[&str] = &["conversationId", "artifactId"];
+
+    impl<'de> Deserialize<'de> for ArtifactDeleteRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut artifact_id = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "artifactId" => {
+                        artifact_id = Some(uuid_field::<D::Error>("artifactId", value)?)
+                    }
+                    _ => return Err(de::Error::unknown_field(&key, DELETE_FIELDS)),
+                }
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                artifact_id: artifact_id.ok_or_else(|| de::Error::missing_field("artifactId"))?,
+            })
+        }
+    }
+
+    /// The reply of `artifacts_delete`: `{ deleted: true }`, as the TypeScript shell replies.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+    pub struct ArtifactDeletion {
+        pub deleted: bool,
+    }
+}
+
 /// The requests of the assistant commands.
 pub mod ai {
     use serde::de;

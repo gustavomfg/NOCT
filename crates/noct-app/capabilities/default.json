@@ -18,6 +18,7 @@
     "allow-conversations-delete",
     "allow-workspace-remove",
     "allow-brain-delete",
+    "allow-artifacts-delete",
     "allow-conversations-create",
     "allow-conversations-list",
     "allow-workspace-set-favorite"

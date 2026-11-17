@@ -26,6 +26,9 @@ pub enum CommandError {
     /// The request moves a suggestion to a status its lifecycle does not allow. Unlike the memory message, this one
     /// names the area, as the TypeScript message does, but not the two statuses.
     InvalidSuggestionTransition,
+    /// The request names an artifact that is not in the conversation, or was already removed. The message is the
+    /// TypeScript one.
+    UnknownArtifact,
 }
 
 impl CommandError {
@@ -40,6 +43,7 @@ impl CommandError {
             Self::InvalidTransition => "invalid-transition",
             Self::UnknownSuggestion => "unknown-suggestion",
             Self::InvalidSuggestionTransition => "invalid-suggestion-transition",
+            Self::UnknownArtifact => "unknown-artifact",
         }
     }
 
@@ -54,6 +58,7 @@ impl CommandError {
             Self::InvalidTransition => "Transição de memória inválida.",
             Self::UnknownSuggestion => "Sugestão não pertence a esta conversa.",
             Self::InvalidSuggestionTransition => "Transição de sugestão inválida.",
+            Self::UnknownArtifact => "Artefato não encontrado ou já removido.",
         }
     }
 }

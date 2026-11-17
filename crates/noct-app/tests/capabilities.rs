@@ -61,6 +61,7 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "conversations_delete",
             "workspace_remove",
             "brain_delete",
+            "artifacts_delete",
             "conversations_create",
             "conversations_list",
             "workspace_set_favorite"

@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 16 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `workspace_remove`, `brain_delete`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 17 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `workspace_remove`, `brain_delete`, `artifacts_delete`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 13 |
-| P4 | 1 |
+| P4 (ported) | 14 |
+| P4 | 0 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,9 +62,9 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `artifacts.delete`, the last delete,
-   each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff
-   and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.
+3. **P4, database writes.** Ported, except `changeControl.editHunk`, which is blocked: it needs the checkpoint content
+   reader, the change diff and `applyPatch` in Rust first. Each delete has its own commit tagged `[review]`. Each write
+   tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
    and the operation observer for the commands already ported.
 5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and
@@ -153,7 +153,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `brain:extract` | `window.nocturne.brain.extract` | `extract(conversationId: string, content: string): Promise<{ memories: BrainMemory[]; content: string; warning?: string }>` | zod: brainMemoryExtractSchema | `electron/ipc/registerMemoryIpc.ts:129` | database write | P4 (ported) | Rust command `brain_extract`: the reply is read the way `extractBrainMemoryCandidates` reads it, with the same marker, the same five-candidate cap and the same skipped items. The candidates are stored as one unit. A failed store is a reply with the TypeScript warning, not an error. No provider call. |
 | `artifacts:list` | `window.nocturne.artifacts.list` | `list(conversationId: string): Promise<Artifact[]>` | zod: idSchema | `electron/ipc/registerArtifactIpc.ts:22` | read | P3 |  |
 | `artifacts:page` | `window.nocturne.artifacts.page` | `page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Artifact>>` | zod: conversationPageSchema | `electron/ipc/registerArtifactIpc.ts:25` | read | P3 |  |
-| `artifacts:delete` | `window.nocturne.artifacts.delete` | `delete(conversationId: string, artifactId: string): Promise<{ deleted: true }>` | inline .parse | `electron/ipc/registerArtifactIpc.ts:29` | database write | P4 | Confirm whether it also removes files before the port. |
+| `artifacts:delete` | `window.nocturne.artifacts.delete` | `delete(conversationId: string, artifactId: string): Promise<{ deleted: true }>` | inline .parse | `electron/ipc/registerArtifactIpc.ts:29` | database write | P4 (ported) | Rust command `artifacts_delete`: the argument is `{ conversationId, artifactId }`, both UUIDs, strict. The conversation and its project are checked, and the artifact must belong to that conversation. Only the row is removed: the file the artifact names stays in the project folder, as in TypeScript. An artifact that is not there is `unknown-artifact` with the TypeScript message. Replies with `{ deleted: true }`. |
 | `suggestions:list` | `window.nocturne.suggestions.list` | `list(conversationId: string): Promise<Suggestion[]>` | zod: idSchema | `electron/ipc/registerSuggestionIpc.ts:25` | read | P3 |  |
 | `suggestions:page` | `window.nocturne.suggestions.page` | `page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Suggestion>>` | zod: conversationPageSchema | `electron/ipc/registerSuggestionIpc.ts:28` | read | P3 |  |
 | `suggestions:create` | `window.nocturne.suggestions.create` | `create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string; comparison?: ReviewComparison; warning?: string }>` | zod: suggestionExtractSchema | `electron/ipc/registerSuggestionIpc.ts:32` | database write | P4 (ported) | Rust command `suggestions_create`: the reply is read by `extract_suggestions`, which follows `extractSuggestions` and `suggestionInputSchema`, with the same marker rules, the same strict items and the same two warnings. A structured reply is reconciled with the history of its conversation (`reconcile`, with the renderer-provided content unable to resolve missing suggestions), and the comparison text is appended to the reply. A reply without a usable snapshot stores nothing. The request is the shared `ReplyRequest` of `brain_extract`. Not ported: the log line of the TypeScript shell. |

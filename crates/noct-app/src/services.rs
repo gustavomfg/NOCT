@@ -13,6 +13,7 @@ use noct_core::brain_memory::{
 use noct_core::contracts::{Conversation, Message, Role, Workspace, WorkspaceAvailability};
 use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::ai::SaveAssistantRequest;
+use noct_core::ipc::artifacts::{ArtifactDeleteRequest, ArtifactDeletion};
 use noct_core::ipc::brain::{
     BrainMemoryCreateRequest, BrainMemoryDeleteRequest, BrainMemoryExtraction,
     BrainMemoryUpdateRequest,
@@ -563,6 +564,31 @@ pub fn brain_delete(
         Ok(())
     } else {
         Err(CommandError::UnknownMemory)
+    }
+}
+
+/// Deletes an artifact of a conversation. The conversation and its project are checked first. The row is removed; a file the
+/// artifact names is left in the project folder, as in the TypeScript shell. An artifact that is not in the conversation, or
+/// was already removed, is `unknown-artifact`.
+pub fn artifact_delete(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &ArtifactDeleteRequest,
+) -> Result<ArtifactDeletion, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let removed = store
+        .artifacts()
+        .delete(&request.artifact_id, &request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?;
+    if removed {
+        Ok(ArtifactDeletion { deleted: true })
+    } else {
+        Err(CommandError::UnknownArtifact)
     }
 }
 

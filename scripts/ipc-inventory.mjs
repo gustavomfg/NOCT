@@ -99,7 +99,7 @@ const CLASS = {
   'brain.extract': ['database write', 'P4 (ported)', 'Rust command `brain_extract`: the reply is read the way `extractBrainMemoryCandidates` reads it, with the same marker, the same five-candidate cap and the same skipped items. The candidates are stored as one unit. A failed store is a reply with the TypeScript warning, not an error. No provider call.'],
   'artifacts.list': ['read', 'P3', ''],
   'artifacts.page': ['read', 'P3', ''],
-  'artifacts.delete': ['database write', 'P4', 'Confirm whether it also removes files before the port.'],
+  'artifacts.delete': ['database write', 'P4 (ported)', 'Rust command `artifacts_delete`: the argument is `{ conversationId, artifactId }`, both UUIDs, strict. The conversation and its project are checked, and the artifact must belong to that conversation. Only the row is removed: the file the artifact names stays in the project folder, as in TypeScript. An artifact that is not there is `unknown-artifact` with the TypeScript message. Replies with `{ deleted: true }`.'],
   'suggestions.list': ['read', 'P3', ''],
   'suggestions.page': ['read', 'P3', ''],
   'suggestions.create': ['database write', 'P4 (ported)', 'Rust command `suggestions_create`: the reply is read by `extract_suggestions`, which follows `extractSuggestions` and `suggestionInputSchema`, with the same marker rules, the same strict items and the same two warnings. A structured reply is reconciled with the history of its conversation (`reconcile`, with the renderer-provided content unable to resolve missing suggestions), and the comparison text is appended to the reply. A reply without a usable snapshot stores nothing. The request is the shared `ReplyRequest` of `brain_extract`. Not ported: the log line of the TypeScript shell.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`workspace_remove\`, \`brain_delete\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`workspace_remove\`, \`brain_delete\`, \`artifacts_delete\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,9 +327,9 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `artifacts.delete`, the last delete,')
-out.push('   each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff')
-out.push('   and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.')
+out.push('3. **P4, database writes.** Ported, except `changeControl.editHunk`, which is blocked: it needs the checkpoint content')
+out.push('   reader, the change diff and `applyPatch` in Rust first. Each delete has its own commit tagged `[review]`. Each write')
+out.push('   tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')
 out.push('   and the operation observer for the commands already ported.')
 out.push('5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and')

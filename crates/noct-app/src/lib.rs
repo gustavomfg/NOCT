@@ -34,6 +34,7 @@ pub fn command_handler<R: Runtime>()
         commands::conversations_delete,
         commands::workspace_remove,
         commands::brain_delete,
+        commands::artifacts_delete,
         commands::conversations_create,
         commands::conversations_list,
         commands::workspace_set_favorite,
