@@ -33,6 +33,7 @@ pub fn command_handler<R: Runtime>()
         commands::ai_save_assistant,
         commands::conversations_delete,
         commands::workspace_remove,
+        commands::brain_delete,
         commands::conversations_create,
         commands::conversations_list,
         commands::workspace_set_favorite,

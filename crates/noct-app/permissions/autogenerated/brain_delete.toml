@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-brain-delete"
+description = "Enables the brain_delete command without any pre-configured scope."
+commands.allow = ["brain_delete"]
+
+[[permission]]
+identifier = "deny-brain-delete"
+description = "Denies the brain_delete command without any pre-configured scope."
+commands.deny = ["brain_delete"]

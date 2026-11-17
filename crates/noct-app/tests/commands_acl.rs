@@ -933,6 +933,78 @@ fn workspace_remove_is_granted_and_checks_its_request() {
     );
 }
 
+/// The memory delete command is granted to the main window. It deletes a memory of a saved project, refuses an extra field
+/// and a memory that is not there, and the removed memory is no longer found.
+#[test]
+fn brain_delete_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("brain-delete-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+    let memory = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_create",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "kind": "decision",
+                "scope": "conversation",
+                "content": "Prefer small commits",
+            } }),
+        ),
+    ));
+    let memory_id = memory["id"].as_str().expect("an id").to_string();
+
+    let extra = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_delete",
+            json!({ "input": { "conversationId": conversation_id.clone(), "memoryId": memory_id.clone(), "force": true } }),
+        ),
+    ));
+    assert_eq!(extra["code"], "invalid-input");
+
+    get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_delete",
+            json!({ "input": { "conversationId": conversation_id.clone(), "memoryId": memory_id.clone() } }),
+        ),
+    )
+    .expect("the memory is deleted");
+
+    let gone = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_delete",
+            json!({ "input": { "conversationId": conversation_id, "memoryId": memory_id } }),
+        ),
+    ));
+    assert_eq!(gone["code"], "unknown-memory");
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

@@ -125,6 +125,22 @@ pub async fn conversations_delete(
     .await
 }
 
+/// Deletes a memory of the conversation's project. The argument is `{ conversationId, memoryId }`.
+#[tauri::command]
+pub async fn brain_delete(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<(), CommandError> {
+    let request: noct_core::ipc::brain::BrainMemoryDeleteRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::brain_delete(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
 /// Creates a candidate brain memory. The argument is `{ conversationId, kind, scope, content }`, checked by the request
 /// contract before the store is read. The store lock covers the conversation lookup, the project check and the write.
 #[tauri::command]

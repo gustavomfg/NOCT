@@ -673,3 +673,52 @@ fn a_refused_project_removal_leaves_the_project_in_place() {
         .expect("the count is read");
     assert_eq!(remaining, 1, "the project is still saved");
 }
+
+#[test]
+fn a_refused_memory_delete_leaves_the_memory_in_place() {
+    let directory = scratch("store-brain-delete-refused");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    let memory = store
+        .brain_memories()
+        .create(
+            "/work/project",
+            &noct_core::brain_memory::CreateBrainMemoryInput {
+                kind: noct_core::brain_memory::BrainMemoryKind::Decision,
+                scope: noct_core::brain_memory::BrainMemoryScope::Conversation,
+                conversation_id: Some(conversation.id.clone()),
+                content: "Prefer small commits".to_string(),
+                confidence: None,
+                source_type: None,
+                source_id: None,
+                status: None,
+            },
+        )
+        .expect("the memory is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_memory_delete BEFORE DELETE ON brain_memories
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .brain_memories()
+        .delete(&memory.id, "/work/project")
+        .expect_err("the refused delete is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert!(
+        store
+            .brain_memories()
+            .get(&memory.id, "/work/project")
+            .expect("the memory is read")
+            .is_some(),
+        "the memory is still there"
+    );
+}

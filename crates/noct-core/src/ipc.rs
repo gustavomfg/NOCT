@@ -576,6 +576,41 @@ pub mod brain {
         "status",
     ];
 
+    /// The request of `brain_delete`: a memory of the conversation's project. Both ids are UUIDs, and an unknown field is
+    /// refused, as `brainMemoryDeleteSchema` is strict.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct BrainMemoryDeleteRequest {
+        pub conversation_id: String,
+        pub memory_id: String,
+    }
+
+    const DELETE_FIELDS: &[&str] = &["conversationId", "memoryId"];
+
+    impl<'de> Deserialize<'de> for BrainMemoryDeleteRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut memory_id = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "memoryId" => memory_id = Some(uuid_field::<D::Error>("memoryId", value)?),
+                    _ => return Err(de::Error::unknown_field(&key, DELETE_FIELDS)),
+                }
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                memory_id: memory_id.ok_or_else(|| de::Error::missing_field("memoryId"))?,
+            })
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct BrainMemoryUpdateRequest {
         pub conversation_id: String,

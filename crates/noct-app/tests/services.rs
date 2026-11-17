@@ -16,6 +16,7 @@ use noct_core::contracts::Role;
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
 use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::ai::SaveAssistantRequest;
+use noct_core::ipc::brain::BrainMemoryDeleteRequest;
 use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
@@ -1703,4 +1704,84 @@ fn workspace_remove_refuses_an_empty_path_and_accepts_a_path_that_is_not_saved()
         services::workspace_remove(&store, "/not/saved").is_ok(),
         "like the TypeScript shell, a path that is not saved is not an error"
     );
+}
+
+#[test]
+fn brain_delete_removes_a_memory_of_the_project_once_and_never_one_of_another_project() {
+    let scratch = Scratch::new("brain-delete");
+    let first = scratch.path().join("first");
+    let second = scratch.path().join("second");
+    std::fs::create_dir(&first).expect("the folder is created");
+    std::fs::create_dir(&second).expect("the folder is created");
+    let first_path = first.to_string_lossy().into_owned();
+    let second_path = second.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store.workspaces().touch(&first_path).expect("saved");
+    store.workspaces().touch(&second_path).expect("saved");
+    let conversation = services::conversation_create(&store, &[], &first_path).expect("created");
+    let other = services::conversation_create(&store, &[], &second_path).expect("created");
+    let memory = services::brain_create(
+        &store,
+        &[],
+        &BrainMemoryCreateRequest {
+            conversation_id: conversation.id.clone(),
+            kind: BrainMemoryKind::Decision,
+            scope: BrainMemoryScope::Conversation,
+            content: "Prefer small commits".to_string(),
+        },
+    )
+    .expect("the memory is created");
+    let elsewhere = services::brain_create(
+        &store,
+        &[],
+        &BrainMemoryCreateRequest {
+            conversation_id: other.id.clone(),
+            kind: BrainMemoryKind::Decision,
+            scope: BrainMemoryScope::Conversation,
+            content: "Keep the lock file".to_string(),
+        },
+    )
+    .expect("the memory is created");
+
+    let request = |conversation_id: &str, memory_id: &str| BrainMemoryDeleteRequest {
+        conversation_id: conversation_id.to_string(),
+        memory_id: memory_id.to_string(),
+    };
+    let wrong_project =
+        services::brain_delete(&store, &[], &request(&conversation.id, &elsewhere.id));
+    assert!(
+        matches!(wrong_project, Err(CommandError::UnknownMemory)),
+        "another project's memory is not found"
+    );
+    assert!(
+        store
+            .brain_memories()
+            .get(&elsewhere.id, &second_path)
+            .expect("read")
+            .is_some(),
+        "the other project's memory is kept"
+    );
+
+    services::brain_delete(&store, &[], &request(&conversation.id, &memory.id))
+        .expect("the memory is deleted");
+    assert!(
+        store
+            .brain_memories()
+            .get(&memory.id, &first_path)
+            .expect("read")
+            .is_none()
+    );
+    let again = services::brain_delete(&store, &[], &request(&conversation.id, &memory.id));
+    assert!(
+        matches!(again, Err(CommandError::UnknownMemory)),
+        "a second delete finds nothing"
+    );
+
+    let missing = services::brain_delete(
+        &store,
+        &[],
+        &request("3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", &memory.id),
+    );
+    assert!(matches!(missing, Err(CommandError::UnknownConversation)));
 }

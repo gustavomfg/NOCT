@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (`ecebef1`), `workspace_remove` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec`, `e9064c4` and `ecebef1`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, deletes a conversation, or removes a project. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). The project removal has its own failed-write test (a refused `workspaces` delete). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (`ecebef1`), `workspace_remove` (`44f2fbf`), `brain_delete` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec`, `e9064c4`, `ecebef1` and `44f2fbf`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, deletes a conversation, removes a project, or deletes a memory. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). The project removal has its own failed-write test (a refused `workspaces` delete). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -308,6 +308,27 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   removed), `crates/noct-app/tests/commands_acl.rs` (one test: the grant, the argument shape, the missing conversation, and
   the listing after the delete), `crates/noct-db/tests/store.rs` (a refused delete leaves the conversation in place).
 - Tests after this change: 566 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with
+  `-D warnings` and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `brain_delete`
+
+- The argument is `{ conversationId, memoryId }`, both UUIDs, and the object is strict (`brainMemoryDeleteSchema`): an extra
+  field is `invalid-input`.
+- Order, as in the TypeScript handler: the conversation must exist (`unknown-conversation`), its project must be saved,
+  authorized, available and not blocked (`unknown-workspace`), and then the memory is deleted only where it belongs to that
+  project. A memory of another project is not found, and it is not touched.
+- The delete is the repository's `DELETE FROM brain_memories WHERE id AND workspace_id`. The history of the memory goes with it
+  by its foreign key, as in TypeScript.
+- Known deviation: a memory that is not there is `unknown-memory`, with the message `Memória não encontrada.`. TypeScript says
+  `Memória não encontrada ou já removida.`. The code is the same, and the interface does not show the message yet.
+- Not ported: the `logger.info` line of the TypeScript handler, as for the other commands.
+- Checks: `crates/noct-core/tests/ipc_brain_delete.rs` (the two ids, the strict object, the missing keys),
+  `crates/noct-app/tests/services.rs` (one test: a delete once, another project's memory kept, the second delete and the
+  missing conversation), `crates/noct-app/tests/commands_acl.rs` (one test), `crates/noct-db/tests/store.rs` (a refused delete
+  leaves the memory in place).
+- A mutation check: with the project filter removed from the repository's delete, the service test fails. The file was
+  restored and checked.
+- Tests after this change: 574 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with
   `-D warnings` and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P4 detail: `workspace_remove`

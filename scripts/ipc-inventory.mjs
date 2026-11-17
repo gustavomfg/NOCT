@@ -95,7 +95,7 @@ const CLASS = {
   'brain.history': ['read', 'P3', ''],
   'brain.create': ['database write', 'P4 (ported)', 'Rust command `brain_create`: the conversation must exist and its project must pass the same check as a conversation write. The content has the schema rules: trimmed, 1 to 8,000 UTF-16 units, and not a credential. Stored as a manual candidate, with its history entry in one transaction. No interface control yet.'],
   'brain.update': ['database write', 'P4 (ported)', 'Rust command `brain_update`: the same conversation and project checks as `brain_create`, and the memory must exist in that project. A status change must follow the lifecycle. The fields that are present are checked as in the schema, and at least one must be present. The credential rule of create applies to the content. No interface control yet.'],
-  'brain.delete': ['database write', 'P4', ''],
+  'brain.delete': ['database write', 'P4 (ported)', 'Rust command `brain_delete`: the argument is `{ conversationId, memoryId }`, both UUIDs, strict. The conversation and its project are checked as in a memory write, and the memory must belong to that project. A memory that is not there is `unknown-memory`, with the message of the code, where TypeScript says it was already removed.'],
   'brain.extract': ['database write', 'P4 (ported)', 'Rust command `brain_extract`: the reply is read the way `extractBrainMemoryCandidates` reads it, with the same marker, the same five-candidate cap and the same skipped items. The candidates are stored as one unit. A failed store is a reply with the TypeScript warning, not an error. No provider call.'],
   'artifacts.list': ['read', 'P3', ''],
   'artifacts.page': ['read', 'P3', ''],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`workspace_remove\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`workspace_remove\`, \`brain_delete\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,7 +327,7 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `brain.delete`, `artifacts.delete`, the deletes,')
+out.push('3. **P4, database writes.** Still to port: `artifacts.delete`, the last delete,')
 out.push('   each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff')
 out.push('   and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')

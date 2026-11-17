@@ -14,7 +14,8 @@ use noct_core::contracts::{Conversation, Message, Role, Workspace, WorkspaceAvai
 use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::ai::SaveAssistantRequest;
 use noct_core::ipc::brain::{
-    BrainMemoryCreateRequest, BrainMemoryExtraction, BrainMemoryUpdateRequest,
+    BrainMemoryCreateRequest, BrainMemoryDeleteRequest, BrainMemoryExtraction,
+    BrainMemoryUpdateRequest,
 };
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
@@ -539,6 +540,30 @@ pub fn workspace_remove(store: &Store, workspace: &str) -> Result<(), CommandErr
         .workspaces()
         .remove(workspace)
         .map_err(|_| CommandError::Persistence)
+}
+
+/// Deletes a memory of the conversation's project. The conversation and its project are checked as in a memory write. A
+/// memory that is not in that project, or was already removed, is `unknown-memory`, as the TypeScript shell refuses it.
+pub fn brain_delete(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryDeleteRequest,
+) -> Result<(), CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let removed = store
+        .brain_memories()
+        .delete(&request.memory_id, &conversation.workspace)
+        .map_err(|_| CommandError::Persistence)?;
+    if removed {
+        Ok(())
+    } else {
+        Err(CommandError::UnknownMemory)
+    }
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

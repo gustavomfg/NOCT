@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 15 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `workspace_remove`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 16 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `workspace_remove`, `brain_delete`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 12 |
-| P4 | 2 |
+| P4 (ported) | 13 |
+| P4 | 1 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,7 +62,7 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `brain.delete`, `artifacts.delete`, the deletes,
+3. **P4, database writes.** Still to port: `artifacts.delete`, the last delete,
    each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff
    and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
@@ -149,7 +149,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `brain:history` | `window.nocturne.brain.history` | `history(conversationId: string, memoryId: string): Promise<BrainMemoryHistoryEntry[]>` | zod: brainMemoryDeleteSchema | `electron/ipc/registerMemoryIpc.ts:69` | read | P3 |  |
 | `brain:create` | `window.nocturne.brain.create` | `create(conversationId: string, value: { kind: BrainMemoryKind; scope: BrainMemoryScope; content: string }): Promise<BrainMemory>` | zod: brainMemoryCreateSchema | `electron/ipc/registerMemoryIpc.ts:75` | database write | P4 (ported) | Rust command `brain_create`: the conversation must exist and its project must pass the same check as a conversation write. The content has the schema rules: trimmed, 1 to 8,000 UTF-16 units, and not a credential. Stored as a manual candidate, with its history entry in one transaction. No interface control yet. |
 | `brain:update` | `window.nocturne.brain.update` | `update(conversationId: string, memoryId: string, value: Omit<UpdateBrainMemoryInput, 'conversationId'>): Promise<BrainMemory>` | zod: brainMemoryUpdateSchema | `electron/ipc/registerMemoryIpc.ts:95` | database write | P4 (ported) | Rust command `brain_update`: the same conversation and project checks as `brain_create`, and the memory must exist in that project. A status change must follow the lifecycle. The fields that are present are checked as in the schema, and at least one must be present. The credential rule of create applies to the content. No interface control yet. |
-| `brain:delete` | `window.nocturne.brain.delete` | `delete(conversationId: string, memoryId: string): Promise<{ deleted: true }>` | zod: brainMemoryDeleteSchema | `electron/ipc/registerMemoryIpc.ts:116` | database write | P4 |  |
+| `brain:delete` | `window.nocturne.brain.delete` | `delete(conversationId: string, memoryId: string): Promise<{ deleted: true }>` | zod: brainMemoryDeleteSchema | `electron/ipc/registerMemoryIpc.ts:116` | database write | P4 (ported) | Rust command `brain_delete`: the argument is `{ conversationId, memoryId }`, both UUIDs, strict. The conversation and its project are checked as in a memory write, and the memory must belong to that project. A memory that is not there is `unknown-memory`, with the message of the code, where TypeScript says it was already removed. |
 | `brain:extract` | `window.nocturne.brain.extract` | `extract(conversationId: string, content: string): Promise<{ memories: BrainMemory[]; content: string; warning?: string }>` | zod: brainMemoryExtractSchema | `electron/ipc/registerMemoryIpc.ts:129` | database write | P4 (ported) | Rust command `brain_extract`: the reply is read the way `extractBrainMemoryCandidates` reads it, with the same marker, the same five-candidate cap and the same skipped items. The candidates are stored as one unit. A failed store is a reply with the TypeScript warning, not an error. No provider call. |
 | `artifacts:list` | `window.nocturne.artifacts.list` | `list(conversationId: string): Promise<Artifact[]>` | zod: idSchema | `electron/ipc/registerArtifactIpc.ts:22` | read | P3 |  |
 | `artifacts:page` | `window.nocturne.artifacts.page` | `page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Artifact>>` | zod: conversationPageSchema | `electron/ipc/registerArtifactIpc.ts:25` | read | P3 |  |
