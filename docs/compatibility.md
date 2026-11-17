@@ -32,26 +32,37 @@ Other environments refuse restoration with `UNSUPPORTED`; checkpoint capture,
 diff inspection and acceptance remain available. Native worker compilation also
 requires the platform's C++17 toolchain; it does not change the Electron SQLite ABI.
 
+The Rust shell on `migration/rust` has the Linux rollback backend only. On macOS and
+Windows it refuses restoration with `UNSUPPORTED`. See
+[Rust rollback backends](rust-native-rollback-backends.md).
+
 ## Minimum platform versions
 
-Open decision 4 of [ADR 0001](adr/0001-rust-migration.md#open-decisions). The values come from
-the Tauri 2 documentation read on 2026-11-17: the prerequisites page
-(`v2.tauri.app/start/prerequisites`), the configuration reference
-(`v2.tauri.app/reference/config`) and the Windows installer page
-(`v2.tauri.app/distribute/windows-installer`). **Unconfirmed** marks a value that those
-pages do not state.
+Open decision 4 of [ADR 0001](adr/0001-rust-migration.md#open-decisions) is partly resolved:
+the values below are proposals, and the owner has not accepted them. Tauri documents what it
+requires and what its configuration defaults to. It does not set NOCT's support floor, so each
+row shows the Tauri statement next to the NOCT proposal.
 
-| Platform | Floor | What the Tauri documentation states | Status |
+Sources, read on 2026-11-17:
+
+- [Prerequisites](https://v2.tauri.app/start/prerequisites/), "Last updated: Aug 20, 2026";
+- [Configuration reference](https://v2.tauri.app/reference/config/), "Last updated: Jul 23, 2023";
+- [Windows installer](https://v2.tauri.app/distribute/windows-installer/), "Last updated: Nov 5, 2026".
+
+The pages were read through a fetch tool, not a browser. Text in quotation marks is copied from the
+fetched page. Other text is a paraphrase.
+
+| Platform | Proposed floor | What the Tauri documentation states | Status |
 | --- | --- | --- | --- |
-| Windows | Windows 10 and Windows 11, x64 (the official target above) | The prerequisites page lists "Windows 7 and later". The installer page says the MSI does not work on Windows 7 by default. | The official target stands. The two Tauri statements about Windows 7 conflict; NOCT does not target Windows 7. |
-| WebView2 (Windows) | Runtime required; no version floor set | Required for development on Windows. Preinstalled on Windows 10 from version 1803 and on Windows 11. `minimumWebview2Version` defaults to `null`. The installer default is `downloadBootstrapper`. | Requirement confirmed. The 1803 figure describes preinstallation, not a support floor, so NOCT sets no WebView2 version. |
-| macOS | Proposed: macOS 10.15 (Catalina) | The prerequisites page says "macOS Catalina (10.15) and later". The bundle default `minimumSystemVersion` is `10.13`. | The 10.15 floor is stated, but the bundler default is lower and the pages do not reconcile them. NOCT must set `minimumSystemVersion` explicitly in phase 8. The current Electron build declares no macOS floor in `electron-builder.json5` (**unconfirmed**). WKWebView version: **unconfirmed**. |
-| Linux | WebKitGTK 4.1, the `webkit2gtk-4.1` package family; version **unconfirmed** | The prerequisites page names the packages for apt, pacman, dnf, emerge and apk, and states no version. | The package family is confirmed. The WebKitGTK version floor is **unconfirmed**. The spike ran on WebKitGTK 2.54 (ADR 0001), which is a measurement, not a floor. Set the floor from the distributions the Linux artifacts target, in phase 8. |
-| Rust toolchain | `1.97.1`, pinned in `rust-toolchain.toml` | The Tauri pages state no Rust version. | A project pin (commit `751894e`), not a Tauri requirement. |
+| Windows | Windows 10 and Windows 11, x64 (the official target above) | The prerequisites page lists "Windows 7 and later" under System Dependencies. The installer page says "By default, the Microsoft Installer (`.msi`) does not work on Windows 7" and has a section "Supporting Windows 7". Neither page states a minimum for a shipped application. | Project decision. The two statements are about different things: the prerequisites page covers the development toolchain, and the installer note covers MSI bootstrapping on Windows 7. NOCT does not target Windows 7. Whether the floor needs a build number is open. |
+| WebView2 (Windows) | Runtime required. No version floor set. | The Windows tip says "WebView 2 is already installed on Windows 10 (from version 1803 onward) and later versions of Windows." The `bundle > windows` default block sets `minimumWebview2Version` to `null`, and `webviewInstallMode` defaults to a silent `downloadBootstrapper`. The installer page says "Your application WILL NOT work if the user does not have the runtime installed." | Confirmed: the runtime is required. The 1803 figure describes preinstallation, not a support floor. NOCT sets no WebView2 version. |
+| macOS | Proposed: macOS 10.15 (Catalina) | The prerequisites page lists "macOS Catalina (10.15) and later" under System Dependencies. The configuration reference defines `minimumSystemVersion` as "A version string indicating the minimum macOS X version that the bundled application supports. Defaults to `10.13`." | The two values differ. 10.15 is the development prerequisite, and 10.13 is the bundler default for the application. Set `bundle.macOS.minimumSystemVersion` explicitly in phase 8, to the value the owner accepts. `electron-builder.json5` sets no macOS minimum either. WKWebView version: not stated by Tauri, not checked. |
+| Linux | WebKitGTK 4.1, the `webkit2gtk-4.1` package family. No version floor set. | The prerequisites page gives 4.1 development packages per distribution, for example `libwebkit2gtk-4.1-dev` (Debian), `webkit2gtk-4.1` (Arch), `webkit2gtk4.1-devel` (Fedora) and `webkit2gtk-4.1-dev` (Alpine). It states no WebKitGTK version. The openSUSE tab names `webkit2gtk3-devel`. | The package family is confirmed. The version floor is **not stated by Tauri**, and this document does not set one. The spike ran on WebKitGTK 2.54.2 (ADR 0001). That is a measurement, not a floor. Set the floor from the distributions the Linux artifacts target, in phase 8. Whether `webkit2gtk3-devel` on openSUSE provides the 4.1 API was not checked. |
+| Rust toolchain | 1.97.1 | The Tauri pages state no Rust version. | A project pin in `rust-toolchain.toml`, set by commit `751894e`. Not a Tauri requirement. |
 
-Notes: the configuration reference was read in part. The `macOS` and `iOS` field descriptions
-reached this review only as summaries, so they are not quoted here. The default values in the
-table were read verbatim.
+Not checked: any Tauri statement on the WKWebView version, and the iOS fields of the configuration
+reference. The configuration page was read in full except for one span, which was read only through a
+summary. The fields used above were read verbatim from other parts of the page.
 
 ## AI compatibility
 
