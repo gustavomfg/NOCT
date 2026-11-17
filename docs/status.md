@@ -11,8 +11,8 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 
 | Package | Commits | Pushed | CI | Not verified |
 | --- | --- | --- | --- | --- |
-| P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate on `0dafe7c`: success. Shell on `0dafe7c`: running when this was written; see the report. | Reverse gate on CI for `0dafe7c` (row gate running). |
-| P2: IPC inventory | `3f2a9ce` | not yet | not run | Nothing run on CI yet. |
+| P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate on `0dafe7c`: success. Shell on `0dafe7c`: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
+| P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Covered by the CI of `f1f5b5f`: Rust shell validation success on Ubuntu, Windows and macOS; row gate success. | Real window. |
 | P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
 | P4: database writes | first cut: `workspace_set_favorite` (its own commit) and the theme button saving through `settings_set` (see `git log`). | not yet | not run | No control sets a favorite yet. Only the theme is saved from the page. A failed write is not forced in a test. |
 | P5: observability | first cut: the commands with a catalog name are measured and their warnings go through the diagnostic gate. This commit. | not yet | not run | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
