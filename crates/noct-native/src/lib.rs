@@ -7,16 +7,16 @@
 
 pub mod protocol;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod operation;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod platform;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use operation::{Operation, run};
 
 /// The answer of a system with no backend: every line gets `UNSUPPORTED` until `CLOSE`.
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn run() {
     use std::io::{BufRead, Write};
 

@@ -393,3 +393,22 @@ fn a_command_before_init_is_revoked_and_an_unknown_one_is_refused_after_it() {
     let mut fixture = Fixture::initialized("unknown");
     assert_eq!(code(fixture.command(&[b"BOGUS".as_slice()])), "CONFLICT");
 }
+
+/// APFS commonly resolves ASCII case aliases of a protected name to the same entry, so the C++ worker refuses them on
+/// Apple systems, and the port does the same. Linux keeps the exact comparison.
+#[cfg(target_os = "macos")]
+#[test]
+fn case_aliases_of_protected_names_are_refused_on_apfs() {
+    let mut fixture = Fixture::initialized("aliases");
+    for relative in [
+        ".GIT/config",
+        ".NocTurne/state",
+        "parent/.NOCTURNE-ROLLBACK-x",
+    ] {
+        assert_eq!(
+            code(fixture.open(relative)),
+            "CONFLICT",
+            "{relative:?} is refused on APFS"
+        );
+    }
+}
