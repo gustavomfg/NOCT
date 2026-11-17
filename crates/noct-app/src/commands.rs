@@ -4,7 +4,9 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::Conversation;
+use noct_core::ipc::brain::BrainMemoryCreateRequest;
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
@@ -95,6 +97,23 @@ pub async fn conversations_create(
     blocking(move || {
         let guard = lock(&store)?;
         services::conversation_create(&guard, &default_blocked_roots(), &workspace)
+    })
+    .await
+}
+
+/// Creates a candidate brain memory. The argument is `{ conversationId, kind, scope, content }`, checked by the request
+/// contract before the store is read. The store lock covers the conversation lookup, the project check and the write.
+#[tauri::command]
+pub async fn brain_create(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<BrainMemory, CommandError> {
+    let request: BrainMemoryCreateRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::brain_create(&guard, &default_blocked_roots(), &request)
     })
     .await
 }

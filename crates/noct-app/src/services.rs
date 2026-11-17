@@ -4,7 +4,12 @@
 
 use std::path::PathBuf;
 
+use noct_core::brain_memory::{
+    BrainMemory, BrainMemoryScope, BrainMemorySource, CreateBrainMemoryInput,
+    InitialBrainMemoryStatus,
+};
 use noct_core::contracts::{Conversation, Workspace, WorkspaceAvailability};
+use noct_core::ipc::brain::BrainMemoryCreateRequest;
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
@@ -156,6 +161,27 @@ pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec
         .collect()
 }
 
+/// Checks that a saved project may take a write: its folder is available and outside the blocked roots, and its row is
+/// authorized. Each refusal is `UnknownWorkspace`, and nothing is written.
+fn authorized_workspace(
+    store: &Store,
+    blocked: &[PathBuf],
+    workspace: &str,
+) -> Result<(), CommandError> {
+    let inspection = workspace_scope::inspect(workspace, blocked);
+    if !matches!(inspection.availability, WorkspaceAvailability::Available) {
+        return Err(CommandError::UnknownWorkspace);
+    }
+    let authorized = workspace_rows(store)?
+        .iter()
+        .any(|row| row.path == workspace && row.authorized);
+    if authorized {
+        Ok(())
+    } else {
+        Err(CommandError::UnknownWorkspace)
+    }
+}
+
 /// Creates a conversation in a project that is saved, authorized and available. The folder must pass the scope check
 /// with the blocked roots, and the project must be saved and authorized. Either refusal is `UnknownWorkspace`, and
 /// nothing is written. The write opens the project and creates the conversation in one transaction.
@@ -170,16 +196,7 @@ pub fn conversation_create(
     if workspace.is_empty() {
         return Err(CommandError::InvalidInput);
     }
-    let inspection = workspace_scope::inspect(workspace, blocked);
-    if !matches!(inspection.availability, WorkspaceAvailability::Available) {
-        return Err(CommandError::UnknownWorkspace);
-    }
-    let authorized = workspace_rows(store)?
-        .iter()
-        .any(|row| row.path == workspace && row.authorized);
-    if !authorized {
-        return Err(CommandError::UnknownWorkspace);
-    }
+    authorized_workspace(store, blocked, workspace)?;
     let row = store
         .create_conversation(workspace)
         .map_err(|_| CommandError::Persistence)?;
@@ -190,6 +207,40 @@ pub fn conversation_create(
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
+}
+
+/// Creates a candidate brain memory in the project of a conversation, as the TypeScript shell stores a manual memory. The
+/// conversation must exist, and its project must pass the same check as a conversation write. A conversation-scoped
+/// memory keeps its conversation; a workspace-scoped one keeps none. The repository writes the memory and its history
+/// entry in one transaction.
+pub fn brain_create(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryCreateRequest,
+) -> Result<BrainMemory, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let input = CreateBrainMemoryInput {
+        conversation_id: match request.scope {
+            BrainMemoryScope::Conversation => Some(request.conversation_id.clone()),
+            BrainMemoryScope::Workspace => None,
+        },
+        kind: request.kind,
+        scope: request.scope,
+        content: request.content.clone(),
+        confidence: None,
+        source_type: Some(BrainMemorySource::Manual),
+        source_id: None,
+        status: Some(InitialBrainMemoryStatus::Candidate),
+    };
+    store
+        .brain_memories()
+        .create(&conversation.workspace, &input)
+        .map_err(|_| CommandError::Persistence)
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

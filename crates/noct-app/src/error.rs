@@ -14,6 +14,8 @@ pub enum CommandError {
     Internal,
     /// The request names a project that is not saved. The message is the one the TypeScript shell gives for it.
     UnknownWorkspace,
+    /// The request names a conversation that does not exist. The message is the one the TypeScript shell gives.
+    UnknownConversation,
 }
 
 impl CommandError {
@@ -23,6 +25,7 @@ impl CommandError {
             Self::Persistence => "persistence",
             Self::Internal => "internal",
             Self::UnknownWorkspace => "unknown-workspace",
+            Self::UnknownConversation => "unknown-conversation",
         }
     }
 
@@ -32,6 +35,7 @@ impl CommandError {
             Self::Persistence => "Não foi possível acessar os dados locais.",
             Self::Internal => "Falha interna do NOCT.",
             Self::UnknownWorkspace => "Pasta do projeto não encontrada.",
+            Self::UnknownConversation => "Conversa não encontrada.",
         }
     }
 }

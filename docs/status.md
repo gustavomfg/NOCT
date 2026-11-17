@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (this change) | `f1f5b5f` | Same run: success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in one test (the conversation insert). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (this change) | `f1f5b5f` | `93af490`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation or a memory. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in two tests (the conversation insert, the memory's history entry). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -97,6 +97,24 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   argument is a bare string, and its output is the existing `Conversation` contract.
 - Local validation: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace`
   (480 passed, 0 failed, 19 ignored; this change adds four tests), `node scripts/generate-ipc-samples.mjs --check`.
+
+### P4 detail: `brain_create`
+
+- The request is `{ conversationId, kind, scope, content }`, checked by the request contract before the store is read. It
+  follows `brainMemoryCreateSchema`: `conversationId` is a UUID; `kind` and `scope` are the enumerated values; `content` is
+  trimmed, has from 1 to 8,000 UTF-16 units, and is not a credential (`is_safe_brain_memory_content`). An unknown or missing
+  field, or a wrong type, is `invalid-input`. The refusal of a credential is `invalid-input` too, where the TypeScript parse
+  gives its own message.
+- The conversation must exist, otherwise `unknown-conversation` with the TypeScript message `Conversa não encontrada.`. Its
+  project must pass the same check as a conversation write (`authorized_workspace`, shared with `conversations_create`).
+  A refusal there is `unknown-workspace`. Nothing is written in any refusal.
+- The memory is a manual candidate. A conversation-scoped memory keeps its conversation; a workspace-scoped one keeps none.
+  The repository writes the memory and its history entry in one transaction. A failed history write removes the memory too
+  (`a_failed_brain_history_write_leaves_no_memory_behind`).
+- Not ported: the log line the TypeScript shell writes for each memory. The interface does not call the command yet.
+- Checks: `crates/noct-core/tests/ipc_brain_create.rs` (eight tests of the request), `crates/noct-app/tests/services.rs` (two
+  tests), `crates/noct-app/tests/commands_acl.rs` (one test), `crates/noct-db/tests/store.rs` (the failed history write).
+- Tests after this change: 492 passed, 0 failed, 19 ignored in the workspace.
 
 ### P5 detail (first cut)
 

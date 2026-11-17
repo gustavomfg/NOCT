@@ -298,3 +298,45 @@ fn a_refused_conversation_insert_leaves_the_workspace_unsaved() {
         "the workspace opened by the same call is rolled back"
     );
 }
+
+#[test]
+fn a_failed_brain_history_write_leaves_no_memory_behind() {
+    // The memory and its first history entry are written in one transaction. The trigger refuses the history
+    // entry, so the memory must be rolled back as well.
+    let directory = scratch("store-brain-create-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_brain_history BEFORE INSERT ON brain_memory_history
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let input = noct_core::brain_memory::CreateBrainMemoryInput {
+        conversation_id: None,
+        kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+        scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+        content: "A note".to_string(),
+        confidence: None,
+        source_type: None,
+        source_id: None,
+        status: None,
+    };
+
+    assert!(
+        store
+            .brain_memories()
+            .create("/work/project", &input)
+            .is_err(),
+        "the refused history write is an error"
+    );
+
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM brain_memories", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "the memory written by the same call is rolled back"
+    );
+}

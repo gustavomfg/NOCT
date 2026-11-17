@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-brain-create"
+description = "Enables the brain_create command without any pre-configured scope."
+commands.allow = ["brain_create"]
+
+[[permission]]
+identifier = "deny-brain-create"
+description = "Denies the brain_create command without any pre-configured scope."
+commands.deny = ["brain_create"]

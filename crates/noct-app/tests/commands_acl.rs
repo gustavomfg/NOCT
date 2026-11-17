@@ -295,6 +295,78 @@ fn conversations_create_is_granted_and_checks_its_request() {
     assert_eq!(conversations(), 1, "the refused requests write nothing");
 }
 
+/// The brain command is granted to the main window. It refuses a request outside the contract before the store is read,
+/// with the code of the contract; a conversation that does not exist has its own code; a saved one takes a memory.
+#[test]
+fn brain_create_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("brain-create-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    let conversation = ok_json(get_ipc_response(&main, {
+        app.state::<Persistence>()
+            .store
+            .lock()
+            .expect("the store is not poisoned")
+            .workspaces()
+            .touch(&saved)
+            .expect("the project is saved");
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        )
+    }));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+
+    let memory = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_create",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "kind": "constraint",
+                "scope": "conversation",
+                "content": "  Keep the review read-only  ",
+            } }),
+        ),
+    ));
+    assert_eq!(memory["content"], "Keep the review read-only");
+    assert_eq!(memory["status"], "candidate");
+
+    let unknown = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_create",
+            json!({ "input": {
+                "conversationId": "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d",
+                "kind": "fact",
+                "scope": "workspace",
+                "content": "A note",
+            } }),
+        ),
+    ));
+    assert_eq!(unknown["code"], "unknown-conversation");
+    assert_eq!(unknown["message"], "Conversa não encontrada.");
+
+    for input in [
+        json!({ "input": { "conversationId": conversation_id.clone(), "kind": "opinion", "scope": "workspace", "content": "A note" } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "kind": "fact", "scope": "workspace", "content": "token=abcdefghijklmnop" } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "kind": "fact", "scope": "workspace", "content": "A note", "theme": "dark" } }),
+        json!({ "input": "not an object" }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "brain_create", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

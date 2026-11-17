@@ -442,3 +442,87 @@ pub mod workspaces {
         Ok(path)
     }
 }
+
+/// The requests of the brain memory commands.
+pub mod brain {
+    use serde::de;
+    use serde::{Deserialize, Deserializer};
+    use serde_json::{Map, Value};
+
+    use crate::brain_memory::{BrainMemoryKind, BrainMemoryScope, is_safe_brain_memory_content};
+    use crate::limits::persistence::BRAIN_MEMORY_CHARACTERS;
+    use crate::text::{js_trim, utf16_len};
+    use crate::validation::uuid_text;
+
+    const CREATE_FIELDS: &[&str] = &["conversationId", "kind", "scope", "content"];
+
+    /// A request to create a brain memory in the project of a conversation. The fields are those of
+    /// `brainMemoryCreateSchema`: `conversationId` is a UUID, `kind` and `scope` are the enumerated values, and
+    /// `content` is trimmed, has from 1 to `BRAIN_MEMORY_CHARACTERS` UTF-16 units, and does not look like a credential.
+    /// An unknown field, a missing field or a wrong type is refused before the store is read.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct BrainMemoryCreateRequest {
+        pub conversation_id: String,
+        pub kind: BrainMemoryKind,
+        pub scope: BrainMemoryScope,
+        pub content: String,
+    }
+
+    impl<'de> Deserialize<'de> for BrainMemoryCreateRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut kind = None;
+            let mut scope = None;
+            let mut content = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "kind" => kind = Some(enum_field::<BrainMemoryKind, D::Error>(value)?),
+                    "scope" => scope = Some(enum_field::<BrainMemoryScope, D::Error>(value)?),
+                    "content" => content = Some(content_field::<D::Error>(value)?),
+                    _ => return Err(de::Error::unknown_field(&key, CREATE_FIELDS)),
+                }
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                kind: kind.ok_or_else(|| de::Error::missing_field("kind"))?,
+                scope: scope.ok_or_else(|| de::Error::missing_field("scope"))?,
+                content: content.ok_or_else(|| de::Error::missing_field("content"))?,
+            })
+        }
+    }
+
+    fn uuid_field<E: de::Error>(field: &str, value: Value) -> Result<String, E> {
+        let Value::String(text) = value else {
+            return Err(E::custom(format!("{field} must be a UUID")));
+        };
+        uuid_text(field, &text).map_err(E::custom)
+    }
+
+    fn enum_field<T: de::DeserializeOwned, E: de::Error>(value: Value) -> Result<T, E> {
+        serde_json::from_value(value).map_err(E::custom)
+    }
+
+    /// The content is trimmed first, as the schema does, and then checked for length and for credentials.
+    fn content_field<E: de::Error>(value: Value) -> Result<String, E> {
+        let Value::String(text) = value else {
+            return Err(E::custom("content must be a string"));
+        };
+        let trimmed = js_trim(&text);
+        let units = utf16_len(trimmed) as u64;
+        if units == 0 || units > BRAIN_MEMORY_CHARACTERS {
+            return Err(E::custom("content has from 1 to 8000 characters"));
+        }
+        if !is_safe_brain_memory_content(trimmed) {
+            return Err(E::custom("content looks like a credential"));
+        }
+        Ok(trimmed.to_string())
+    }
+}

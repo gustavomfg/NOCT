@@ -8,6 +8,7 @@
     "allow-settings-get",
     "allow-settings-set",
     "allow-workspaces-list",
+    "allow-brain-create",
     "allow-conversations-create",
     "allow-conversations-list",
     "allow-workspace-set-favorite"

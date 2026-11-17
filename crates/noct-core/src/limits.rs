@@ -20,6 +20,9 @@ pub mod persistence {
     pub const DOCUMENT_CHARACTERS: u64 = 2_000_000;
     pub const DOCUMENT_NAME_CHARACTERS: u64 = 200;
     pub const METADATA_CHARACTERS: u64 = 500_000;
+    /// The longest brain memory content, in UTF-16 units after trimming. `safeBrainMemoryContent` in
+    /// `shared/ipc/schemas.ts` uses the same number.
+    pub const BRAIN_MEMORY_CHARACTERS: u64 = 8_000;
 }
 
 /// Byte limits for files read from an authorized workspace.

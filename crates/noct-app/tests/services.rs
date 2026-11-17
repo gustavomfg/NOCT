@@ -7,7 +7,11 @@ use common::Scratch;
 use noct_app::bootstrap;
 use noct_app::error::CommandError;
 use noct_app::services;
+use noct_core::brain_memory::{
+    BrainMemoryKind, BrainMemoryScope, BrainMemorySource, BrainMemoryStatus,
+};
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
+use noct_core::ipc::brain::BrainMemoryCreateRequest;
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
 use noct_core::ipc::workspaces::{WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePageRequest};
@@ -626,4 +630,97 @@ fn a_conversation_is_refused_unless_its_folder_is_saved_authorized_available_and
         ),
         "an empty path is invalid input"
     );
+}
+
+#[test]
+fn a_brain_memory_is_a_manual_candidate_in_the_project_of_its_conversation() {
+    let scratch = Scratch::new("brain-create");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+
+    let request = BrainMemoryCreateRequest {
+        conversation_id: conversation.id.clone(),
+        kind: BrainMemoryKind::Decision,
+        scope: BrainMemoryScope::Conversation,
+        content: "Prefer small commits".to_string(),
+    };
+    let memory = services::brain_create(&store, &[], &request).expect("the memory is created");
+
+    assert_eq!(memory.workspace_id, path);
+    assert_eq!(
+        memory.conversation_id.as_deref(),
+        Some(conversation.id.as_str())
+    );
+    assert_eq!(memory.status, BrainMemoryStatus::Candidate);
+    assert_eq!(memory.source_type, BrainMemorySource::Manual);
+    assert_eq!(memory.content, "Prefer small commits");
+
+    let workspace_wide = BrainMemoryCreateRequest {
+        scope: BrainMemoryScope::Workspace,
+        content: "The project uses Rust 1.97".to_string(),
+        ..request
+    };
+    let shared = services::brain_create(&store, &[], &workspace_wide).expect("created");
+    assert_eq!(
+        shared.conversation_id, None,
+        "a workspace memory keeps no conversation"
+    );
+}
+
+#[test]
+fn a_brain_memory_is_refused_without_a_conversation_or_an_authorized_project() {
+    let scratch = Scratch::new("brain-refused");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let memories = || -> i64 {
+        store
+            .connection()
+            .query_row("SELECT COUNT(*) FROM brain_memories", [], |row| row.get(0))
+            .expect("the count is read")
+    };
+    let request = |conversation_id: &str| BrainMemoryCreateRequest {
+        conversation_id: conversation_id.to_string(),
+        kind: BrainMemoryKind::Fact,
+        scope: BrainMemoryScope::Workspace,
+        content: "A note".to_string(),
+    };
+
+    assert!(
+        matches!(
+            services::brain_create(
+                &store,
+                &[],
+                &request("3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d")
+            ),
+            Err(CommandError::UnknownConversation)
+        ),
+        "a conversation that does not exist"
+    );
+    assert_eq!(memories(), 0);
+
+    std::fs::remove_dir(&project).expect("the folder is removed");
+    assert!(
+        matches!(
+            services::brain_create(&store, &[], &request(&conversation.id)),
+            Err(CommandError::UnknownWorkspace)
+        ),
+        "a conversation whose project is no longer available"
+    );
+    assert_eq!(memories(), 0, "the refused request writes nothing");
 }
