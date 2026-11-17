@@ -53,3 +53,17 @@ These packages leave the repository in phase 9 of [ADR 0001](adr/0001-rust-migra
 
 - **A (proposed):** keep this record. Update the ESLint and typescript-eslint chain in a separate commit after the TypeScript gates pass. Decide on `electron-builder` with the packaging decision in phase 8.
 - **B:** add an audit step that fails only on production findings, for example `npm audit --omit=dev --audit-level=high`, in the CI workflows. This changes a workflow, so it needs approval first.
+
+## Verification on 2026-11-17
+
+Re-run at `de7dba4`, the code head of `migration/rust`. Each command is read-only: nothing was installed or changed.
+
+| Command | Result |
+| --- | --- |
+| `npm audit --omit=dev` | `found 0 vulnerabilities`, exit 0 |
+| `npm ls minimatch --omit=dev` | An empty tree: the production tree has no `minimatch` |
+| `npm audit --json` (full tree) | 13 moderate, 0 high, 0 critical. The only advisory is GHSA-g3hv-75wg-m249 |
+| `npm audit fix --dry-run` | The output ends with "Will install electron-builder@25.1.0, which is a breaking change". Nothing was applied |
+
+The Rust build does not run npm, so no npm finding is on its path. The `beforeBuildCommand` in
+`crates/noct-app/tauri.conf.json` runs `trunk`, and no `package.json` exists under `crates/`.
