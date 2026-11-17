@@ -50,7 +50,7 @@ repositório mostra, quando isso difere da ADR ou precisa de uma nota. A seção
 | 3. Rollback nativo | Backends de macOS (clone APFS) e Windows | Parcialmente feita, só Linux | `crates/noct-native/src/linux.rs` é o único backend. O worker Rust responde `UNSUPPORTED` no macOS e no Windows. O que falta está listado em [o documento de backends](docs/rust-native-rollback-backends.md). |
 | 4. Serviços de workspace | Indexador, controle de mudanças, validação, engenharia | Parcialmente feita | Existem repositórios, na fase 2, para workspaces, change sets, índice do projeto, índice semântico e validação. Os serviços, como o `ProjectIndexService`, não foram portados. |
 | 5. IA | `electron/ai`, `security` | Parcialmente feita | Feito: o cofre de credenciais em `noct-secrets`. O seu ciclo de ida e volta com o cofre do sistema operacional passa no CI nos três sistemas. Não portados: os adaptadores de provedores e o loop de ferramentas. Os crates Rust não têm cliente HTTP para provedores. |
-| 6. IPC e shell | `electron/ipc`, `main.ts`, `runtime` para Tauri | Parcialmente feita | A primeira fatia está feita: quatro comandos, liberados só para a janela `main`. Conferido numa janela em execução só pela verificação manual de configurações da seção 3. |
+| 6. IPC e shell | `electron/ipc`, `main.ts`, `runtime` para Tauri | Parcialmente feita | A primeira fatia está feita: cinco comandos, liberados só para a janela `main`. Conferido numa janela em execução só pela verificação manual de configurações da seção 3. |
 | 7. Interface | `src/` para Leptos | Parcialmente feita | A área de configurações, a lista de projetos na barra lateral, a camada de vidro e os temas. Conferido no Chromium com um shell simulado. Não conferido numa janela real. |
 | 8. Atualizações e empacotamento | `electron/updates`, `electron-builder`, workflows de release | Não iniciada no lado Rust | Bloqueada. Veja abaixo. |
 | 9. Aposentadoria | Remover `electron/`, TypeScript, Vite, npm e o requisito de Node | Não iniciada | Depende da fase 8 e das fases anteriores. |
@@ -119,7 +119,9 @@ Não visto em nenhuma janela, em nenhuma plataforma:
 - a barra lateral com workspaces reais, e o layout atual;
 - o tamanho mínimo da janela, como o gerenciador de janelas o aplica;
 - a política de navegação numa webview em execução;
-- qualquer comando além de `settings_get` e `workspaces_list` chamado a partir de uma janela;
+- os comandos chamados a partir de uma janela em execução (`settings_get`, `settings_set` para o tema, `workspaces_list`,
+  `conversations_list` e `workspace_set_favorite`). A conferência no navegador usa um shell simulado, e os testes em Rust
+  usam o runtime de teste do Tauri;
 - o custo da camada de vidro, que não foi medido;
 - o aviso para uma pasta de dados fora do perfil do usuário, num perfil real do Windows.
 
@@ -170,7 +172,7 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 
 | Crate | Responsabilidade |
 | --- | --- |
-| `noct-app` | O shell Tauri 2. Abre a pasta de dados e o log, registra os quatro comandos, define a política da janela e confere o acesso aos workspaces. |
+| `noct-app` | O shell Tauri 2. Abre a pasta de dados e o log, registra os cinco comandos, define a política da janela e confere o acesso aos workspaces. |
 | `noct-core` | Os contratos, limites e tipos que espelham o `shared/`, e a redação do log. |
 | `noct-db` | Persistência SQLite: o runtime, as migrações 1 a 32, os repositórios, backups e pontos de recuperação, escritas atômicas, o log de arquivo e o observador de operações. |
 | `noct-native` | Um binário separado, um worker de rollback para operações de sistema de arquivos. Tem só um backend, para Linux. |
@@ -184,7 +186,8 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 - **Política da webview.** `withGlobalTauri` é `false`. A Content-Security-Policy é
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   O Chromium confere essa política (`scripts/check-shell-csp.mjs`). Nenhuma webview a aplicou ainda.
-- **Comandos.** Quatro comandos, `settings_get`, `settings_set`, `workspaces_list` e `conversations_list`, são declarados em
+- **Comandos.** Cinco comandos, `settings_get`, `settings_set`, `workspaces_list`, `conversations_list` e
+  `workspace_set_favorite`, são declarados em
   `crates/noct-app/build.rs`. `crates/noct-app/capabilities/default.json` os libera só para a janela `main`. Os testes com
   o runtime simulado do Tauri recusam um comando que não foi liberado e um pedido vindo de uma segunda janela.
 - **Navegação.** A janela principal aceita navegação só para a interface empacotada e, nos builds de depuração, para o
@@ -259,7 +262,7 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 | `cargo fmt --all -- --check` | Passou |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Passou |
 | `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passou |
-| `cargo test --workspace --no-fail-fast` | 437 passaram, 0 falharam, 19 ignorados |
+| `cargo test --workspace --no-fail-fast` | 456 passaram, 0 falharam, 19 ignorados |
 | `cargo tree -p noct-app -e normal -i rusqlite -f '{p} features={f}'`, e `cargo tree --workspace -e normal -f '{p} {f}' \| grep -c hooks` | `rusqlite` 0.42.0 sem `hooks`. O grep conta 0. A feature `hooks` é dev-dependency do `noct-db` (commit `c0748e0`), então não entra no grafo de release. |
 | `node --test scripts/run-rust-shell.test.mjs` | 7 passaram |
 | `node scripts/verify-row-gate.mjs` | 10 passaram, depois `scripts/verify-rust-written-gate.mjs` passou, saída 0 |
@@ -384,8 +387,10 @@ Os jobs de Windows e macOS rodam o build, os testes do workspace e o build de re
 - A ADR 0001 listava "ligação do gate no CI" como pendente na fase 2. A ADR agora diz que ela está feita em
   `row-gate.yml`, embora o job não seja obrigatório.
 - A ADR 0001 está "Proposed", enquanto a ADR 0002 está "Accepted" e a substitui em parte.
-- A decisão 4 da ADR 0001 pedia as versões mínimas das plataformas em `docs/compatibility.md`. O arquivo agora tem os
-  valores decididos e as fontes deles. O texto da ADR ainda não foi atualizado.
+- A decisão 4 da ADR 0001 pedia as versões mínimas das plataformas em `docs/compatibility.md`. O arquivo tem os valores
+  decididos e as fontes deles, e o texto da ADR agora registra a decisão (Windows 10 ou posterior, macOS 10.15 ou
+  posterior, Ubuntu 22.04 ou posterior). A versão do WebKitGTK no Ubuntu 22.04 e a configuração do macOS no pacote
+  continuam em aberto.
 - Nenhuma allowlist de provedores está implementada. `docs/provider-allowlist-design.md` é só um desenho (seção 6).
 - A ADR 0002 agora também registra texto sobre estatísticas e versão do schema (commit `c0748e0`) que não trata de
   credenciais. A descrição do cofre não mudou.
