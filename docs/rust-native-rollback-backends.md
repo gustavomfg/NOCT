@@ -3,10 +3,11 @@
 - **Status:** implemented in `crates/noct-native` for Linux, macOS (local APFS) and Windows (local fixed NTFS). Each
   backend fails closed on any other filesystem or volume. The Electron product still runs the C++ worker,
   `native/rollback-boundary.cpp`, on every platform; the Rust worker is not wired into the product.
-- **Verified here:** the Linux backend, locally (tests and a differential run against the C++ worker). The macOS and
-  Windows backends are type-checked and linted for their targets locally, but their tests have not run on a real
-  Mac or Windows system in this session. The CI matrix is the first run; its results are recorded in
-  [the branch status](status.md).
+- **Verified:** the Linux backend locally, with its tests and a differential run against the C++ worker. The macOS
+  and Windows backends are type-checked and linted for their targets locally, and their protocol tests pass on the
+  GitHub runners (`windows-latest` on NTFS, `macos-latest` on APFS) in
+  `rust-shell-validation.yml`, run `44124578455` on commit `7b4826a`. They have not been run against the C++ worker
+  there, and not on a user's volume.
 - **Compared:** `native/rollback-boundary.cpp` (the Linux and Apple branches and the protocol) and
   `native/rollback-windows.h` (the Windows branch).
 - **Related:** [Native rollback V1](native-rollback-v1.md) describes the contract. [Compatibility](compatibility.md)
@@ -95,9 +96,11 @@ Differences from the C++ header, all in the stricter direction or in wording:
 | Check | Linux | macOS (APFS) | Windows (NTFS) |
 | --- | --- | --- | --- |
 | `cargo check` and `cargo clippy -D warnings` for the target | Passed locally | Passed locally (`aarch64-apple-darwin`) | Passed locally (`x86_64-pc-windows-msvc`) |
-| Protocol tests (`tests/rollback_protocol.rs`) | Passed locally, 12 tests | In CI only (`macos-latest`), 13 tests with the APFS case test | In CI only (`windows-latest`) |
-| Differential against the C++ worker | 35 of 36 scenarios identical; the difference is the trailing slash | Not run; the C++ worker was not built on macOS here | Not run; the C++ header needs MSVC |
-| Run on a real volume of that system | No (the test runs on `tmpfs` or `ext4` in CI) | No | No |
+| Protocol tests (`tests/rollback_protocol.rs`) | Passed locally, 12 tests; passed in CI (`ubuntu-latest`) | Passed in CI (`macos-latest`), 13 tests with the APFS case test | Passed in CI (`windows-latest`), 12 tests |
+| Binary tests (`tests/rollback_binary.rs`, the child process) | Passed locally, 4 tests; passed in CI | Passed in CI, 4 tests | Passed in CI, 4 tests |
+| Differential against the C++ worker | 35 of 36 scenarios identical; the difference is the trailing slash | Not run; the C++ worker was not built on macOS | Not run; the C++ header needs MSVC |
+| Volume of the test run | `tmpfs` or `ext4` on the runner | APFS, the runner's temporary directory | NTFS, the runner's temporary directory |
+| A user's volume | No | No | No |
 
 `native-rollback-validation.yml` runs the TypeScript suite `tests/nativeRollbackBoundary.test.ts` on Linux, Windows and
 macOS. It runs on pushes to `main` and `stabilization/native-rollback-v1` only, so it does not run on `migration/rust`.
@@ -106,6 +109,6 @@ That suite exercises the C++ worker, not the Rust one.
 ## What remains before the Rust worker can replace the C++ worker
 
 1. The owner decides the two open decisions above.
-2. The differential runs on macOS and Windows, with the C++ worker built there.
+2. The differential runs on macOS and Windows, with the C++ worker built there in CI.
 3. The TypeScript suite runs against the Rust worker on each system, on APFS and NTFS.
-4. A real restore of a file on APFS and NTFS, not only the protocol tests.
+4. A real restore of a file on a user's APFS and NTFS volumes, not only the runner's temporary directory.
