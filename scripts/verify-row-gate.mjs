@@ -16,32 +16,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import { writeReleaseLines } from './release-lines.mjs'
-
-const root = path.resolve(import.meta.dirname, '..')
-const ts = createRequire(path.join(root, 'package.json'))('typescript')
-const buildDirectory = path.join(root, 'node_modules', '.cache', 'noct-row-gate')
-
-function compileTree(directory) {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const source = path.join(directory, entry.name)
-    if (entry.isDirectory()) {
-      compileTree(source)
-      continue
-    }
-    if (!entry.name.endsWith('.ts') || entry.name.endsWith('.d.ts')) continue
-    const output = path.join(buildDirectory, path.relative(root, source)).replace(/\.ts$/, '.js')
-    const { outputText } = ts.transpileModule(fs.readFileSync(source, 'utf8'), {
-      fileName: source,
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        esModuleInterop: true,
-      },
-    })
-    fs.mkdirSync(path.dirname(output), { recursive: true })
-    fs.writeFileSync(output, outputText)
-  }
-}
+import { buildDirectory, compileTypeScript, root, ts } from './row-gate-typescript.mjs'
 
 // Fixed instants keep the seed reproducible. The expected rows come from the TypeScript
 // repositories reading that same file, so they hold whatever the application stores.
@@ -1057,8 +1032,7 @@ function suggestionParity(BetterSqlite3, SuggestionRepository, directory, review
   return snapshot
 }
 
-compileTree(path.join(root, 'electron'))
-compileTree(path.join(root, 'shared'))
+compileTypeScript()
 const { LocalDatabase } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/Database.js')
 const { OperationRecoveryRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/OperationRecoveryRepository.js')
 const { WorkspaceEvidenceRepository } = createRequire(path.join(buildDirectory, 'probe.js'))('./electron/database/WorkspaceEvidenceRepository.js')
@@ -1112,6 +1086,14 @@ try {
     },
   )
   process.exitCode = run.status ?? 1
+  if (run.status === 0) {
+    // The reverse direction: Rust writes a database, TypeScript reads and writes it, Rust reads back.
+    const reverse = spawnSync(process.execPath, [path.join(root, 'scripts', 'verify-rust-written-gate.mjs')], {
+      cwd: root,
+      stdio: 'inherit',
+    })
+    process.exitCode = reverse.status ?? 1
+  }
 } finally {
   fs.rmSync(gateDirectory, { recursive: true, force: true })
 }
