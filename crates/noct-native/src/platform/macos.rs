@@ -373,3 +373,22 @@ pub fn displace(
     })?;
     Ok(())
 }
+
+/// The refusal of a failed filesystem call, as the C++ worker's `checked` reports it.
+pub fn refused() -> Failure {
+    Failure::new("CONFLICT", "Filesystem operation refused")
+}
+
+/// The absence of `leaf`. Any entry is a conflict, and a failed lookup is an unavailable absence, as in C++.
+pub fn absence(parent: &Object, leaf: &[u8]) -> Outcome<()> {
+    match child(parent, leaf, false) {
+        Ok(None) => Ok(()),
+        Ok(Some(_)) => Err(Failure::new("CONFLICT", "Deleted entry recreated")),
+        Err(_) => Err(Failure::new("CONFLICT", "Absence unavailable")),
+    }
+}
+
+/// Staging accepts no special permission bits. The C++ worker refuses them as a conflict.
+pub fn check_stage_mode(mode: u32) -> Outcome<()> {
+    require(mode & 0o7000 == 0, "Special permission bits unsupported")
+}

@@ -9,6 +9,10 @@
 //! - `check_filesystem`: the local-filesystem gate of `INIT`.
 //! - `split_relative`, `validate_retention`: the name rules of `OPEN` and `DISPLACE`.
 //! - `stage`, `produced_mode`, `publish`, `displace`: the publication steps.
+//! - `refused`, `absence`, `check_stage_mode`: the refusals whose message or outcome differs between the systems.
+//!
+//! Each module also carries the system's own refusal messages, so that the protocol answers as the matching C++ backend
+//! does. The state machine in `operation.rs` is the same for all of them.
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -19,3 +23,8 @@ pub use linux::*;
 mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::*;
+
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+pub use windows::*;

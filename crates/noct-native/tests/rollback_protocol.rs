@@ -26,7 +26,8 @@ impl Scratch {
             std::process::id()
         ));
         fs::create_dir_all(&base).expect("the scratch directory is created");
-        let base = fs::canonicalize(&base).expect("the scratch directory has a canonical path");
+        let base =
+            native(&fs::canonicalize(&base).expect("the scratch directory has a canonical path"));
         Self { base }
     }
 }
@@ -37,12 +38,66 @@ impl Drop for Scratch {
     }
 }
 
+/// A path in the form the worker takes. On Windows a canonical path carries the `\\?\` prefix, which the
+/// worker's drive-root check does not accept, so the prefix is removed.
+fn native(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy();
+        if let Some(plain) = text.strip_prefix(r"\\?\") {
+            return PathBuf::from(plain);
+        }
+    }
+    path.to_path_buf()
+}
+
 /// The identity the worker reports for a path: device and inode on Unix.
 #[cfg(unix)]
 fn identity_of(path: &Path) -> String {
     use std::os::unix::fs::MetadataExt;
     let metadata = fs::metadata(path).expect("the path has metadata");
     format!("{}:{}", metadata.dev(), metadata.ino())
+}
+
+/// The identity the worker reports for a path: volume serial and the two halves of the file index.
+#[cfg(windows)]
+fn identity_of(path: &Path) -> String {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES,
+        FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
+        OPEN_EXISTING,
+    };
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: `wide` is NUL-terminated and outlives the call; the handle is closed below.
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            std::ptr::null_mut(),
+        )
+    };
+    assert_ne!(handle, INVALID_HANDLE_VALUE, "the path can be opened");
+    // SAFETY: an all-zero structure is a valid output buffer for this plain record.
+    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: the handle is live and `info` is a valid out-pointer.
+    let read = unsafe { GetFileInformationByHandle(handle, &mut info) };
+    // SAFETY: the handle was returned by CreateFileW above and is closed once.
+    unsafe { CloseHandle(handle) };
+    assert_ne!(read, 0, "the identity is readable");
+    format!(
+        "{}:{}:{}",
+        info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow
+    )
 }
 
 /// A wire field: the hex of the text, as the Electron client sends paths and contents.
@@ -57,10 +112,11 @@ fn fields(response: &str) -> Vec<&str> {
 
 /// A workspace with `parent/target.txt` holding `AFTER`, and a recovery directory, bound by `INIT`.
 struct Fixture {
-    _scratch: Scratch,
+    // The operation is declared first, so its handles close before the scratch directory is removed.
+    operation: Operation,
     workspace: PathBuf,
     recovery: PathBuf,
-    operation: Operation,
+    _scratch: Scratch,
 }
 
 impl Fixture {
@@ -73,10 +129,10 @@ impl Fixture {
         fs::write(workspace.join("parent").join("target.txt"), b"AFTER")
             .expect("the target is written");
         let mut fixture = Self {
-            _scratch: scratch,
+            operation: Operation::default(),
             workspace,
             recovery,
-            operation: Operation::default(),
+            _scratch: scratch,
         };
         let init = [
             field(&fixture.workspace.to_string_lossy()),
@@ -269,8 +325,13 @@ fn special_permission_bits_are_refused_before_anything_is_staged() {
         .open("parent/new.txt")
         .expect("OPEN reads an absent leaf");
 
-    // 0o4755 is 2541 in decimal, the setuid form of the requested mode.
-    assert_eq!(code(fixture.stage("HELLO", "2541")), "CONFLICT");
+    // 0o4755 is 2541 in decimal, the setuid form of the requested mode. Windows answers with its own refusal of
+    // special bits, which is UNSUPPORTED there, as the C++ worker does.
+    #[cfg(windows)]
+    let expected = "UNSUPPORTED";
+    #[cfg(not(windows))]
+    let expected = "CONFLICT";
+    assert_eq!(code(fixture.stage("HELLO", "2541")), expected);
 }
 
 #[test]

@@ -13,6 +13,24 @@ use crate::protocol::{Failure, MAX_BYTES, Outcome, hex, require, split_frame, un
 /// The largest frame the worker reads: two hex digits per byte of a file, and room for the fields.
 const FRAME_BUDGET: usize = MAX_BYTES * 2 + 16 * 1024;
 
+/// The messages that differ between the C++ backends in this state machine. Each system answers with its own wording,
+/// so the client reads the same text it would from the matching C++ worker.
+#[cfg(not(windows))]
+mod messages {
+    pub const STAGE_STATE: &str = "Invalid staging state";
+    pub const STAGE_CHANGED: &str = "Staged bytes changed";
+    pub const DISPLACED_DIVERGED: &str = "Competing displaced object preserved; conflict";
+    pub const OBSERVED_GONE: &str = "Filesystem operation refused";
+}
+
+#[cfg(windows)]
+mod messages {
+    pub const STAGE_STATE: &str = "Invalid stage state";
+    pub const STAGE_CHANGED: &str = "Stage changed";
+    pub const DISPLACED_DIVERGED: &str = "Displaced object diverged";
+    pub const OBSERVED_GONE: &str = "Observed AFTER changed";
+}
+
 /// The object that a command needs and that the protocol has not yet acquired.
 fn held(slot: &Option<Object>) -> Outcome<&Object> {
     slot.as_ref()
@@ -78,6 +96,9 @@ impl Operation {
                 self.revoke();
                 Ok("OK".into())
             }
+            // Windows custody: a holder process binds a root before any operation exists.
+            #[cfg(windows)]
+            b"BIND" => self.bind(args),
             _ => {
                 self.admit()?;
                 match command {
@@ -90,6 +111,20 @@ impl Operation {
                 }
             }
         }
+    }
+
+    /// Windows custody: binds the root for a holder process, which answers the root identity and keeps the root open.
+    /// Its operation never becomes active, so a holder cannot run a command other than `CLOSE`.
+    #[cfg(windows)]
+    fn bind(&mut self, args: &[&[u8]]) -> Outcome<String> {
+        require(
+            args.len() == 2 && self.root.is_none(),
+            "Invalid custody request",
+        )?;
+        let root = platform::acquire_root(&unhex(args[1])?)?;
+        let answer = format!("BOUND\t{}", hex(platform::identity(&root)?.as_bytes()));
+        self.root = Some(root);
+        Ok(answer)
     }
 
     /// Revalidates the retained bindings against fresh pathname resolution. Any mismatch revokes the operation for the
@@ -134,8 +169,7 @@ impl Operation {
             };
         }
         match platform::child(parent, &self.leaf, false)? {
-            // The C++ worker reports a vanished observed entry as the failed reopen that it is.
-            None => Err(Failure::new("CONFLICT", "Filesystem operation refused")),
+            None => Err(Failure::new("CONFLICT", messages::OBSERVED_GONE)),
             Some(current) => require(
                 platform::identity(&current)? == self.observed_id
                     && platform::mode_of(&current)? == self.observed_mode
@@ -243,11 +277,11 @@ impl Operation {
     fn stage(&mut self, args: &[&[u8]]) -> Outcome<String> {
         require(
             args.len() == 3 && self.opened && !self.prepared,
-            "Invalid staging state",
+            messages::STAGE_STATE,
         )?;
         self.staged_bytes = unhex(args[1])?;
         let mode = parse_mode(args[2])?;
-        require((mode & 0o7000) == 0, "Special permission bits unsupported")?;
+        platform::check_stage_mode(mode)?;
         self.staged_mode = mode;
 
         let (staged, name) = platform::stage(held(&self.parent)?, &self.staged_bytes, mode)?;
@@ -284,15 +318,15 @@ impl Operation {
         self.moved = true;
         platform::flush_directory(parent)?;
 
-        // A missing retention entry is a failed reopen, as in the C++ worker; the message is the same.
-        let displaced = platform::child(parent, &self.displaced_name, true)?
-            .ok_or(Failure::new("CONFLICT", "Filesystem operation refused"))?;
+        // A missing retention entry is a failed reopen, as in the C++ worker.
+        let displaced =
+            platform::child(parent, &self.displaced_name, true)?.ok_or_else(platform::refused)?;
         let displaced_id = platform::identity(&displaced)?;
         require(
             displaced_id == self.observed_id
                 && platform::mode_of(&displaced)? == self.observed_mode
                 && platform::read_all(&displaced)? == self.observed_bytes,
-            "Competing displaced object preserved; conflict",
+            messages::DISPLACED_DIVERGED,
         )?;
         let response = format!("DISPLACED\t{}", hex(displaced_id.as_bytes()));
         self.displaced = Some(displaced);
@@ -312,14 +346,14 @@ impl Operation {
             let staged = held(&self.staged)?;
             require(
                 platform::read_all(staged)? == self.staged_bytes,
-                "Staged bytes changed",
+                messages::STAGE_CHANGED,
             )?;
             platform::publish(staged, parent, &self.leaf, self.staged_mode)?;
             self.published = true;
             platform::flush_directory(parent)?;
 
-            let produced = platform::child(parent, &self.leaf, false)?
-                .ok_or(Failure::new("CONFLICT", "Filesystem operation refused"))?;
+            let produced =
+                platform::child(parent, &self.leaf, false)?.ok_or_else(platform::refused)?;
             require(
                 platform::read_all(&produced)? == self.staged_bytes
                     && (platform::mode_of(&produced)? & 0o777)
@@ -327,12 +361,7 @@ impl Operation {
                 "Produced state diverged",
             )?;
         } else {
-            // The C++ worker refuses a recreated entry, and any other failed lookup as an unavailable absence.
-            match platform::child(parent, &self.leaf, false) {
-                Ok(None) => {}
-                Ok(Some(_)) => return Err(Failure::new("CONFLICT", "Deleted entry recreated")),
-                Err(_) => return Err(Failure::new("CONFLICT", "Absence unavailable")),
-            }
+            platform::absence(parent, &self.leaf)?;
             self.published = true;
         }
         if self.moved {

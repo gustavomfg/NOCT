@@ -2836,6 +2836,7 @@ name = "noct-native"
 version = "1.0.5"
 dependencies = [
  "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

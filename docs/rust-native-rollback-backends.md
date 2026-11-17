@@ -1,105 +1,111 @@
-# Rust rollback backends: what is missing on macOS and Windows
+# Rust rollback backends: state and gaps
 
-- **Status:** not implemented. This is a record of what the code does, taken by reading it on `migration/rust`
-  at `de7dba4`. No run on macOS or Windows backs it.
-- **Compared:** `crates/noct-native` (the Rust rollback worker), with `native/rollback-boundary.cpp` (the C++
-  worker that the Electron product uses on every platform) and `native/rollback-windows.h`, which the C++
-  worker includes on Windows.
+- **Status:** implemented in `crates/noct-native` for Linux, macOS (local APFS) and Windows (local fixed NTFS). Each
+  backend fails closed on any other filesystem or volume. The Electron product still runs the C++ worker,
+  `native/rollback-boundary.cpp`, on every platform; the Rust worker is not wired into the product.
+- **Verified here:** the Linux backend, locally (tests and a differential run against the C++ worker). The macOS and
+  Windows backends are type-checked and linted for their targets locally, but their tests have not run on a real
+  Mac or Windows system in this session. The CI matrix is the first run; its results are recorded in
+  [the branch status](status.md).
+- **Compared:** `native/rollback-boundary.cpp` (the Linux and Apple branches and the protocol) and
+  `native/rollback-windows.h` (the Windows branch).
 - **Related:** [Native rollback V1](native-rollback-v1.md) describes the contract. [Compatibility](compatibility.md)
   lists the platforms.
 
-## Current behaviour of the Rust worker
+## Layout
 
-- On Linux, `crates/noct-native/src/main.rs` runs the protocol with the Linux backend in `linux.rs`.
-- On every other platform, `main.rs` reads each line and answers `ERR\tUNSUPPORTED\t` followed by the hex of
-  "Protected rollback backend not verified", until it reads `CLOSE`. Restoration fails closed, and nothing is changed.
-- The tests of `noct-native` are in `linux.rs`, which compiles only on Linux. No test runs the non-Linux answer.
-- The comment at the top of `main.rs` says the answer is "the fail-closed behavior of the C++ `#else` branch".
-  That is true only for platforms the C++ worker does not support. On macOS and Windows the C++ worker has backends,
-  so the Rust answer there is not the C++ behaviour, and the comment is inaccurate for those two platforms. This
-  document changes no code. The comment should be corrected in a code commit.
-- The Electron product does not use the Rust worker. `electron/change-control/NativeRollbackOperation.ts` runs
-  `rollback-boundary` (`rollback-boundary.exe` on Windows). `scripts/build-native-boundary.mjs` builds it from
-  `native/rollback-boundary.cpp`, and `electron-builder.json5` packages it as `native-boundary`.
+- `operation.rs`: the protocol state machine, the same on every system. It holds the bindings, checks them before every
+  command, and revokes the operation after any failure.
+- `platform/linux.rs`, `platform/macos.rs`, `platform/windows.rs`: the system calls, one module per system with the same
+  items. Each module also carries that system's refusals, so the answers match the matching C++ branch.
+- `tests/rollback_protocol.rs`: the protocol scenarios, on real files in a scratch directory. The expectations that
+  differ by system are gated with `cfg`.
+- Any other system: `lib.rs` answers every line with `ERR\tUNSUPPORTED` until `CLOSE`.
 
-## What the C++ worker does on macOS
+## Linux
 
-Line numbers refer to `native/rollback-boundary.cpp` at `de7dba4`. The table lists what a Rust port for macOS would
-have to match.
+Port of the Linux branch. Lookups use `openat2` with `RESOLVE_BENEATH`, `RESOLVE_NO_SYMLINKS`,
+`RESOLVE_NO_MAGICLINKS` and `RESOLVE_NO_XDEV` (unless the root itself crosses a mount). Staging uses `O_TMPFILE`, and
+publication links the anonymous object through `/proc/self/fd`. Displacement uses `renameat2` with `RENAME_NOREPLACE`.
+Durability is `fsync`. Local `tmpfs`, `ext4` or `Btrfs` only.
 
-| Area | What the C++ worker does on macOS | Lines |
+Checked locally: 12 protocol tests pass; the differential against the C++ worker (built with `g++` from
+`native/rollback-boundary.cpp`) gives the same responses and the same final tree in 35 of 36 scenarios. The one
+difference is intended, see below.
+
+## macOS
+
+Port of the Apple branch, for local APFS volumes (`f_fstypename == "apfs"` and `MNT_LOCAL`).
+
+| Area | Rust backend | C++ worker |
 | --- | --- | --- |
-| Platform gate | `INIT` requires the root's filesystem type to be `apfs` and the mount to be local (`MNT_LOCAL`). Otherwise it fails with `UNSUPPORTED`. | 182–185 |
-| Protected names | Before the protected-name check, ASCII letters are lowercased, so case aliases of protected names are refused. The Linux build does not do this. | 132–136 |
-| Journal | `steps.jsonl` and `operation.json` are created with `O_EXCL` and `O_NOFOLLOW`, mode `0600`, and are flushed at `INIT`. | 186–188 |
-| Staging | No `O_TMPFILE` on this path. A named file, `.nocturne-rollback-stage-<pid>-<serial>`, is created with `O_EXCL` and `O_NOFOLLOW`, written, `fchmod`ed, flushed and read back. Afterwards only the retained descriptor selects it. | 219–236 |
-| Displacement | `renameatx_np` with `RENAME_EXCL`. Linux uses `renameat2` with flag 1. The code claims no compare-and-swap on the source inode. | 238–254 |
-| Publication | `fclonefileat` with `CLONE_NOOWNERCOPY` derives the published file from the staged descriptor. It is a controlled copy, not a link to the same inode. On macOS the worker then compares bytes. The inode-identity check runs on Linux only. | 256–275 |
-| Durability | `flush` calls `fsync` on the descriptor, and nothing else. | 126 |
+| Lookup | `openat` per component with `O_NOFOLLOW`, from retained descriptors; a crossing into another device is refused | Same |
+| Protected names | Compared without ASCII case, on Apple only | Same (lines 132–136) |
+| Staging | Named file `.nocturne-rollback-stage-<pid>-<serial>`, `O_EXCL`, `O_NOFOLLOW`; only its descriptor selects it afterwards | Same |
+| Displacement | `renameatx_np` with `RENAME_EXCL` | Same |
+| Publication | `fclonefileat` with `CLONE_NOOWNERCOPY`; the clone is checked by its bytes and mode, not by inode | Same |
+| Durability | `fcntl(F_FULLFSYNC)` | `fsync` |
 
-The walk through path components with `openat(O_NOFOLLOW)` from retained directory descriptors, and the refusal of
-symlinks and device crossings, are described in [Native rollback V1](native-rollback-v1.md) (its macOS
-paragraph). They are not repeated here.
+**Durability decision.** The Rust backend uses `F_FULLFSYNC`, as the owner decided. On macOS, `fsync` does not ask the
+drive to flush its cache, so an acknowledged write may not survive a power loss. The C++ worker, which the product runs,
+still uses `fsync`. Changing it is a change to the product path, and it is not part of this branch. Until it is made, the
+two workers differ in this one respect.
 
-## What the C++ worker does on Windows
+## Windows
 
-Line numbers refer to `native/rollback-windows.h` at `de7dba4`.
+Port of `native/rollback-windows.h`. Every lookup is an `NtCreateFile` relative to a retained directory handle. The
+NT entry points are resolved from `ntdll.dll` with `GetProcAddress`; a missing one is `UNSUPPORTED`. Reparse points are
+refused at every step. The root is a fixed NTFS volume, opened as `\\?\X:\` and walked from there. Identity is the
+volume serial number and the two halves of the file index, in the format the TypeScript client compares.
 
-| Area | What the C++ worker does on Windows | Lines |
-| --- | --- | --- |
-| Native calls | `NtCreateFile` is resolved at run time with `GetProcAddress` on `ntdll.dll`. | 67 |
-| Drive type | The volume must report `DRIVE_FIXED` (`GetDriveTypeW`). Any other type fails with `UNSUPPORTED`. | 106 |
-| Filesystem | The volume must be NTFS (`GetVolumeInformationByHandleW`). | 111–112 |
-| Opening | `CreateFileW` with `FILE_FLAG_BACKUP_SEMANTICS` and `FILE_FLAG_OPEN_REPARSE_POINT`. Reparse points are refused. | 78, 108–109 |
-| Identity | A file's identity is the volume serial number and the file index, from `GetFileInformationByHandle`. A walk that crosses a volume is refused. | 54–57, 97 |
-| Exclusive rename | A `FILE_RENAME_INFO` with `RootDirectory` set and `ReplaceIfExists` set to `FALSE`. | 126–127 |
-| Durability | `FlushFileBuffers` on the handle. A failure is reported as `UNKNOWN`. | 124 |
+- **Custody (`BIND`).** `BIND` binds a root and answers its identity. The TypeScript client uses it through a holder
+  process that keeps the root open while an action runs. The holder's operation never becomes active.
+- **Publication.** The staged handle is renamed exclusively (`NtSetInformationFile`, `FileRenameInformation`, no
+  replacement). The published entry is verified to be the same object.
+- **Modes.** Staging needs a writable regular file, as in C++. The published mode is checked as `0666`.
+- **Dependency.** `windows-sys` 0.61.2, pinned, in `noct-native` only, for the Windows target only. Features:
+  `Win32_Foundation`, `Win32_Security`, `Win32_Storage_FileSystem`, `Win32_System_IO`, `Win32_System_LibraryLoader`,
+  `Win32_System_Threading`, `Win32_System_WindowsProgramming`. The NT structures (`OBJECT_ATTRIBUTES`, `IO_STATUS_BLOCK`,
+  `UNICODE_STRING`, the rename record) are declared in `platform/windows.rs` with their layouts, so the `Wdk` feature set
+  stays off.
 
-## Decision needed: Windows bindings
+Differences from the C++ header, all in the stricter direction or in wording:
 
-The Windows backend needs Win32 and NT calls: `NtCreateFile`, the file information structures and the volume queries.
-The Rust crates do not declare them today. There are two ways to get them:
+- `DISPLACE` also compares the mode of the displaced entry. The C++ header compares identity and bytes only.
+- When an observed entry cannot be reopened for verification, the message is `Windows filesystem operation refused`,
+  where C++ says `Observed AFTER changed`. The code is `CONFLICT` in both.
+- No directory flush, as in C++. See the open decisions.
 
-- **A new direct dependency**, such as `windows-sys`. `Cargo.lock` already contains `windows-sys` 0.61.2, pulled in
-  transitively by Tauri, but making `noct-native` depend on it directly is still a new dependency. `AGENTS.md`
-  requires its justification, maintenance and security review, and the owner's approval.
-- **Declarations written in the repository**, with `extern "system"` and `unsafe` blocks. There is no new dependency,
-  but the repository then keeps the ABI declarations and the struct layouts itself.
+## Differences that apply to every system
 
-The owner has not chosen between them. The README of this branch records the related decision on the Windows ACL.
+- **Trailing slash.** The C++ worker drops a trailing `/` and treats the empty leaf as absent, so `OPEN parent/`
+  answers `DATA 0`. The Rust worker refuses it with `CONFLICT`. This is intended: an empty name is not a file.
+- **Numbers.** The Rust worker parses the mode field strictly, and refuses a value with a non-digit tail. C++
+  `std::stoul` accepts a prefix. The client sends digits only.
 
-## Durability on macOS: parity with the C++ worker
+## Open decisions for the owner
 
-Decision: the macOS backend uses `fsync`, as the C++ worker does. It does not use `F_FULLFSYNC`.
+1. **Product durability on macOS.** Should the C++ product worker also use `F_FULLFSYNC`? This changes the shipped
+   path, so it needs its own change and review.
+2. **Directory flush on Windows.** The C++ header flushes no directory after a rename or a create. Adding one is a
+   durability decision, not a port detail.
 
-Checked on the branch: `F_FULLFSYNC` appears nowhere in `native/`, `electron/`, `scripts/` or `crates/`, and `native/` has
-not changed since `de7dba4`. Every durability call in `native/rollback-boundary.cpp` goes through `flush`, which calls
-`fsync` (line 126). The calls are at lines 188, 194, 196, 234, 250 and 270. The rule for this case is parity, so the
-port keeps `fsync`.
+## Verification
 
-The difference that stays: on macOS, `fsync(2)` does not ask the drive to flush its cache, and `fcntl(F_FULLFSYNC)` does.
-So on macOS, a write that the worker acknowledged may not survive a power loss. The rollback V1 document already says that
-"File/directory fsync acknowledgments are not a power-loss certification" (around line 118). Using `F_FULLFSYNC` is a
-separate change. It would change the C++ worker and the Rust backend together, and it needs its own measurement of its
-cost.
+| Check | Linux | macOS (APFS) | Windows (NTFS) |
+| --- | --- | --- | --- |
+| `cargo check` and `cargo clippy -D warnings` for the target | Passed locally | Passed locally (`aarch64-apple-darwin`) | Passed locally (`x86_64-pc-windows-msvc`) |
+| Protocol tests (`tests/rollback_protocol.rs`) | Passed locally, 12 tests | In CI only (`macos-latest`), 13 tests with the APFS case test | In CI only (`windows-latest`) |
+| Differential against the C++ worker | 35 of 36 scenarios identical; the difference is the trailing slash | Not run; the C++ worker was not built on macOS here | Not run; the C++ header needs MSVC |
+| Run on a real volume of that system | No (the test runs on `tmpfs` or `ext4` in CI) | No | No |
 
-Windows has an open question of its own, for the directory-level rename, which is not reviewed here.
+`native-rollback-validation.yml` runs the TypeScript suite `tests/nativeRollbackBoundary.test.ts` on Linux, Windows and
+macOS. It runs on pushes to `main` and `stabilization/native-rollback-v1` only, so it does not run on `migration/rust`.
+That suite exercises the C++ worker, not the Rust one.
 
-## Verification gaps
+## What remains before the Rust worker can replace the C++ worker
 
-- `native-rollback-validation.yml` runs `tests/nativeRollbackBoundary.test.ts` on Linux, Windows and macOS. It runs on
-  pushes to `main` and `stabilization/native-rollback-v1` only, not on `migration/rust`.
-- `rust-shell-validation.yml` builds and tests the workspace on Windows and macOS, but no test in `noct-native` runs
-  there (see "Current behaviour" above).
-- No test runs the Rust worker against APFS or NTFS.
-
-## What closing the gap needs
-
-1. A decision on whether the Rust worker takes over the macOS and Windows backends, or whether the product keeps the
-   C++ worker there until parity exists. This is the owner's decision.
-2. Each backend passes the checks in the tables above, with tests that run on that platform's CI runner. A
-   `cfg`-gated block that no runner executes does not count.
-3. The Rust worker runs the scenarios of `tests/nativeRollbackBoundary.test.ts` on APFS and on NTFS.
-4. The `UNSUPPORTED` answer stays on the platforms that have no backend.
-5. The durability decision (`fsync` or `F_FULLFSYNC` on macOS, and the Windows flush semantics for renames) is
-   recorded in [Native rollback V1](native-rollback-v1.md).
+1. The owner decides the two open decisions above.
+2. The differential runs on macOS and Windows, with the C++ worker built there.
+3. The TypeScript suite runs against the Rust worker on each system, on APFS and NTFS.
+4. A real restore of a file on APFS and NTFS, not only the protocol tests.

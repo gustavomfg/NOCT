@@ -117,6 +117,9 @@ each file, retained entry labels and the observed outcome. A failed journal writ
 prevents the next mutation. Snapshot writes can be incomplete on crash; the
 append journal is retained. File/directory fsync acknowledgments are not a
 power-loss certification.
+The Rust worker's macOS backend asks the drive to flush with `F_FULLFSYNC`, which `fsync` does not do.
+The C++ worker that the product runs still uses `fsync` until the owner decides otherwise; see
+[Rust rollback backends](rust-native-rollback-backends.md).
 The append log stores compact per-step observations, not repeated cumulative
 snapshots. Entries are limited to 64 KiB and the diagnostic snapshot to 1 MiB;
 exceeding a journal budget aborts further mutations rather than dropping evidence.
