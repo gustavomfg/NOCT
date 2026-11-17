@@ -5,11 +5,12 @@ mod common;
 
 use common::Scratch;
 use noct_app::bootstrap;
+use noct_app::error::CommandError;
 use noct_app::services;
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
-use noct_core::ipc::workspaces::WorkspacePageRequest;
+use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePageRequest};
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
 const NOT_A_FOLDER: &str = "O caminho do workspace não é uma pasta.";
@@ -379,5 +380,56 @@ fn workspace_pages_follow_the_offset_and_report_more() {
         joined,
         paths(&whole),
         "one-row pages join back into the whole list"
+    );
+}
+
+/// A favorite is stored for a saved project, and the list shows it first. A project that is not saved is refused,
+/// and nothing is written for it: no row appears and the saved favorites stay as they were.
+#[test]
+fn a_favorite_is_stored_for_a_saved_project_and_refused_for_one_that_is_not() {
+    let scratch = Scratch::new("favorite");
+    let saved = scratch.path().join("saved");
+    let other = scratch.path().join("other");
+    std::fs::create_dir(&saved).expect("the folder is created");
+    std::fs::create_dir(&other).expect("the folder is created");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let saved = saved.to_string_lossy().into_owned();
+    let other = other.to_string_lossy().into_owned();
+    store.workspaces().touch(&saved).expect("saved");
+    store.workspaces().touch(&other).expect("saved");
+    let favorite = |workspace: &str, favorite: bool| WorkspaceFavoriteRequest {
+        workspace: workspace.to_string(),
+        favorite,
+    };
+
+    services::workspace_set_favorite(&store, &favorite(&other, true))
+        .expect("a saved project is marked");
+    let listed = services::workspaces_from_rows(
+        services::workspace_rows(&store).expect("rows are read"),
+        &[],
+    );
+    assert_eq!(listed[0].path, other, "the favorite is listed first");
+    assert!(listed[0].favorite);
+
+    let missing = scratch
+        .path()
+        .join("never-saved")
+        .to_string_lossy()
+        .into_owned();
+    let refused = services::workspace_set_favorite(&store, &favorite(&missing, true));
+    assert!(
+        matches!(refused, Err(CommandError::UnknownWorkspace)),
+        "a project that is not saved is refused"
+    );
+    let rows = services::workspace_rows(&store).expect("rows are read");
+    assert_eq!(rows.len(), 2, "the refused request saves no project");
+    assert!(
+        rows.iter().any(|row| row.path == other && row.favorite),
+        "the favorite that was set is unchanged"
+    );
+    assert!(
+        rows.iter().all(|row| row.path != missing),
+        "no row is written for the refused path"
     );
 }

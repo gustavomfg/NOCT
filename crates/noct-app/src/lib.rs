@@ -25,6 +25,7 @@ pub fn command_handler<R: Runtime>()
         commands::settings_set,
         commands::workspaces_list,
         commands::conversations_list,
+        commands::workspace_set_favorite,
     ]
 }
 

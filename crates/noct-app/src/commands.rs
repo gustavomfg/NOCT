@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
-use noct_core::ipc::workspaces::{WorkspacePage, WorkspacePageRequest};
+use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
 use noct_db::store::Store;
 use tauri::State;
 
@@ -61,6 +61,23 @@ pub async fn workspaces_list(
             items: services::workspaces_from_rows(rows, &default_blocked_roots()),
             has_more,
         })
+    })
+    .await
+}
+
+/// Marks a saved project as a favorite, or unmarks it. The argument is `{ workspace, favorite }`. The store lock is
+/// held across the check that the project is saved and the write, so the two cannot be separated by another write.
+#[tauri::command]
+pub async fn workspace_set_favorite(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<(), CommandError> {
+    let request: WorkspaceFavoriteRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::workspace_set_favorite(&guard, &request)
     })
     .await
 }

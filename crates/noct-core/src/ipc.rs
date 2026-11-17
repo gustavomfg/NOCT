@@ -355,4 +355,62 @@ pub mod workspaces {
         pub items: Vec<Workspace>,
         pub has_more: bool,
     }
+
+    /// The longest project path a request may carry, in characters. The TypeScript handler of `workspace.watch`
+    /// takes the same bound, 4,000 characters, so both sides refuse the same paths.
+    pub const PATH_CHARACTERS_MAX: usize = 4_000;
+
+    const FAVORITE_FIELDS: &[&str] = &["workspace", "favorite"];
+
+    /// A request to mark a project as a favorite, or to unmark it. Both fields are required: `workspace` is the
+    /// path of a saved project, from 1 to `PATH_CHARACTERS_MAX` characters, and `favorite` is a boolean. The shell
+    /// refuses a project that is not saved; this request does not create one.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct WorkspaceFavoriteRequest {
+        pub workspace: String,
+        pub favorite: bool,
+    }
+
+    impl<'de> Deserialize<'de> for WorkspaceFavoriteRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut workspace = None;
+            let mut favorite = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "workspace" => workspace = Some(path_of::<D::Error>(value)?),
+                    "favorite" => {
+                        favorite =
+                            Some(value.as_bool().ok_or_else(|| {
+                                de::Error::custom("favorite must be true or false")
+                            })?)
+                    }
+                    _ => return Err(de::Error::unknown_field(&key, FAVORITE_FIELDS)),
+                }
+            }
+            let workspace = workspace.ok_or_else(|| de::Error::missing_field("workspace"))?;
+            let favorite = favorite.ok_or_else(|| de::Error::missing_field("favorite"))?;
+            Ok(Self {
+                workspace,
+                favorite,
+            })
+        }
+    }
+
+    /// A path of 1 to `PATH_CHARACTERS_MAX` characters. A null, a number or a longer path is refused.
+    fn path_of<E: de::Error>(value: Value) -> Result<String, E> {
+        let Value::String(path) = value else {
+            return Err(E::custom("workspace must be a path"));
+        };
+        let length = path.chars().count();
+        if length == 0 || length > PATH_CHARACTERS_MAX {
+            return Err(E::custom(format!(
+                "workspace has from 1 to {PATH_CHARACTERS_MAX} characters"
+            )));
+        }
+        Ok(path)
+    }
 }

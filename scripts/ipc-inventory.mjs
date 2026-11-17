@@ -34,7 +34,7 @@ const CLASS = {
   'workspace.validate': ['filesystem read', 'P3', 'Checks a path and its scope. No authorisation.'],
   'workspace.list': ['read', 'P3 (ported)', 'Rust command `workspaces_list`, paged: a required limit (1 to 500) and an offset. `hasMore` says whether more follow. First cut: the interface reads the first page only.'],
   'workspace.remove': ['database write', 'P4', 'Removes a workspace record.'],
-  'workspace.favorite': ['database write', 'P4', 'Validated with `workspaceFavoriteSchema`.'],
+  'workspace.favorite': ['database write', 'P4 (ported)', 'Rust command `workspace_set_favorite`: the project must be saved, and the request has the same fields and bounds as `workspaceFavoriteSchema`. No interface control yet.'],
   'workspace.openTool': ['process/shell', 'later', 'Starts an editor or a terminal in the workspace.'],
   'workspace.watch': ['filesystem read', 'later', 'Starts or stops a filesystem watcher on the workspace.'],
   'workspace.changed': ['event', 'event', 'Watcher events.'],
@@ -72,7 +72,7 @@ const CLASS = {
   'changeControl.decideHunk': ['filesystem write', 'later', 'Accepting a hunk applies its patch to the workspace file.'],
   'changeControl.decide': ['filesystem write', 'later', 'Accepting a change applies it to the workspace.'],
   'changeControl.changed': ['event', 'event', ''],
-  'conversations.list': ['read', 'P3 (ported)', 'Already a Rust command (`conversations_list`). No limit yet.'],
+  'conversations.list': ['read', 'P3 (ported)', 'Already a Rust command (`conversations_list`), paged: a required limit from 1 to 500 and a cursor.'],
   'conversations.page': ['read', 'P3', 'Paginated.'],
   'conversations.create': ['database write', 'P4', 'Creates a conversation for a workspace.'],
   'conversations.messages': ['read', 'P3', 'Returns every message with no limit. The port uses the paged form.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`settings_get\`, \`settings_set\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')

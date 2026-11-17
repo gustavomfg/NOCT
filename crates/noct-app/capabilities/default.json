@@ -8,6 +8,7 @@
     "allow-settings-get",
     "allow-settings-set",
     "allow-workspaces-list",
-    "allow-conversations-list"
+    "allow-conversations-list",
+    "allow-workspace-set-favorite"
   ]
 }

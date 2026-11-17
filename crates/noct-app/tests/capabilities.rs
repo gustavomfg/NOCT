@@ -44,14 +44,15 @@ fn the_main_window_capability_grants_exactly_the_first_slice() {
 }
 
 #[test]
-fn the_first_slice_is_the_four_commands_of_the_contract() {
+fn the_first_slice_is_the_commands_of_the_contract() {
     assert_eq!(
         command_names::ALL,
         &[
             "settings_get",
             "settings_set",
             "workspaces_list",
-            "conversations_list"
+            "conversations_list",
+            "workspace_set_favorite"
         ]
     );
 }

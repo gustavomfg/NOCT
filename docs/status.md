@@ -14,7 +14,8 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate on `0dafe7c`: success. Shell on `0dafe7c`: running when this was written; see the report. | Reverse gate on CI for `0dafe7c` (row gate running). |
 | P2: IPC inventory | `3f2a9ce` | not yet | not run | Nothing run on CI yet. |
 | P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
-| P4 to P10 | not started | | | |
+| P4: database writes | first cut: `workspace_set_favorite`, in its own commit (see `git log`). The theme button is next. | not yet | not run | Nothing on the page sets a favorite yet. A failed write is not forced in a test. |
+| P5 to P10 | not started | | | |
 
 ### P1 detail
 
@@ -53,11 +54,23 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
   maximum-size pages each join back into the whole list, and that list equals the TypeScript list for the nine
   release lines and the current line; the browser check of the sidebar, with a new scenario for a page that has more.
 
+### P4 detail (first cut)
+
+- `workspace_set_favorite` takes `{ workspace, favorite }`. Both fields are required. `workspace` has from 1 to 4,000
+  characters, the same bound as `workspace.watch`; `favorite` is a boolean. Any other field, a null, or a wrong type
+  is refused as invalid input before the store is read. The request is checked against the same fields as the
+  TypeScript schema `workspaceFavoriteSchema`.
+- The project must be saved. A path that is not saved is refused with `unknown-workspace` and the message the
+  TypeScript shell gives for it, and nothing is written. The check and the write run under one store lock.
+- The write is one `UPDATE`, so SQLite leaves the row as it was if the statement fails. A forced failure is not
+  tested; the tests cover the refused requests, which must write nothing.
+- The command is granted to the main window only. The interface does not call it yet.
+
 ## Verified in this round
 
-Local, on the tree of the P3 commit: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
+Local, on the tree of the P4 first cut: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
 `cargo clippy -p noct-ui --target wasm32-unknown-unknown -D warnings`, `cargo test --workspace --no-fail-fast`
-(437 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
+(446 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
 `npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node --test scripts/*.test.mjs` (7 of 7),
 `node scripts/check-shell-csp.mjs`, `node scripts/check-shell-ui.mjs` (16 scenarios, after `trunk build --release` of
 `crates/noct-ui`), and the output differential: `node scripts/generate-output-differential.mjs`, then

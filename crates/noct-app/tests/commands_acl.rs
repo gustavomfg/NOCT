@@ -160,6 +160,73 @@ fn workspaces_list_refuses_page_requests_outside_the_contract() {
     }
 }
 
+/// The favorite command is granted to the main window. It refuses a request outside the contract before the store
+/// is read, and a project that is not saved with its own code; a saved project is marked, and the mark is stored.
+#[test]
+fn workspace_set_favorite_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("favorite-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let saved = "/synthetic/project";
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(saved)
+        .expect("the project is saved");
+
+    assert_eq!(
+        ok_json(get_ipc_response(
+            &main,
+            request(
+                &main,
+                "workspace_set_favorite",
+                json!({ "input": { "workspace": saved, "favorite": true } }),
+            ),
+        )),
+        Value::Null,
+        "a saved project is marked and the command returns nothing"
+    );
+    let stored = app
+        .state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .list()
+        .expect("the rows are read");
+    assert!(
+        stored.iter().any(|row| row.path == saved && row.favorite),
+        "the mark is stored"
+    );
+
+    let unknown = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "workspace_set_favorite",
+            json!({ "input": { "workspace": "/synthetic/never-saved", "favorite": true } }),
+        ),
+    ));
+    assert_eq!(unknown["code"], "unknown-workspace");
+    assert_eq!(unknown["message"], "Pasta do projeto não encontrada.");
+
+    for input in [
+        json!({ "input": { "workspace": "", "favorite": true } }),
+        json!({ "input": { "workspace": saved, "favorite": "yes" } }),
+        json!({ "input": { "workspace": saved } }),
+        json!({ "input": { "workspace": saved, "favorite": true, "theme": "dark" } }),
+        json!({ "input": null }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "workspace_set_favorite", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

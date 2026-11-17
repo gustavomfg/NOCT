@@ -12,6 +12,8 @@ pub enum CommandError {
     Persistence,
     /// Something the shell did not expect, such as a worker that failed to finish.
     Internal,
+    /// The request names a project that is not saved. The message is the one the TypeScript shell gives for it.
+    UnknownWorkspace,
 }
 
 impl CommandError {
@@ -20,6 +22,7 @@ impl CommandError {
             Self::InvalidInput => "invalid-input",
             Self::Persistence => "persistence",
             Self::Internal => "internal",
+            Self::UnknownWorkspace => "unknown-workspace",
         }
     }
 
@@ -28,6 +31,7 @@ impl CommandError {
             Self::InvalidInput => "Entrada inválida.",
             Self::Persistence => "Não foi possível acessar os dados locais.",
             Self::Internal => "Falha interna do NOCT.",
+            Self::UnknownWorkspace => "Pasta do projeto não encontrada.",
         }
     }
 }

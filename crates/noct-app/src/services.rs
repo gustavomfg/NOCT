@@ -9,7 +9,7 @@ use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
-use noct_core::ipc::workspaces::{WorkspacePage, WorkspacePageRequest};
+use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::Store;
 
@@ -64,6 +64,25 @@ pub fn workspace_page_rows(
     let has_more = end < total;
     let page = rows.into_iter().skip(start).take(end - start).collect();
     Ok((page, has_more))
+}
+
+/// Marks a saved project as a favorite, or unmarks it. The project must be saved: a request for a path that is not
+/// saved is refused with `UnknownWorkspace`, and nothing is written. The caller holds the store lock across the
+/// check and the write, so no other write can save or remove the project between them.
+pub fn workspace_set_favorite(
+    store: &Store,
+    request: &WorkspaceFavoriteRequest,
+) -> Result<(), CommandError> {
+    let saved = workspace_rows(store)?
+        .iter()
+        .any(|row| row.path == request.workspace);
+    if !saved {
+        return Err(CommandError::UnknownWorkspace);
+    }
+    store
+        .workspaces()
+        .set_favorite(&request.workspace, request.favorite)
+        .map_err(|_| CommandError::Persistence)
 }
 
 /// One page of projects with their availability. It reads the rows under the store lock, which the caller

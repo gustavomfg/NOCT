@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 4 (`workspaces_list`, `conversations_list`, `settings_get`, `settings_set`).
+- Already a Rust command: 5 (`workspaces_list`, `conversations_list`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 1 |
-| P4 | 14 |
+| P4 (ported) | 2 |
+| P4 | 13 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -89,7 +89,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `workspace:validate` | `window.nocturne.workspace.validate` | `validate(value: string): Promise<string \| null>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:68` | filesystem read | P3 | Checks a path and its scope. No authorisation. |
 | `workspaces:list` | `window.nocturne.workspace.list` | `list(): Promise<Workspace[]>` | none (no input) | `electron/ipc/registerWorkspaceIpc.ts:69` | read | P3 (ported) | Rust command `workspaces_list`, paged: a required limit (1 to 500) and an offset. `hasMore` says whether more follow. First cut: the interface reads the first page only. |
 | `workspaces:remove` | `window.nocturne.workspace.remove` | `remove(value: string): Promise<void>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:78` | database write | P4 | Removes a workspace record. |
-| `workspaces:favorite` | `window.nocturne.workspace.favorite` | `favorite(value: string, favorite: boolean): Promise<void>` | zod: workspaceFavoriteSchema | `electron/ipc/registerWorkspaceIpc.ts:79` | database write | P4 | Validated with `workspaceFavoriteSchema`. |
+| `workspaces:favorite` | `window.nocturne.workspace.favorite` | `favorite(value: string, favorite: boolean): Promise<void>` | zod: workspaceFavoriteSchema | `electron/ipc/registerWorkspaceIpc.ts:79` | database write | P4 (ported) | Rust command `workspace_set_favorite`: the project must be saved, and the request has the same fields and bounds as `workspaceFavoriteSchema`. No interface control yet. |
 | `workspace:openTool` | `window.nocturne.workspace.openTool` | `openTool(value: string, tool: 'editor' \| 'terminal'): Promise<void>` | zod: workspaceToolSchema | `electron/ipc/registerWorkspaceIpc.ts:88` | process/shell | later | Starts an editor or a terminal in the workspace. |
 | `workspace:watch` | `window.nocturne.workspace.watch` | `watch(value: string \| null): Promise<void>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:80` | filesystem read | later | Starts or stops a filesystem watcher on the workspace. |
 | `workspace:changed` | `window.nocturne.workspace.onChanged (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `electron/ipc/registerWorkspaceIpc.ts:28` | event | event | Watcher events. |
@@ -127,7 +127,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `changeControl:decideHunk` | `window.nocturne.changeControl.decideHunk` | `decideHunk(conversationId: string, hunkId: string, status: 'accepted' \| 'rejected'): Promise<ChangeHunkRecord>` | zod: changeControlHunkDecisionSchema | `electron/ipc/registerChangeControlIpc.ts:76` | filesystem write | later | Accepting a hunk applies its patch to the workspace file. |
 | `changeControl:decide` | `window.nocturne.changeControl.decide` | `decide(conversationId: string, changeId: string, status: 'accepted' \| 'rejected'): Promise<{ changeSet: ChangeSetRecord; change: ChangeRecord }>` | zod: changeControlHunkDecisionSchema | `electron/ipc/registerChangeControlIpc.ts:76` | filesystem write | later | Accepting a change applies it to the workspace. |
 | `changeControl:changed` | `window.nocturne.changeControl.onChanged (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `electron/ipc/registerAiIpc.ts:269` | event | event |  |
-| `conversations:list` | `window.nocturne.conversations.list` | `list(): Promise<Conversation[]>` | none (no input) | `electron/ipc/registerConversationIpc.ts:24` | read | P3 (ported) | Already a Rust command (`conversations_list`). No limit yet. |
+| `conversations:list` | `window.nocturne.conversations.list` | `list(): Promise<Conversation[]>` | none (no input) | `electron/ipc/registerConversationIpc.ts:24` | read | P3 (ported) | Already a Rust command (`conversations_list`), paged: a required limit from 1 to 500 and a cursor. |
 | `conversations:page` | `window.nocturne.conversations.page` | `page(offset?: number, limit?: number): Promise<CollectionPage<Conversation>>` | zod: pageSchema | `electron/ipc/registerConversationIpc.ts:25` | read | P3 | Paginated. |
 | `conversations:create` | `window.nocturne.conversations.create` | `create(workspace: string): Promise<Conversation>` | inline .parse | `electron/ipc/registerConversationIpc.ts:29` | database write | P4 | Creates a conversation for a workspace. |
 | `conversations:messages` | `window.nocturne.conversations.messages` | `messages(id: string): Promise<Message[]>` | zod: idSchema | `electron/ipc/registerConversationIpc.ts:34` | read | P3 | Returns every message with no limit. The port uses the paged form. |
