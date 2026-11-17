@@ -14,7 +14,7 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate on `0dafe7c`: success. Shell on `0dafe7c`: running when this was written; see the report. | Reverse gate on CI for `0dafe7c` (row gate running). |
 | P2: IPC inventory | `3f2a9ce` | not yet | not run | Nothing run on CI yet. |
 | P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
-| P4: database writes | first cut: `workspace_set_favorite`, in its own commit (see `git log`). The theme button is next. | not yet | not run | Nothing on the page sets a favorite yet. A failed write is not forced in a test. |
+| P4: database writes | first cut: `workspace_set_favorite` (its own commit) and the theme button saving through `settings_set` (see `git log`). | not yet | not run | No control sets a favorite yet. Only the theme is saved from the page. A failed write is not forced in a test. |
 | P5 to P10 | not started | | | |
 
 ### P1 detail
@@ -65,14 +65,19 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 - The write is one `UPDATE`, so SQLite leaves the row as it was if the statement fails. A forced failure is not
   tested; the tests cover the refused requests, which must write nothing.
 - The command is granted to the main window only. The interface does not call it yet.
+- The sidebar theme button changes the theme at once and saves it with `settings_set` (`{ input: { theme } }`, the
+  theme and nothing else). The settings area shows the reply, so it keeps the saved theme. A save the shell refuses
+  keeps the theme on screen and shows the shell's message beside the button until the next press.
+- The browser check of the sidebar counts the saves: two for a full run, one for a refused save, none otherwise. The
+  full run reloads the page, so the saves made before the reload are kept.
 
 ## Verified in this round
 
 Local, on the tree of the P4 first cut: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
 `cargo clippy -p noct-ui --target wasm32-unknown-unknown -D warnings`, `cargo test --workspace --no-fail-fast`
-(446 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
+(450 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
 `npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node --test scripts/*.test.mjs` (7 of 7),
-`node scripts/check-shell-csp.mjs`, `node scripts/check-shell-ui.mjs` (16 scenarios, after `trunk build --release` of
+`node scripts/check-shell-csp.mjs`, `node scripts/check-shell-ui.mjs` (17 scenarios, after `trunk build --release` of
 `crates/noct-ui`), and the output differential: `node scripts/generate-output-differential.mjs`, then
 `cargo test -p noct-app --test output_differential -- --ignored` (passes for the nine release lines and the current line).
 

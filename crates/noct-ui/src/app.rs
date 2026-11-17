@@ -32,6 +32,8 @@ pub fn App() -> impl IntoView {
     let system_dark = dom::system_prefers_dark();
     let (theme, set_theme) = signal(Theme::from_setting(None, system_dark));
     let (theme_touched, set_theme_touched) = signal(false);
+    // The shell's message for a theme that was not saved. It is shown until the next press of the button.
+    let (theme_error, set_theme_error) = signal(None::<String>);
 
     let (mode, set_mode) = signal(Mode::Review);
     let (settings_open, set_settings_open) = signal(false);
@@ -68,9 +70,21 @@ pub fn App() -> impl IntoView {
 
     Effect::new(move |_| dom::set_root_attribute("data-theme", theme.get().attribute()));
 
+    // The theme changes at once and is saved with `settings_set`. A saved reply is the settings the shell holds, so
+    // the settings area shows the theme that was saved; a refused save keeps the theme on screen and says so.
     let toggle_theme = move |_| {
+        let next = theme.get_untracked().toggled();
         set_theme_touched.set(true);
-        set_theme.update(|current| *current = current.toggled());
+        set_theme.set(next);
+        set_theme_error.set(None);
+        ipc::call_with(
+            settings::SET_COMMAND,
+            &settings::theme_request(next.setting()),
+            move |outcome| match settings::saved(outcome) {
+                Ok(view) => set_settings_view.set(view),
+                Err(failure) => set_theme_error.set(Some(failure.message)),
+            },
+        );
     };
     let theme_button_label = move || match theme.get() {
         Theme::Light => "Usar tema escuro",
@@ -103,6 +117,13 @@ pub fn App() -> impl IntoView {
                         }}
                     </button>
                 </div>
+                {move || {
+                    theme_error.get().map(|message| {
+                        view! {
+                            <p class="note" role="alert" data-testid="theme-error">{message}</p>
+                        }
+                    })
+                }}
                 <nav class="nav" aria-label="Projetos">
                     <div class="nav__label">"Projetos"</div>
                     {move || projects_view(workspaces_view.get(), read_workspaces)}

@@ -9,6 +9,22 @@ use crate::ipc::{self, Failure, Outcome};
 /// The command the interface reads its settings with.
 pub const COMMAND: &str = "settings_get";
 
+/// The command that saves a setting. The sidebar theme button is its only caller for now.
+pub const SET_COMMAND: &str = "settings_set";
+
+/// The argument of the save: the theme and nothing else, so the theme button changes no other setting.
+pub fn theme_request(theme: AppTheme) -> String {
+    serde_json::json!({ "input": { "theme": theme } }).to_string()
+}
+
+/// The settings the shell holds after a save, or the shell's error to show beside the button that saved.
+pub fn saved(outcome: Outcome) -> Result<SettingsView, Failure> {
+    match settle(outcome) {
+        SettingsView::Failed(failure) => Err(failure),
+        view => Ok(view),
+    }
+}
+
 /// What the settings area shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SettingsView {
@@ -150,6 +166,46 @@ mod tests {
                 "{text:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_theme_is_saved_alone() {
+        assert_eq!(
+            theme_request(AppTheme::Dark),
+            r#"{"input":{"theme":"dark"}}"#
+        );
+        assert_eq!(
+            theme_request(AppTheme::Light),
+            r#"{"input":{"theme":"light"}}"#
+        );
+    }
+
+    #[test]
+    fn a_saved_reply_is_the_settings_the_shell_holds() {
+        match saved(Outcome::Resolved(
+            r#"{"approvalPolicy":"on-request","theme":"light"}"#.to_string(),
+        )) {
+            Ok(SettingsView::Ready(settings)) => assert_eq!(settings.theme, Some(AppTheme::Light)),
+            other => panic!("the saved settings are shown, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_refused_save_is_the_shell_error_and_an_unexpected_reply_is_an_error() {
+        assert_eq!(
+            saved(Outcome::Rejected(
+                r#"{"code":"persistence","message":"Não foi possível acessar os dados locais."}"#
+                    .to_string(),
+            )),
+            Err(Failure {
+                code: "persistence".to_string(),
+                message: "Não foi possível acessar os dados locais.".to_string(),
+            })
+        );
+        assert_eq!(
+            saved(Outcome::Resolved("[]".to_string())),
+            Err(ipc::invalid_response())
+        );
     }
 
     #[test]

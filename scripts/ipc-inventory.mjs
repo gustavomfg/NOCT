@@ -112,7 +112,7 @@ const CLASS = {
   'diagnostics.rendererError': ['filesystem write', 'P5', 'Logs a renderer error. It goes through the log redaction.'],
   'diagnostics.rendererStats': ['filesystem write', 'P5', 'Logs renderer performance numbers.'],
   'settings.get': ['read', 'P3 (ported)', 'Already a Rust command (`settings_get`).'],
-  'settings.set': ['database write', 'P4 (ported)', 'Already a Rust command (`settings_set`). Wiring the theme button is part of P4.'],
+  'settings.set': ['database write', 'P4 (ported)', 'Rust command `settings_set`. The sidebar theme button saves the theme through it; the other settings have no control yet.'],
   'updates.getState': ['read', 'P8', 'Updater state held in the process. No network.'],
   'updates.check': ['network', 'stop', 'Contacts the update server. The updater is a stop condition.'],
   'updates.download': ['network', 'stop', 'Downloads an update.'],

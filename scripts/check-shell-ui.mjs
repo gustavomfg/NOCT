@@ -5,8 +5,9 @@
 // mock defines `window.__TAURI_INTERNALS__.invoke`, which is the function the shell's webview defines
 // (tauri-2.12.5/scripts/core.js). Each scenario answers `settings_get` and `workspaces_list` in its own way.
 //
-// What this proves: the interface calls only `settings_get` (with an empty payload) and `workspaces_list` (with the
-// first page request, `{ input: { limit: 500 } }`);
+// What this proves: the interface calls only `settings_get` (with an empty payload), `workspaces_list` (with the
+// first page request, `{ input: { limit: 500 } }`), and `settings_set` (with the theme and nothing else, once for
+// each press of the theme button);
 // the settings show their loading state, values, the shell's error and the way to try again; the sidebar lists
 // the projects the shell returns, in order, with the note of each one that cannot be used as it is, and shows its
 // own loading, empty, error and retry states; a reply outside the contract is an error, not a default or a
@@ -142,6 +143,7 @@ const SCENARIOS = [
   { name: 'projects-error-then-retry', mode: 'ready', theme: 'light', projects: 'error-then-retry', expectTheme: 'light' },
   { name: 'projects-reply-outside-the-contract', mode: 'ready', theme: 'light', projects: 'invalid', expectTheme: 'light' },
   { name: 'projects-with-more-to-come', mode: 'ready', theme: 'light', projects: 'ready', more: true, expectTheme: 'light' },
+  { name: 'theme-not-saved-says-so', mode: 'ready', theme: 'light', saveFails: true, expectTheme: 'light' },
 ]
 
 const TYPES = {
@@ -192,6 +194,8 @@ function installMock(config) {
       window.__noctCalls.push({ command, payload })
       const attempt = (window.__noctAttempts[command] = (window.__noctAttempts[command] ?? 0) + 1)
       const mode = modeOf(command)
+      // A save the scenario refuses gets the shell's own error, as a refused read does.
+      if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
       return new Promise((resolve, reject) => {
         const answer = () => {
           switch (mode) {
@@ -355,6 +359,17 @@ try {
       check((await html.getAttribute('data-theme')) === scenario.expectTheme, `the theme is ${scenario.expectTheme}`)
       check((await html.getAttribute('data-glass')) === 'on', 'the glass layer is on by default')
 
+      // The full scenario reloads the page, which clears the recorded calls; the saves made before the reload are kept here.
+      let savesBeforeReload = []
+      if (scenario.saveFails) {
+        // A theme the shell does not save still changes on screen, and the window says why it was not kept.
+        await themeButton.click()
+        const alert = page.getByTestId('theme-error')
+        await alert.waitFor({ timeout: 8000 })
+        check((await alert.textContent())?.includes(SHELL_ERROR.message), 'a theme that is not saved says so with the shell message')
+        check((await html.getAttribute('data-theme')) === 'dark', 'the theme still changes on screen when the save is refused')
+      }
+
       if (scenario.full) {
         // The sidebar button changes the theme for the session, and says what it will switch to.
         const other = scenario.expectTheme === 'light' ? 'dark' : 'light'
@@ -402,6 +417,7 @@ try {
         check((await card.evaluate((element) => getComputedStyle(element).transform)) === 'none', 'a hovered card has no transform')
 
         // Keyboard: the first Tab from the top of a fresh page reaches the theme button, with a visible outline.
+        savesBeforeReload = await page.evaluate(() => (window.__noctCalls ?? []).filter((call) => call.command === 'settings_set'))
         await page.reload()
         await page.getByRole('button', { name: 'Ajustes', exact: true }).waitFor({ timeout: 8000 })
         await page.keyboard.press('Tab')
@@ -467,10 +483,20 @@ try {
       if (scenario.mode !== 'no-runtime') {
         const count = (command) => calls.filter((call) => call.command === command).length
         check(calls.length >= 2, 'the interface calls the shell for settings and projects')
-        check(calls.every((call) => READ_COMMANDS.includes(call.command)), 'only the two read commands are called')
+        check(calls.every((call) => [...READ_COMMANDS, 'settings_set'].includes(call.command)), 'only the read commands and the theme save are called')
+        const reads = calls.filter((call) => call.command !== 'settings_set')
         check(
-          calls.every((call) => JSON.stringify(call.payload) === PAYLOAD_OF[call.command]),
+          reads.every((call) => JSON.stringify(call.payload) === PAYLOAD_OF[call.command]),
           'each read is sent its own payload: settings_get none, workspaces_list the first page at the largest limit',
+        )
+        const saves = [...savesBeforeReload, ...calls.filter((call) => call.command === 'settings_set')]
+        check(
+          saves.every((call) => /^\{"input":\{"theme":"(light|dark)"\}\}$/.test(JSON.stringify(call.payload))),
+          'a theme save sends the theme and nothing else',
+        )
+        check(
+          saves.length === (scenario.full ? 2 : scenario.saveFails ? 1 : 0),
+          `the theme is saved once for each press of the theme button (saves: ${saves.length})`,
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
         check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
