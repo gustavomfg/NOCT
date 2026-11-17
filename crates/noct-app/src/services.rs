@@ -6,10 +6,10 @@ use std::path::PathBuf;
 
 use noct_core::brain_memory::{
     BrainMemory, BrainMemoryScope, BrainMemorySource, CreateBrainMemoryInput,
-    InitialBrainMemoryStatus,
+    InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition,
 };
 use noct_core::contracts::{Conversation, Workspace, WorkspaceAvailability};
-use noct_core::ipc::brain::BrainMemoryCreateRequest;
+use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
@@ -240,6 +240,52 @@ pub fn brain_create(
     store
         .brain_memories()
         .create(&conversation.workspace, &input)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Changes a brain memory of a conversation's project. The conversation must exist, and its project must pass the check
+/// of a conversation write. The memory must exist in that project, and a status change must follow the lifecycle; a
+/// status that stays the same is not a change. The conversation of a conversation-scoped memory is the one of the
+/// request, and a workspace-scoped memory keeps none. The repository writes the change and its history entry in one
+/// transaction.
+pub fn brain_update(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryUpdateRequest,
+) -> Result<BrainMemory, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let workspace = conversation.workspace.as_str();
+    let current = store
+        .brain_memories()
+        .get(&request.memory_id, workspace)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownMemory)?;
+    if let Some(status) = request.status
+        && status != current.status
+        && !allowed_transition(current.status, status)
+    {
+        return Err(CommandError::InvalidTransition);
+    }
+    let input = UpdateBrainMemoryInput {
+        kind: request.kind,
+        scope: request.scope,
+        conversation_id: match request.scope {
+            Some(BrainMemoryScope::Conversation) => Some(Some(request.conversation_id.clone())),
+            Some(BrainMemoryScope::Workspace) => Some(None),
+            None => None,
+        },
+        content: request.content.clone(),
+        confidence: request.confidence,
+        status: request.status,
+    };
+    store
+        .brain_memories()
+        .update(&request.memory_id, workspace, &input)
         .map_err(|_| CommandError::Persistence)
 }
 

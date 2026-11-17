@@ -284,9 +284,12 @@ fn a_refused_conversation_insert_leaves_the_workspace_unsaved() {
         )
         .expect("the trigger is installed");
 
+    let error = store
+        .create_conversation("/work/project")
+        .expect_err("the refused insert is an error");
     assert!(
-        store.create_conversation("/work/project").is_err(),
-        "the refused insert is an error"
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
     );
 
     let saved: i64 = store
@@ -306,6 +309,10 @@ fn a_failed_brain_history_write_leaves_no_memory_behind() {
     let directory = scratch("store-brain-create-rollback");
     let store = Store::open(&directory).expect("open");
     store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace the memory belongs to is saved");
+    store
         .connection()
         .execute_batch(
             "CREATE TRIGGER refuse_brain_history BEFORE INSERT ON brain_memory_history
@@ -323,12 +330,15 @@ fn a_failed_brain_history_write_leaves_no_memory_behind() {
         status: None,
     };
 
+    // The workspace exists, so the memory insert succeeds and only the history insert is refused. The message
+    // must name the trigger, or the test would pass for another reason.
+    let error = store
+        .brain_memories()
+        .create("/work/project", &input)
+        .expect_err("the refused history write is an error");
     assert!(
-        store
-            .brain_memories()
-            .create("/work/project", &input)
-            .is_err(),
-        "the refused history write is an error"
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
     );
 
     let stored: i64 = store
@@ -338,5 +348,61 @@ fn a_failed_brain_history_write_leaves_no_memory_behind() {
     assert_eq!(
         stored, 0,
         "the memory written by the same call is rolled back"
+    );
+}
+
+#[test]
+fn a_failed_brain_history_write_on_update_leaves_the_memory_unchanged() {
+    let directory = scratch("store-brain-update-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace the memory belongs to is saved");
+    let created = store
+        .brain_memories()
+        .create(
+            "/work/project",
+            &noct_core::brain_memory::CreateBrainMemoryInput {
+                conversation_id: None,
+                kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+                scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+                content: "A note".to_string(),
+                confidence: None,
+                source_type: None,
+                source_id: None,
+                status: None,
+            },
+        )
+        .expect("the memory is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_brain_update_history BEFORE INSERT ON brain_memory_history
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let update = noct_core::brain_memory::UpdateBrainMemoryInput {
+        content: Some("A changed note".to_string()),
+        ..Default::default()
+    };
+
+    let error = store
+        .brain_memories()
+        .update(&created.id, "/work/project", &update)
+        .expect_err("the refused history write is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let stored = store
+        .brain_memories()
+        .get(&created.id, "/work/project")
+        .expect("the memory is read")
+        .expect("the memory is stored");
+    assert_eq!(
+        stored.content, "A note",
+        "the change is rolled back with its history entry"
     );
 }

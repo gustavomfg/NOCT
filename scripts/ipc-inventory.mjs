@@ -94,7 +94,7 @@ const CLASS = {
   'brain.page': ['read', 'P3', ''],
   'brain.history': ['read', 'P3', ''],
   'brain.create': ['database write', 'P4 (ported)', 'Rust command `brain_create`: the conversation must exist and its project must pass the same check as a conversation write. The content has the schema rules: trimmed, 1 to 8,000 UTF-16 units, and not a credential. Stored as a manual candidate, with its history entry in one transaction. No interface control yet.'],
-  'brain.update': ['database write', 'P4', 'Same credential check as create.'],
+  'brain.update': ['database write', 'P4 (ported)', 'Rust command `brain_update`: the same conversation and project checks as `brain_create`, and the memory must exist in that project. A status change must follow the lifecycle. The fields that are present are checked as in the schema, and at least one must be present. The credential rule of create applies to the content. No interface control yet.'],
   'brain.delete': ['database write', 'P4', ''],
   'brain.extract': ['database write', 'P4', 'Local extraction, no provider call. Stores candidate memories.'],
   'artifacts.list': ['read', 'P3', ''],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_update\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')

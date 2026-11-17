@@ -367,6 +367,105 @@ fn brain_create_is_granted_and_checks_its_request() {
     }
 }
 
+/// The brain update command is granted to the main window. A change that the lifecycle refuses, a memory that does not
+/// exist and a request that changes nothing each have their own code or are invalid input; a valid change is stored.
+#[test]
+fn brain_update_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("brain-update-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+    let memory = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_create",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "kind": "fact",
+                "scope": "workspace",
+                "content": "A note",
+            } }),
+        ),
+    ));
+    let memory_id = memory["id"].as_str().expect("an id").to_string();
+
+    let updated = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_update",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "memoryId": memory_id.clone(),
+                "content": "  A changed note  ",
+                "status": "active",
+            } }),
+        ),
+    ));
+    assert_eq!(updated["content"], "A changed note");
+    assert_eq!(updated["status"], "active");
+
+    let refused = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_update",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "memoryId": memory_id.clone(),
+                "status": "candidate",
+            } }),
+        ),
+    ));
+    assert_eq!(refused["code"], "invalid-transition");
+    assert_eq!(refused["message"], "Transição de memória inválida.");
+
+    let missing = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_update",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "memoryId": "7a1d2c3e-4f50-4a61-8b72-9c83d4e5f607",
+                "content": "A note",
+            } }),
+        ),
+    ));
+    assert_eq!(missing["code"], "unknown-memory");
+
+    for input in [
+        json!({ "input": { "conversationId": conversation_id.clone(), "memoryId": memory_id.clone() } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "memoryId": memory_id.clone(), "confidence": 101 } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "memoryId": memory_id.clone(), "theme": "dark" } }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "brain_update", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

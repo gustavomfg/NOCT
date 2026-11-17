@@ -11,7 +11,7 @@ use noct_core::brain_memory::{
     BrainMemoryKind, BrainMemoryScope, BrainMemorySource, BrainMemoryStatus,
 };
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
-use noct_core::ipc::brain::BrainMemoryCreateRequest;
+use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
 use noct_core::ipc::workspaces::{WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePageRequest};
@@ -723,4 +723,182 @@ fn a_brain_memory_is_refused_without_a_conversation_or_an_authorized_project() {
         "a conversation whose project is no longer available"
     );
     assert_eq!(memories(), 0, "the refused request writes nothing");
+}
+
+#[test]
+fn a_brain_memory_follows_its_lifecycle_and_a_refused_change_writes_nothing() {
+    let scratch = Scratch::new("brain-update");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let memory = services::brain_create(
+        &store,
+        &[],
+        &BrainMemoryCreateRequest {
+            conversation_id: conversation.id.clone(),
+            kind: BrainMemoryKind::Fact,
+            scope: BrainMemoryScope::Workspace,
+            content: "A note".to_string(),
+        },
+    )
+    .expect("created");
+    let blank = || BrainMemoryUpdateRequest {
+        conversation_id: conversation.id.clone(),
+        memory_id: memory.id.clone(),
+        kind: None,
+        scope: None,
+        content: None,
+        confidence: None,
+        status: None,
+    };
+    let change = |edit: &dyn Fn(&mut BrainMemoryUpdateRequest)| {
+        let mut request = blank();
+        edit(&mut request);
+        services::brain_update(&store, &[], &request)
+    };
+
+    let edited = change(&|r| {
+        r.content = Some("Prefer large commits".to_string());
+        r.confidence = Some(80);
+    })
+    .expect("the content and confidence change");
+    assert_eq!(edited.content, "Prefer large commits");
+    assert_eq!(edited.confidence, 80);
+    assert_eq!(edited.status, BrainMemoryStatus::Candidate);
+
+    assert_eq!(
+        change(&|r| r.status = Some(BrainMemoryStatus::Active))
+            .expect("candidate to active")
+            .status,
+        BrainMemoryStatus::Active
+    );
+    assert_eq!(
+        change(&|r| r.status = Some(BrainMemoryStatus::Archived))
+            .expect("active to archived")
+            .status,
+        BrainMemoryStatus::Archived
+    );
+    assert!(
+        matches!(
+            change(&|r| r.status = Some(BrainMemoryStatus::Candidate)),
+            Err(CommandError::InvalidTransition)
+        ),
+        "an archived memory does not become a candidate"
+    );
+    assert!(
+        change(&|r| r.status = Some(BrainMemoryStatus::Archived)).is_ok(),
+        "a status that stays the same is not a change"
+    );
+
+    let stored = store
+        .brain_memories()
+        .get(&memory.id, &path)
+        .expect("the memory is read")
+        .expect("the memory is stored");
+    assert_eq!(
+        stored.status,
+        BrainMemoryStatus::Archived,
+        "the refused change wrote nothing"
+    );
+    assert_eq!(stored.content, "Prefer large commits");
+}
+
+#[test]
+fn a_brain_memory_scope_change_sets_or_clears_its_conversation() {
+    let scratch = Scratch::new("brain-update-scope");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let memory = services::brain_create(
+        &store,
+        &[],
+        &BrainMemoryCreateRequest {
+            conversation_id: conversation.id.clone(),
+            kind: BrainMemoryKind::Fact,
+            scope: BrainMemoryScope::Workspace,
+            content: "A note".to_string(),
+        },
+    )
+    .expect("created");
+    let update = |scope: BrainMemoryScope| BrainMemoryUpdateRequest {
+        conversation_id: conversation.id.clone(),
+        memory_id: memory.id.clone(),
+        kind: None,
+        scope: Some(scope),
+        content: None,
+        confidence: None,
+        status: None,
+    };
+
+    let scoped = services::brain_update(&store, &[], &update(BrainMemoryScope::Conversation))
+        .expect("the memory moves to the conversation");
+    assert_eq!(
+        scoped.conversation_id.as_deref(),
+        Some(conversation.id.as_str())
+    );
+
+    let shared = services::brain_update(&store, &[], &update(BrainMemoryScope::Workspace))
+        .expect("the memory moves to the workspace");
+    assert_eq!(
+        shared.conversation_id, None,
+        "a workspace memory keeps no conversation"
+    );
+}
+
+#[test]
+fn a_brain_update_names_the_missing_conversation_or_memory() {
+    let scratch = Scratch::new("brain-update-missing");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let request = |conversation_id: &str, memory_id: &str| BrainMemoryUpdateRequest {
+        conversation_id: conversation_id.to_string(),
+        memory_id: memory_id.to_string(),
+        kind: None,
+        scope: None,
+        content: Some("A note".to_string()),
+        confidence: None,
+        status: None,
+    };
+    let absent = "7a1d2c3e-4f50-4a61-8b72-9c83d4e5f607";
+
+    assert!(
+        matches!(
+            services::brain_update(
+                &store,
+                &[],
+                &request("3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", absent)
+            ),
+            Err(CommandError::UnknownConversation)
+        ),
+        "a conversation that does not exist"
+    );
+    assert!(
+        matches!(
+            services::brain_update(&store, &[], &request(&conversation.id, absent)),
+            Err(CommandError::UnknownMemory)
+        ),
+        "a memory that does not exist in the project"
+    );
 }

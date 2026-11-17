@@ -16,6 +16,11 @@ pub enum CommandError {
     UnknownWorkspace,
     /// The request names a conversation that does not exist. The message is the one the TypeScript shell gives.
     UnknownConversation,
+    /// The request names a brain memory that does not exist in the project. The message is the TypeScript one.
+    UnknownMemory,
+    /// The request moves a memory to a status its lifecycle does not allow. The TypeScript message also names the two
+    /// statuses; this one does not, so the interface shows the same refusal without them.
+    InvalidTransition,
 }
 
 impl CommandError {
@@ -26,6 +31,8 @@ impl CommandError {
             Self::Internal => "internal",
             Self::UnknownWorkspace => "unknown-workspace",
             Self::UnknownConversation => "unknown-conversation",
+            Self::UnknownMemory => "unknown-memory",
+            Self::InvalidTransition => "invalid-transition",
         }
     }
 
@@ -36,6 +43,8 @@ impl CommandError {
             Self::Internal => "Falha interna do NOCT.",
             Self::UnknownWorkspace => "Pasta do projeto não encontrada.",
             Self::UnknownConversation => "Conversa não encontrada.",
+            Self::UnknownMemory => "Memória não encontrada.",
+            Self::InvalidTransition => "Transição de memória inválida.",
         }
     }
 }

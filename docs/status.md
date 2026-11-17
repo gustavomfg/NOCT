@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (this change) | `f1f5b5f` | `93af490`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation or a memory. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in two tests (the conversation insert, the memory's history entry). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (this change) | `f1f5b5f` | `93af490` and `595bb08`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation or changes a memory. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in three tests (the conversation insert, the memory insert's history entry, the update's history entry). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -115,6 +115,31 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 - Checks: `crates/noct-core/tests/ipc_brain_create.rs` (eight tests of the request), `crates/noct-app/tests/services.rs` (two
   tests), `crates/noct-app/tests/commands_acl.rs` (one test), `crates/noct-db/tests/store.rs` (the failed history write).
 - Tests after this change: 492 passed, 0 failed, 19 ignored in the workspace.
+
+### P4 detail: `brain_update`
+
+- The request is `{ conversationId, memoryId, kind?, scope?, content?, confidence?, status? }`, checked by the request contract
+  before the store is read. It follows `brainMemoryUpdateSchema`: both ids are UUIDs; at least one field must be present, and
+  the refusal says so in the TypeScript words (`Informe ao menos uma alteração.`); `content` follows the create rules;
+  `confidence` is a whole number from 0 to 100 (`80.0` is accepted, as JavaScript reads it as 80); `kind`, `scope` and
+  `status` are the enumerated values. An unknown field, or a wrong type, is `invalid-input`.
+- The conversation and the project are checked as in `brain_create`: `unknown-conversation`, then `unknown-workspace`.
+- The memory must exist in that project: `unknown-memory`, with the TypeScript message `Memória não encontrada.`.
+- A status change must follow the lifecycle. The transition table moved from the repository into `noct-core`
+  (`allowed_transition`), so the service and the repository share one definition. A refusal is `invalid-transition`, with
+  the message `Transição de memória inválida.`. **Deviation:** the TypeScript message also names the two statuses
+  (`candidate → archived.`); the Rust message does not. A status that stays the same is not a change, as in TypeScript.
+- Scope follows the request, as in TypeScript: `conversation` sets the request's conversation, `workspace` clears it, and an
+  absent scope keeps the memory's own.
+- The repository writes the change and its history entry in one transaction. A test refuses the history entry and checks the
+  memory keeps its content, and that the refusal is the trigger's (not a foreign-key error).
+- Not ported: the log line the TypeScript shell writes per update. The interface does not call the command yet.
+- Checks: `crates/noct-core/tests/ipc_brain_update.rs` (six tests), `crates/noct-app/tests/services.rs` (three tests),
+  `crates/noct-app/tests/commands_acl.rs` (one test), `crates/noct-db/tests/store.rs` (the failed history write).
+- Tests after this change: 503 passed, 0 failed, 19 ignored in the workspace.
+- A correction found while writing this: the two earlier failed-write tests (`conversations_create` and `brain_create`) passed
+  without reaching their trigger when the workspace row was missing (a foreign-key error). They now create the workspace first
+  and assert the trigger's message, so each one fails only because of the trigger.
 
 ### P5 detail (first cut)
 

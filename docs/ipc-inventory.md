@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 7 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 8 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_update`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 4 |
-| P4 | 11 |
+| P4 (ported) | 5 |
+| P4 | 10 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -149,7 +149,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `brain:page` | `window.nocturne.brain.page` | `page(conversationId: string, offset?: number, limit?: number, query?: string, status?: BrainMemoryStatus): Promise<CollectionPage<BrainMemory>>` | zod: brainMemoryPageSchema | `electron/ipc/registerMemoryIpc.ts:63` | read | P3 |  |
 | `brain:history` | `window.nocturne.brain.history` | `history(conversationId: string, memoryId: string): Promise<BrainMemoryHistoryEntry[]>` | zod: brainMemoryDeleteSchema | `electron/ipc/registerMemoryIpc.ts:69` | read | P3 |  |
 | `brain:create` | `window.nocturne.brain.create` | `create(conversationId: string, value: { kind: BrainMemoryKind; scope: BrainMemoryScope; content: string }): Promise<BrainMemory>` | zod: brainMemoryCreateSchema | `electron/ipc/registerMemoryIpc.ts:75` | database write | P4 (ported) | Rust command `brain_create`: the conversation must exist and its project must pass the same check as a conversation write. The content has the schema rules: trimmed, 1 to 8,000 UTF-16 units, and not a credential. Stored as a manual candidate, with its history entry in one transaction. No interface control yet. |
-| `brain:update` | `window.nocturne.brain.update` | `update(conversationId: string, memoryId: string, value: Omit<UpdateBrainMemoryInput, 'conversationId'>): Promise<BrainMemory>` | zod: brainMemoryUpdateSchema | `electron/ipc/registerMemoryIpc.ts:95` | database write | P4 | Same credential check as create. |
+| `brain:update` | `window.nocturne.brain.update` | `update(conversationId: string, memoryId: string, value: Omit<UpdateBrainMemoryInput, 'conversationId'>): Promise<BrainMemory>` | zod: brainMemoryUpdateSchema | `electron/ipc/registerMemoryIpc.ts:95` | database write | P4 (ported) | Rust command `brain_update`: the same conversation and project checks as `brain_create`, and the memory must exist in that project. A status change must follow the lifecycle. The fields that are present are checked as in the schema, and at least one must be present. The credential rule of create applies to the content. No interface control yet. |
 | `brain:delete` | `window.nocturne.brain.delete` | `delete(conversationId: string, memoryId: string): Promise<{ deleted: true }>` | zod: brainMemoryDeleteSchema | `electron/ipc/registerMemoryIpc.ts:116` | database write | P4 |  |
 | `brain:extract` | `window.nocturne.brain.extract` | `extract(conversationId: string, content: string): Promise<{ memories: BrainMemory[]; content: string; warning?: string }>` | zod: brainMemoryExtractSchema | `electron/ipc/registerMemoryIpc.ts:129` | database write | P4 | Local extraction, no provider call. Stores candidate memories. |
 | `artifacts:list` | `window.nocturne.artifacts.list` | `list(conversationId: string): Promise<Artifact[]>` | zod: idSchema | `electron/ipc/registerArtifactIpc.ts:22` | read | P3 |  |

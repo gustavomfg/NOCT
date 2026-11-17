@@ -158,6 +158,20 @@ pub struct UpdateBrainMemoryInput {
     pub status: Option<BrainMemoryStatus>,
 }
 
+/// Whether a memory may move from one status to another. The lifecycle: candidates are approved or disapproved, active
+/// memories become outdated or are archived, outdated memories return to use or are archived, and archived ones only
+/// return. A status that does not change is always allowed; the caller decides whether that is a change at all.
+pub fn allowed_transition(from: BrainMemoryStatus, to: BrainMemoryStatus) -> bool {
+    use BrainMemoryStatus::{Active, Archived, Candidate, Outdated};
+    matches!(
+        (from, to),
+        (Candidate, Active | Archived)
+            | (Active, Outdated | Archived)
+            | (Outdated, Active | Archived)
+            | (Archived, Active)
+    )
+}
+
 /// A memory an agent proposed, before it is stored as a candidate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

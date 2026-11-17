@@ -6,6 +6,7 @@
 
 use std::collections::HashSet;
 
+use noct_core::brain_memory::allowed_transition;
 use noct_core::brain_memory::{
     BrainMemory, BrainMemoryCandidate, BrainMemoryHistoryAction, BrainMemoryHistoryEntry,
     BrainMemoryScope, BrainMemorySource, BrainMemoryStatus, CreateBrainMemoryInput,
@@ -461,19 +462,6 @@ impl<'a> BrainMemories<'a> {
             }
         }
     }
-}
-
-/// The lifecycle. Candidates are approved or disapproved, active memories become outdated or
-/// are archived, outdated memories return to use or are archived, and archived ones only return.
-fn allowed_transition(from: BrainMemoryStatus, to: BrainMemoryStatus) -> bool {
-    use BrainMemoryStatus::{Active, Archived, Candidate, Outdated};
-    matches!(
-        (from, to),
-        (Candidate, Active | Archived)
-            | (Active, Outdated | Archived)
-            | (Outdated, Active | Archived)
-            | (Archived, Active)
-    )
 }
 
 fn status_action(from: BrainMemoryStatus, to: BrainMemoryStatus) -> BrainMemoryHistoryAction {

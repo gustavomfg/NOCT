@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::Conversation;
-use noct_core::ipc::brain::BrainMemoryCreateRequest;
+use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
@@ -114,6 +114,24 @@ pub async fn brain_create(
     blocking(move || {
         let guard = lock(&store)?;
         services::brain_create(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
+/// Changes a brain memory. The argument is `{ conversationId, memoryId, ... }`, where the optional fields that are present
+/// are changed. The request contract checks it before the store is read. The store lock covers the lookups, the project
+/// check and the write.
+#[tauri::command]
+pub async fn brain_update(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<BrainMemory, CommandError> {
+    let request: BrainMemoryUpdateRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::brain_update(&guard, &default_blocked_roots(), &request)
     })
     .await
 }

@@ -449,7 +449,9 @@ pub mod brain {
     use serde::{Deserialize, Deserializer};
     use serde_json::{Map, Value};
 
-    use crate::brain_memory::{BrainMemoryKind, BrainMemoryScope, is_safe_brain_memory_content};
+    use crate::brain_memory::{
+        BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, is_safe_brain_memory_content,
+    };
     use crate::limits::persistence::BRAIN_MEMORY_CHARACTERS;
     use crate::text::{js_trim, utf16_len};
     use crate::validation::uuid_text;
@@ -499,7 +501,7 @@ pub mod brain {
         }
     }
 
-    fn uuid_field<E: de::Error>(field: &str, value: Value) -> Result<String, E> {
+    pub(super) fn uuid_field<E: de::Error>(field: &str, value: Value) -> Result<String, E> {
         let Value::String(text) = value else {
             return Err(E::custom(format!("{field} must be a UUID")));
         };
@@ -524,5 +526,84 @@ pub mod brain {
             return Err(E::custom("content looks like a credential"));
         }
         Ok(trimmed.to_string())
+    }
+
+    const UPDATE_FIELDS: &[&str] = &[
+        "conversationId",
+        "memoryId",
+        "kind",
+        "scope",
+        "content",
+        "confidence",
+        "status",
+    ];
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct BrainMemoryUpdateRequest {
+        pub conversation_id: String,
+        pub memory_id: String,
+        pub kind: Option<BrainMemoryKind>,
+        pub scope: Option<BrainMemoryScope>,
+        pub content: Option<String>,
+        pub confidence: Option<i64>,
+        pub status: Option<BrainMemoryStatus>,
+    }
+
+    impl<'de> Deserialize<'de> for BrainMemoryUpdateRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut memory_id = None;
+            let mut kind = None;
+            let mut scope = None;
+            let mut content = None;
+            let mut confidence = None;
+            let mut status = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "memoryId" => memory_id = Some(uuid_field::<D::Error>("memoryId", value)?),
+                    "kind" => kind = Some(enum_field::<BrainMemoryKind, D::Error>(value)?),
+                    "scope" => scope = Some(enum_field::<BrainMemoryScope, D::Error>(value)?),
+                    "content" => content = Some(content_field::<D::Error>(value)?),
+                    "confidence" => confidence = Some(confidence_field::<D::Error>(value)?),
+                    "status" => status = Some(enum_field::<BrainMemoryStatus, D::Error>(value)?),
+                    _ => return Err(de::Error::unknown_field(&key, UPDATE_FIELDS)),
+                }
+            }
+            if kind.is_none()
+                && scope.is_none()
+                && content.is_none()
+                && confidence.is_none()
+                && status.is_none()
+            {
+                return Err(de::Error::custom("Informe ao menos uma alteração."));
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                memory_id: memory_id.ok_or_else(|| de::Error::missing_field("memoryId"))?,
+                kind,
+                scope,
+                content,
+                confidence,
+                status,
+            })
+        }
+    }
+
+    fn confidence_field<E: de::Error>(value: Value) -> Result<i64, E> {
+        let number = value
+            .as_f64()
+            .ok_or_else(|| E::custom("confidence is an integer from 0 to 100"))?;
+        if number.fract() != 0.0 || !(0.0..=100.0).contains(&number) {
+            return Err(E::custom("confidence is an integer from 0 to 100"));
+        }
+        Ok(number as i64)
     }
 }
