@@ -2,8 +2,10 @@
 //!
 //! Speaks the same line protocol as `native/rollback-boundary.cpp`, consumed by
 //! `electron/change-control/NativeRollbackOperation.ts`. Only the Linux backend is
-//! ported; other platforms answer every command with `UNSUPPORTED`, which is the
-//! fail-closed behavior of the C++ `#else` branch.
+//! ported. On macOS and Windows this worker answers every command with `UNSUPPORTED`
+//! because the port is missing: the C++ worker has backends there (its `__APPLE__`
+//! and `_WIN32` branches). The `#else` branch of the C++ worker is the fail-closed
+//! answer for every other platform. See `docs/rust-native-rollback-backends.md`.
 
 #[cfg(target_os = "linux")]
 mod linux;
