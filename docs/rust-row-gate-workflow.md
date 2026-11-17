@@ -92,39 +92,41 @@ Recorded as proposed:
 
 - The events are the ones above. The shell workflow keeps its own triggers.
 
-## Proposed, not implemented: TypeScript reads what Rust wrote
+## Rust writes, TypeScript reads and writes, Rust reads back
 
-Status: proposed. Nothing in this section is implemented. The test changes no TypeScript code and no workflow.
+Status: implemented. `scripts/verify-rust-written-gate.mjs` runs it, and `scripts/verify-row-gate.mjs` runs that
+script after its own checks, so `row-gate.yml` runs both directions with no workflow change. The Rust side is
+`crates/noct-db/tests/rust_written_gate.rs`. The compiled TypeScript is loaded through `scripts/row-gate-typescript.mjs`,
+which changes no TypeScript source.
 
-Today no test opens, with the TypeScript code, a database that Rust wrote. The gate runs the other way: TypeScript
-writes the databases, Rust reads them and writes copies, and the Rust results are compared with JSON that TypeScript
-produced (`scripts/verify-row-gate.mjs` and `crates/noct-db/tests/row_gate.rs`). The README of this branch states it in
-its rollback section.
+Before this test, no check opened with the TypeScript code a database that Rust wrote. The original gate ran the other
+way: TypeScript wrote the databases, and Rust read them and wrote copies.
 
-The proposed test has three phases:
+The test has four steps, all in a temporary folder under `target/`:
 
-1. **Rust writes.** An ignored Rust test, run by the gate script like the existing ones, creates a fresh schema-32
-   database for each scenario, using the same scenarios as the gate, such as a workspace, a conversation, a setting,
-   a suggestion, a change, a semantic unit and an engineering write. It writes each database to `NOCT_ROW_GATE_DIR`
-   and the logical rows as canonical JSON, normalised as `expected.json` is. The writes go through the Rust
-   repositories, not raw SQL.
-2. **TypeScript reads.** A Node script opens each Rust-written copy with the compiled `LocalDatabase`, built the same
-   way as in step 1 of this gate. It checks that `PRAGMA user_version` is 32 and that no migration runs. It runs the
-   TypeScript repository reads for those scenarios and compares the normalised rows with the Rust JSON. Any difference
-   fails the script.
-3. **TypeScript writes, Rust reads back.** For a subset of the scenarios, the TypeScript repositories write to a copy
-   of a Rust-written database. The Rust test then reads the copy and compares it with the rows that TypeScript
-   reports. This covers writes from TypeScript into a database that Rust created.
+1. **Rust writes.** The Rust test creates a schema-32 database through the Rust repositories: two workspaces, one of them
+   a favourite, the settings, two conversations and two messages, one with metadata. It records the logical rows as
+   JSON in the form the TypeScript repositories return. The script first checks that `PRAGMA user_version` equals the
+   schema that `shared/constants.ts` declares.
+2. **TypeScript reads.** The compiled `LocalDatabase` opens the Rust database and reads the same rows through its
+   repositories. The rows must be equal to the Rust JSON.
+3. **TypeScript writes.** Through its repositories, TypeScript sets a setting, marks a workspace as a favourite, adds
+   a message to a conversation Rust wrote, and renames that conversation. It records the logical rows after those writes.
+4. **Rust reads back.** The Rust test opens the same file and compares its rows with the JSON from step 3.
 
 Caveats:
 
-- Opening a database with the TypeScript code is not read-only. `DatabaseRuntime.ts` runs `PRAGMA optimize` (line 112),
-  `wal_checkpoint(PASSIVE)` (line 113) and `wal_checkpoint(FULL)` (line 139). So the comparison must use logical state,
-  meaning rows and `user_version`, not file bytes or sidecar files.
-- The format of `expected.json` in the existing gate is the model for the normalised output.
-- The step 3 comparison is the point of the test. If TypeScript cannot read a row that Rust wrote, that is the
-  finding, and it must be reported, not fixed in the test.
-- The cost is not measured. The existing gate takes about 13 seconds locally.
+- Opening a database with the TypeScript code is not read-only. `LocalDatabase` runs `operationRecovery.reconcile()` when
+  it is constructed, and `DatabaseRuntime.ts` runs `PRAGMA optimize` (line 112), `wal_checkpoint(PASSIVE)` (line 113)
+  and `wal_checkpoint(FULL)` (line 139). So the comparison uses logical rows and `user_version`, not file bytes or
+  sidecar files.
+- The comparison is on the rows the scenario writes. It does not cover the release lines, the semantic index or the
+  engineering tables. The existing gate covers those in the reading direction only.
+- A mismatch fails the script and names the step. If TypeScript cannot read a row that Rust wrote, that is the finding,
+  and it is reported; the test is not changed to pass.
+- Checked by a mutation: the script was run with a wrong expected setting, and it failed with a non-zero status.
+- The cost is not measured separately. The whole row gate takes about 13 seconds locally, and this step adds one
+  compile check and two cargo runs.
 
 ## Not verified
 

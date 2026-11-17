@@ -236,10 +236,11 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 - **Bancos mais novos.** O runtime recusa um schema mais novo que 32 antes de alterar qualquer coisa.
 - **Rollback para o aplicativo Electron.** As duas implementações usam o schema 32, então um arquivo escrito por uma deve
   abrir na outra. Este branch não testa isso. O row gate lê arquivos que o TypeScript escreveu, e compara as escritas do
-  Rust com os resultados esperados do TypeScript. Nenhum teste abre um arquivo escrito pelo Rust com o código TypeScript.
-  Um teste que faz isso está proposto em [o documento do row gate](docs/rust-row-gate-workflow.md). Ele não está
-  implementado. Os acessos do TypeScript também escrevem no banco (`PRAGMA optimize` e checkpoints do WAL), então esse
-  teste precisa comparar o estado lógico.
+  Rust com os resultados esperados do TypeScript. A outra direção também é conferida: `scripts/verify-rust-written-gate.mjs`
+  faz o Rust escrever um banco, o TypeScript lê e escreve nele, e o Rust lê de volta, comparando as linhas lógicas a cada
+  etapa. Ele roda com o row gate no CI. Cobre espaços de trabalho, configurações e conversas, não as linhas de release,
+  o índice semântico nem as tabelas de engenharia. Os acessos do TypeScript também escrevem no banco (`PRAGMA optimize` e
+  checkpoints do WAL), então a comparação usa linhas lógicas, não bytes do arquivo.
 - **Rollback no macOS e no Windows.** O worker Rust responde `UNSUPPORTED` nessas plataformas. O worker C++ que o produto
   Electron usa tem backends para as duas. O que falta está listado em
   [o documento de backends](docs/rust-native-rollback-backends.md).
@@ -257,10 +258,10 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 | `cargo fmt --all -- --check` | Passou |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Passou |
 | `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passou |
-| `cargo test --workspace --no-fail-fast` | 425 passaram, 0 falharam, 17 ignorados |
+| `cargo test --workspace --no-fail-fast` | 425 passaram, 0 falharam, 19 ignorados |
 | `cargo tree -p noct-app -e normal -i rusqlite -f '{p} features={f}'`, e `cargo tree --workspace -e normal -f '{p} {f}' \| grep -c hooks` | `rusqlite` 0.42.0 sem `hooks`. O grep conta 0. A feature `hooks` é dev-dependency do `noct-db` (commit `c0748e0`), então não entra no grafo de release. |
 | `node --test scripts/run-rust-shell.test.mjs` | 7 passaram |
-| `node scripts/verify-row-gate.mjs` | 10 passaram, saída 0 |
+| `node scripts/verify-row-gate.mjs` | 10 passaram, depois `scripts/verify-rust-written-gate.mjs` passou, saída 0 |
 | `node scripts/generate-output-differential.mjs`, e depois `cargo test -p noct-app --test output_differential -- --ignored` | 1 passou |
 | `trunk build --release` em `crates/noct-ui` | Passou |
 | `cargo build -p noct-app --release --features custom-protocol` | Passou. O binário embute o arquivo wasm. |
@@ -286,6 +287,7 @@ Não rodados aqui, com o motivo:
 | Teste | Quantidade | Como roda | Por que está ignorado | Rodado aqui? |
 | --- | --- | --- | --- | --- |
 | `crates/noct-db/tests/row_gate.rs` | 10 | `node scripts/verify-row-gate.mjs` | Precisa de `NOCT_ROW_GATE_DIR`, que o script define | Sim, 10 passaram |
+| `crates/noct-db/tests/rust_written_gate.rs` | 2 | `node scripts/verify-rust-written-gate.mjs`, que o `verify-row-gate.mjs` também roda | Precisa de `NOCT_RUST_WRITTEN_DIR`, que o script define | Sim, passaram |
 | `crates/noct-app/tests/output_differential.rs` | 1 | `node scripts/generate-output-differential.mjs`, e depois o teste com `--ignored` | Precisa das bases das linhas de release | Sim, passou |
 | `crates/noct-secrets/tests/os_store.rs` | 1 | `cargo test -p noct-secrets --test os_store -- --ignored --nocapture` | Precisa do cofre de credenciais do sistema operacional | Não, veja acima |
 | Benchmarks em `crates/noct-db/src/repositories/semantic_index.rs` | 4 | Modo release, `--ignored --nocapture` | São medições | Não |
@@ -341,7 +343,7 @@ Os jobs de Windows e macOS rodam o build, os testes do workspace e o build de re
   as lacunas do CI e as aproximações conhecidas.
 - [Versões mínimas de plataforma](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma). Os pisos propostos, as páginas do
   Tauri que eles citam, e o que não está confirmado.
-- [Row gate no CI](docs/rust-row-gate-workflow.md). O workflow, as decisões, o teste proposto em que o TypeScript lê o que o
+- [Row gate no CI](docs/rust-row-gate-workflow.md). O workflow, as decisões, o teste em que o TypeScript lê e escreve o que o
   Rust escreveu, e o que não foi conferido.
 - [Backends de rollback em Rust](docs/rust-native-rollback-backends.md). O que os backends de macOS e Windows precisam
   reproduzir, e o que falta.

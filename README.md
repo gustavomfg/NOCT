@@ -232,9 +232,11 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 - **Newer databases.** The runtime refuses a schema newer than 32 before it changes anything.
 - **Rollback to the Electron application.** Both implementations use schema 32, so a file written by one should open in
   the other. This branch does not test it. The row gate reads files that TypeScript wrote, and compares Rust's writes
-  with TypeScript's expected results. No test opens a file written by Rust with the TypeScript code. A test that does is
-  proposed in [the row gate document](docs/rust-row-gate-workflow.md). It is not implemented. TypeScript opens write to
-  the database as well (`PRAGMA optimize` and WAL checkpoints), so that test must compare logical state.
+  with TypeScript's expected results. The other direction is checked as well: `scripts/verify-rust-written-gate.mjs`
+  has Rust write a database, TypeScript read it and write to it, and Rust read it back, comparing the logical rows at
+  each step. It runs with the row gate on CI. It covers workspaces, settings and conversations, not the release lines,
+  the semantic index or the engineering tables. TypeScript opens write to the database as well (`PRAGMA optimize` and
+  WAL checkpoints), so the comparison uses logical rows, not file bytes.
 - **Rollback on macOS and Windows.** The Rust worker answers `UNSUPPORTED` on those platforms. The C++ worker that the
   Electron product uses has backends for both. The missing parts are listed in
   [the backends document](docs/rust-native-rollback-backends.md).
@@ -251,10 +253,10 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 | `cargo fmt --all -- --check` | Passed |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Passed |
 | `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passed |
-| `cargo test --workspace --no-fail-fast` | 425 passed, 0 failed, 17 ignored |
+| `cargo test --workspace --no-fail-fast` | 425 passed, 0 failed, 19 ignored |
 | `cargo tree -p noct-app -e normal -i rusqlite -f '{p} features={f}'`, and `cargo tree --workspace -e normal -f '{p} {f}' \| grep -c hooks` | `rusqlite` 0.42.0 without `hooks`. The grep counts 0. The `hooks` feature is a dev-dependency of `noct-db` (commit `c0748e0`), so it is not in the release graph. |
 | `node --test scripts/run-rust-shell.test.mjs` | 7 passed |
-| `node scripts/verify-row-gate.mjs` | 10 passed, exit 0 |
+| `node scripts/verify-row-gate.mjs` | 10 passed, then `scripts/verify-rust-written-gate.mjs` passed, exit 0 |
 | `node scripts/generate-output-differential.mjs`, then `cargo test -p noct-app --test output_differential -- --ignored` | 1 passed |
 | `trunk build --release` in `crates/noct-ui` | Passed |
 | `cargo build -p noct-app --release --features custom-protocol` | Passed. The binary embeds the wasm file. |
@@ -280,6 +282,7 @@ Not run here, with the reason:
 | Test | Count | How it runs | Why it is ignored | Run here? |
 | --- | --- | --- | --- | --- |
 | `crates/noct-db/tests/row_gate.rs` | 10 | `node scripts/verify-row-gate.mjs` | It needs `NOCT_ROW_GATE_DIR`, which the script sets | Yes, 10 passed |
+| `crates/noct-db/tests/rust_written_gate.rs` | 2 | `node scripts/verify-rust-written-gate.mjs`, which `verify-row-gate.mjs` also runs | It needs `NOCT_RUST_WRITTEN_DIR`, which the script sets | Yes, passed |
 | `crates/noct-app/tests/output_differential.rs` | 1 | `node scripts/generate-output-differential.mjs`, then the test with `--ignored` | It needs the release-line bases | Yes, passed |
 | `crates/noct-secrets/tests/os_store.rs` | 1 | `cargo test -p noct-secrets --test os_store -- --ignored --nocapture` | It needs the operating system credential store | No, see above |
 | Benchmarks in `crates/noct-db/src/repositories/semantic_index.rs` | 4 | Release mode, `--ignored --nocapture` | They are measurements | No |
@@ -334,8 +337,8 @@ The Windows and macOS jobs run the build, the workspace tests and the release bu
   and the known approximations.
 - [Minimum platform versions](docs/compatibility.md#minimum-platform-versions). The proposed floors, the Tauri pages they
   cite, and what is not confirmed.
-- [Row gate in CI](docs/rust-row-gate-workflow.md). The workflow, its decisions, the proposed test in which TypeScript
-  reads what Rust wrote, and what is not verified.
+- [Row gate in CI](docs/rust-row-gate-workflow.md). The workflow, its decisions, the test in which TypeScript reads and
+  writes what Rust wrote, and what is not verified.
 - [Rust rollback backends](docs/rust-native-rollback-backends.md). What the macOS and Windows backends must match, and
   what is missing.
 - [Windows file permissions](docs/rust-windows-file-permissions.md). The analysis, the warning, and the ACL that is not
