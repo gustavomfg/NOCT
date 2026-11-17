@@ -6,8 +6,9 @@
 > Electron e do TypeScript para Rust. Não é uma versão. O produto estável é o aplicativo Electron na `main` (versão
 > 1.0.5), e o README dele está na `main`.
 
-Este arquivo descreve o branch como ele foi conferido em 2026-11-16, contra o código do commit `db68422`. Cada afirmação
-diz o que foi conferido. O que não foi conferido está listado como não conferido.
+Este arquivo descreve o branch como ele foi conferido em 2026-11-17, contra o código do commit `de7dba4`. Os commits
+depois dele mudam só a documentação. Cada afirmação diz o que foi conferido. O que não foi conferido está listado como
+não conferido.
 
 ## 1. O que é o NOCT e o que a migração faz
 
@@ -38,24 +39,24 @@ O que este branch ainda não faz:
 
 ### Fases
 
-O status vem da seção de progresso da ADR 0001 e do código. Quando os dois divergem, a tabela diz isso, e a seção 10
-lista o conflito.
+A coluna Status é o status que a ADR 0001 dá na tabela de fases (depois do commit `e86b24b`). A última coluna diz o que o
+repositório mostra, quando isso difere da ADR ou precisa de uma nota. A seção 10 lista os conflitos.
 
-| Fase | Escopo na ADR | Status | O que o repositório mostra |
+| Fase | Escopo na ADR | Status (ADR 0001) | O que o repositório mostra |
 | --- | --- | --- | --- |
 | 0. Fundação | Workspace, `noct-native` (Linux), limites em `noct-core`, shell Tauri | **Feita** no branch | A seção de evidências da ADR. O workspace compila no Linux, no Windows e no macOS, no CI. |
-| 1. Contratos | `shared/` para `noct-core` | Em andamento | Existem módulos de contrato em `noct-core`, e uma guarda lê `shared/constants.ts`. A ADR não registra conclusão. |
+| 1. Contratos | `shared/` para `noct-core` | Não revisada nesta atualização | Existem módulos de contrato em `noct-core`, e uma guarda lê `shared/constants.ts`. A ADR não registra conclusão. |
 | 2. Persistência | `electron/database` e `persistence` para `noct-db` | Em andamento | Feito: o runtime, as migrações 1 a 32, os repositórios e os itens de fechamento (caminho público de abertura, nove fixtures de linhas de release, catálogo de operações do observador). Aberto: a conferência com uma cópia de dados reais antes de qualquer lançamento público, e o observador ainda não tem pontos de chamada (fase 6). |
-| 3. Rollback nativo | Backends de macOS (clone APFS) e Windows | Em andamento, só Linux | `crates/noct-native/src/linux.rs` é o único backend. O repositório não tem backend de macOS nem de Windows. |
-| 4. Serviços de workspace | Indexador, controle de mudanças, validação, engenharia | **Pendente** | Os contratos e os repositórios dessas áreas existem na fase 2. Os serviços, como o `ProjectIndexService`, não foram portados. A ADR diz "não iniciada". |
-| 5. IA | `electron/ai`, `security` | Em andamento | Feito: o cofre de credenciais em `noct-secrets`. O seu ciclo de ida e volta com o cofre do sistema operacional passa no CI nos três sistemas. Não portados: os adaptadores de provedores e o loop de ferramentas. Os crates Rust não têm cliente HTTP para provedores. |
-| 6. IPC e shell | `electron/ipc`, `main.ts`, `runtime` para Tauri | Em andamento | A primeira fatia está feita: quatro comandos, liberados só para a janela `main`. Conferido numa janela em execução só pela verificação manual de configurações da seção 3. |
-| 7. Interface | `src/` para Leptos | Em andamento | A área de configurações, a lista de projetos na barra lateral, a camada de vidro e os temas. Conferido no Chromium com um shell simulado. Não conferido numa janela real. |
-| 8. Atualizações e empacotamento | `electron/updates`, `electron-builder`, workflows de release | **Pendente** | Bloqueada. Veja abaixo. |
-| 9. Aposentadoria | Remover `electron/`, TypeScript, Vite, npm e o requisito de Node | **Pendente** | Depende da fase 8 e das fases anteriores. |
+| 3. Rollback nativo | Backends de macOS (clone APFS) e Windows | Parcialmente feita, só Linux | `crates/noct-native/src/linux.rs` é o único backend. O worker Rust responde `UNSUPPORTED` no macOS e no Windows. O que falta está listado em [o documento de backends](docs/rust-native-rollback-backends.md). |
+| 4. Serviços de workspace | Indexador, controle de mudanças, validação, engenharia | Parcialmente feita | Existem repositórios, na fase 2, para workspaces, change sets, índice do projeto, índice semântico e validação. Os serviços, como o `ProjectIndexService`, não foram portados. |
+| 5. IA | `electron/ai`, `security` | Parcialmente feita | Feito: o cofre de credenciais em `noct-secrets`. O seu ciclo de ida e volta com o cofre do sistema operacional passa no CI nos três sistemas. Não portados: os adaptadores de provedores e o loop de ferramentas. Os crates Rust não têm cliente HTTP para provedores. |
+| 6. IPC e shell | `electron/ipc`, `main.ts`, `runtime` para Tauri | Parcialmente feita | A primeira fatia está feita: quatro comandos, liberados só para a janela `main`. Conferido numa janela em execução só pela verificação manual de configurações da seção 3. |
+| 7. Interface | `src/` para Leptos | Parcialmente feita | A área de configurações, a lista de projetos na barra lateral, a camada de vidro e os temas. Conferido no Chromium com um shell simulado. Não conferido numa janela real. |
+| 8. Atualizações e empacotamento | `electron/updates`, `electron-builder`, workflows de release | Não iniciada no lado Rust | Bloqueada. Veja abaixo. |
+| 9. Aposentadoria | Remover `electron/`, TypeScript, Vite, npm e o requisito de Node | Não iniciada | Depende da fase 8 e das fases anteriores. |
 
-Só a fase 0 está marcada como feita por inteiro. Nas fases 2 e 5, os itens de fechamento e o cofre estão feitos, e o
-resto de cada fase está aberto.
+A fase 0 é a única que a ADR marca como feita. Nas fases 2, 5, 6 e 7, os itens de fechamento ou as primeiras fatias
+estão feitos, e o resto de cada fase está aberto.
 
 ### O que bloqueia a fase 8
 
@@ -69,31 +70,40 @@ O critério da ADR para a fase 8 é "pacotes assinados validados em três plataf
   de uma decisão explícita".
 - **O shell não rodou numa janela no Windows nem no macOS**, então o critério "validado em três plataformas" ainda não
   pode ser cumprido.
-- **As versões mínimas das plataformas não estão declaradas.** A decisão 4 da ADR 0001 pede que elas estejam em
-  `docs/compatibility.md`. Esse arquivo não tem entrada para WebKitGTK, WebView2 nem WKWebView.
+- **As versões mínimas das plataformas são propostas, não decididas.** A decisão 4 da ADR 0001 está parcialmente
+  resolvida. [`docs/compatibility.pt-BR.md`](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma) tem os pisos propostos e as
+  afirmações do Tauri em que se apoiam. O Tauri não informa a versão do WebKitGTK, e as páginas de macOS dele dão dois
+  valores diferentes.
 
 ## 3. Verificação
 
-Os resultados abaixo são do commit `db68422`, o código que este README descreve. Este README não acrescenta código. As
+Os resultados abaixo são do commit `de7dba4`, o código que este README descreve. Este README não acrescenta código. As
 conferências desta máquina rodaram no Linux. Nada foi rodado à mão no Windows nem no macOS.
 
 ### O que o CI cobre
 
+O resultado de um job é `success` quando todas as etapas que rodaram passaram. As etapas só de Linux rodam dentro do job
+do Ubuntu, então a tabela lê o resultado do job para elas.
+
 | Verificação | Linux (`ubuntu-latest`) | Windows (`windows-latest`) | macOS (`macos-latest`) |
 | --- | --- | --- | --- |
-| O workspace compila, e `cargo test --workspace --no-fail-fast` passa (testes ignorados excluídos) | Passou, `db68422` | Passou, `db68422` | Passou, `db68422` |
-| O shell de release compila com a interface embutida (o job confere se o nome do arquivo wasm está no binário) | Passou, `db68422` | Passou, `db68422` | Passou, `db68422` |
+| O workspace compila, e `cargo test --workspace --no-fail-fast` passa (testes ignorados excluídos) | Passou, `de7dba4` | Passou, `de7dba4` | Passou, `de7dba4` |
+| O shell de release compila com a interface embutida (o job confere se o nome do arquivo wasm está no binário) | Passou, `de7dba4` | Passou, `de7dba4` | Passou, `de7dba4` |
 | Ida e volta no cofre de chaves do sistema, `os_store` (última execução, em `1d89435`) | Passou | Passou | Passou |
-| As permissões dos manifestos do Tauri batem com os arquivos commitados | só no CI | não rodou | não rodou |
-| Diferencial de saídas contra o TypeScript, nove linhas de release | só no CI | não rodou | não rodou |
-| Chromium: Content-Security-Policy, e as áreas de configurações e interface (14 cenários, shell simulado) | só no CI | não rodou | não rodou |
-| Fixture de redação de log e amostras de contrato IPC, contra o TypeScript e o zod | só no CI | não rodou | não rodou |
-| Testes do launcher (`node --test scripts/run-rust-shell.test.mjs`) | só no CI | não rodou | não rodou |
-| Row gate: 10 testes contra os bancos dos repositórios TypeScript | Passou, `db68422` (só Ubuntu) | não rodou | não rodou |
-| Política de dependências (`cargo deny check`, `cargo audit`) | `rust-audit.yml` (`ubuntu-24.04`) | não rodou | não rodou |
+| As permissões dos manifestos do Tauri batem com os arquivos commitados | Passou, `de7dba4` | não rodou | não rodou |
+| Diferencial de saídas contra o TypeScript, nove linhas de release | Passou, `de7dba4` | não rodou | não rodou |
+| Chromium: Content-Security-Policy, e as áreas de configurações e interface (14 cenários, shell simulado) | Passou, `de7dba4` | não rodou | não rodou |
+| Fixture de redação de log e amostras de contrato IPC, contra o TypeScript e o zod | Passou, `de7dba4` | não rodou | não rodou |
+| Testes do launcher (`node --test scripts/run-rust-shell.test.mjs`) | Passou, `de7dba4` | não rodou | não rodou |
+| Row gate: 10 testes contra os bancos dos repositórios TypeScript | Passou, `de7dba4` (`row-gate.yml`) | não rodou | não rodou |
+| Política de dependências (`cargo deny check`, `cargo audit`) | Passou, `1d89435` (`rust-audit.yml`, última execução) | não rodou | não rodou |
 
-O ciclo de ida e volta do cofre e a política de dependências são workflows separados. O workflow do cofre só roda quando
-o crate de segredos, o lockfile ou o próprio arquivo mudam, então a última execução dele é de um commit anterior.
+O ciclo de ida e volta do cofre e a política de dependências são workflows separados. Cada um roda só quando os próprios
+caminhos mudam, então a última execução deles é de um commit anterior.
+
+Os testes de estatística acrescentados pelo `c0748e0` (`a_failed_analysis_after_a_large_round_is_logged_and_the_round_still_updates`
+e `a_failed_statistics_step_at_close_still_runs_the_optimize_and_the_close_succeeds`) aparecem como `ok` nos logs dos três
+jobs do shell do `de7dba4`.
 
 ### Vista numa janela real
 
@@ -193,12 +203,14 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 
 ### Ainda faltando
 
-- **Allowlist de provedores.** O pedido deste README cita uma, mas o repositório não define nenhuma, então nenhuma é
-  escrita aqui. O produto Electron tem estas regras: provedores remotos de Chat Completions precisam usar HTTPS, recusam
+- **Allowlist de provedores.** Nenhuma está implementada. O repositório tem um desenho, [`docs/provider-allowlist-design.md`](docs/provider-allowlist-design.md),
+  com seis perguntas em aberto e sem código. Ele registra uma lacuna do produto Electron: um endpoint de fonte local aceita
+  HTTPS para qualquer host, inclusive endereços privados, e pula a conferência do endereço resolvido que as fontes remotas
+  fazem. As regras do produto Electron são estas: provedores remotos de Chat Completions precisam usar HTTPS, recusam
   redirecionamentos e conferem cada endereço resolvido antes de conectar; HTTP sem TLS só é permitido para serviços de
   loopback (`docs/security.md`). O ambiente dos processos filhos do Electron tem uma allowlist própria
   (`electron/runtime/childEnvironment.ts`). O branch Rust não tem cliente de provedores, então nenhuma dessas regras foi
-  portada. Qual política é a pretendida é uma decisão do responsável pelo projeto.
+  portada. Qual política se aplica é uma decisão do responsável pelo projeto.
 - **ACL no Windows.** A pasta de dados não recebe DACL. Para definir uma, é preciso `windows-sys` como dependência direta,
   que o responsável ainda não aprovou. A decisão foi esperar a integração do cofre, com o responsável presente. A análise
   está em `docs/rust-windows-file-permissions.md`.
@@ -206,8 +218,10 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
   decisão.
 - **Conferência de acesso ao workspace.** Ela aproxima `access(R_OK | X_OK)` sem uma chamada nativa. Os testes não cobrem
   ACLs, outros usuários nem acesso por grupo (`docs/rust-shell.md`, "Known approximations").
-- **Dependências do npm.** O `npm ci` reportou 13 achados moderados do `npm audit` (nenhum alto nem crítico). Eu não os
-  revisei nesta rodada.
+- **Dependências do npm.** `npm audit --omit=dev` não reporta vulnerabilidades. A árvore completa tem 13 achados moderados,
+  todos de um único advisory, GHSA-g3hv-75wg-m249 (`minimatch`), em ferramentas de desenvolvimento. Nenhum está no caminho
+  do build Rust. O `npm audit fix` não foi aplicado, porque a saída dele instala `electron-builder@25.1.0`, que ele chama de
+  mudança incompatível. As opções estão em [`docs/npm-audit-triage.md`](docs/npm-audit-triage.md). Nenhuma foi decidida.
 
 ## 7. Compatibilidade e rollback
 
@@ -223,6 +237,12 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 - **Rollback para o aplicativo Electron.** As duas implementações usam o schema 32, então um arquivo escrito por uma deve
   abrir na outra. Este branch não testa isso. O row gate lê arquivos que o TypeScript escreveu, e compara as escritas do
   Rust com os resultados esperados do TypeScript. Nenhum teste abre um arquivo escrito pelo Rust com o código TypeScript.
+  Um teste que faz isso está proposto em [o documento do row gate](docs/rust-row-gate-workflow.md). Ele não está
+  implementado. Os acessos do TypeScript também escrevem no banco (`PRAGMA optimize` e checkpoints do WAL), então esse
+  teste precisa comparar o estado lógico.
+- **Rollback no macOS e no Windows.** O worker Rust responde `UNSUPPORTED` nessas plataformas. O worker C++ que o produto
+  Electron usa tem backends para as duas. O que falta está listado em
+  [o documento de backends](docs/rust-native-rollback-backends.md).
 - **Credenciais dos provedores não são migradas.** A decisão 6 da ADR 0001 propõe que o usuário digite de novo as chaves
   dos provedores uma vez, depois da migração. Isso está pendente de confirmação.
 - **Não é o mesmo rollback.** O `noct-native` faz rollback de operações de sistema de arquivos. Ele não faz rollback do
@@ -230,25 +250,28 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 
 ## 8. Testes e CI
 
-### Rodado para este README (Linux, commit `db68422`)
+### Rodado para este README (Linux, commit `de7dba4`)
 
 | Comando | Resultado |
 | --- | --- |
 | `cargo fmt --all -- --check` | Passou |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Passou |
 | `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passou |
-| `cargo test --workspace --no-fail-fast` | 423 passaram, 0 falharam, 17 ignorados |
+| `cargo test --workspace --no-fail-fast` | 425 passaram, 0 falharam, 17 ignorados |
+| `cargo tree -p noct-app -e normal -i rusqlite -f '{p} features={f}'`, e `cargo tree --workspace -e normal -f '{p} {f}' \| grep -c hooks` | `rusqlite` 0.42.0 sem `hooks`. O grep conta 0. A feature `hooks` é dev-dependency do `noct-db` (commit `c0748e0`), então não entra no grafo de release. |
 | `node --test scripts/run-rust-shell.test.mjs` | 7 passaram |
 | `node scripts/verify-row-gate.mjs` | 10 passaram, saída 0 |
 | `node scripts/generate-output-differential.mjs`, e depois `cargo test -p noct-app --test output_differential -- --ignored` | 1 passou |
 | `trunk build --release` em `crates/noct-ui` | Passou |
+| `cargo build -p noct-app --release --features custom-protocol` | Passou. O binário embute o arquivo wasm. |
 | `node scripts/check-shell-csp.mjs` | Passou |
 | `node scripts/check-shell-ui.mjs` | 14 de 14 cenários passaram |
 | `node scripts/generate-log-redaction-fixture.mjs --check` | Passou |
 | `node scripts/generate-ipc-samples.mjs --check` | Passou |
 | `cargo deny check` | Passou (advisories, bans, licenses, sources) |
 | `cargo audit` | Nenhuma vulnerabilidade. Seis avisos, todos listados com motivo em `deny.toml`: cinco crates sem manutenção e um crate unsound, `glib` (RUSTSEC-2024-0429) |
-| `npm ci` | Instalado. Reportou 13 achados moderados do npm audit. |
+| `npm ci` | Instalado |
+| `npm audit --omit=dev` | `found 0 vulnerabilities`. A árvore completa tem 13 achados moderados. Veja [a triagem](docs/npm-audit-triage.md). |
 
 Não rodados aqui, com o motivo:
 
@@ -274,7 +297,7 @@ Não rodados aqui, com o motivo:
 | --- | --- | --- | --- |
 | `rust-shell-validation.yml` | Sim, e por disparo manual. Não tem gatilho de pull request. | `ubuntu-latest`, `windows-latest`, `macos-latest` | Build, testes do workspace, build de release com a interface embutida. As etapas só de Linux estão listadas abaixo. |
 | `row-gate.yml` | Sim. Também em pull requests para a `main`, e por disparo manual. | `ubuntu-latest` | O row gate. Não é uma verificação obrigatória: torná-la obrigatória é uma configuração do repositório. |
-| `rust-audit.yml` | Sim. Também em pull requests, em agenda e por disparo manual. | `ubuntu-24.04` | `cargo deny check` e `cargo audit`. |
+| `rust-audit.yml` | Sim, quando os próprios caminhos mudam. Também em pull requests, em agenda e por disparo manual. | `ubuntu-24.04` | `cargo deny check` e `cargo audit`. |
 | `keyring-round-trip.yml` | Sim, quando mudam `crates/noct-secrets/**`, `Cargo.toml`, `Cargo.lock` ou o próprio workflow. | `ubuntu-24.04`, `windows-latest`, `macos-latest` | Os testes unitários, e a ida e volta de `os_store` com o cofre real em cada sistema. |
 
 Os outros workflows não rodam em push para este branch. `package-validation.yml` (chamado "CI · source, renderer and
@@ -316,36 +339,50 @@ Os jobs de Windows e macOS rodam o build, os testes do workspace e o build de re
   Accepted. Substitui em parte a decisão 6 da ADR 0001.
 - [Rodando o shell Rust localmente](docs/rust-shell.md). Os modos de execução, o que foi conferido, a verificação manual,
   as lacunas do CI e as aproximações conhecidas.
-- [Row gate no CI](docs/rust-row-gate-workflow.md). O workflow, as decisões, e o que não foi conferido.
+- [Versões mínimas de plataforma](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma). Os pisos propostos, as páginas do
+  Tauri que eles citam, e o que não está confirmado.
+- [Row gate no CI](docs/rust-row-gate-workflow.md). O workflow, as decisões, o teste proposto em que o TypeScript lê o que o
+  Rust escreveu, e o que não foi conferido.
+- [Backends de rollback em Rust](docs/rust-native-rollback-backends.md). O que os backends de macOS e Windows precisam
+  reproduzir, e o que falta.
 - [Permissões de arquivo no Windows](docs/rust-windows-file-permissions.md). A análise, o aviso, e a ACL que não está
   implementada.
+- [Desenho da allowlist de provedores](docs/provider-allowlist-design.md). Uma proposta, com perguntas em aberto. Sem código.
+- [Triagem do npm audit](docs/npm-audit-triage.md). Os achados, o escopo, e as opções. Nada foi corrigido.
 - [Índice da documentação](docs/README.md). Os outros documentos. Os guias de usuário dele descrevem o produto Electron.
   Por exemplo, `docs/security.md` descreve o IPC do Electron.
 - [`AGENTS.md`](AGENTS.md). As regras para quem contribui e os comandos de validação.
 
 ### Próximos passos
 
-1. **Responsável pelo projeto.** Definir a allowlist de provedores, ou confirmar a política de provedores do Electron como
-   regra para o Rust (seção 6).
-2. **Responsável pelo projeto, com ele presente.** Decidir sobre `windows-sys` e sobre a ACL do Windows, durante a
-   integração do cofre.
+1. **Responsável pelo projeto.** Decidir a allowlist de provedores, usando o desenho em
+   `docs/provider-allowlist-design.md`, ou confirmar a política de provedores do Electron como regra para o Rust (seção 6).
+2. **Responsável pelo projeto, com ele presente.** Decidir entre `windows-sys` ou declarações no próprio repositório, e
+   sobre a ACL do Windows, durante a integração do cofre (seção 6 e `docs/rust-native-rollback-backends.md`).
 3. **Janelas reais.** Abrir o shell no Windows (WebView2) e no macOS (WKWebView). No Linux, conferir o layout atual e a
    barra lateral com workspaces reais, usando `--from-fixture`, e conferir o tamanho mínimo da janela.
 4. **Fase 2.** Ligar o observador de operações aos pontos de chamada da fase 6. Antes de qualquer lançamento público,
    rodar a comparação entre TypeScript e Rust numa cópia de dados reais, mantida em `target/` e nunca commitada.
-5. **Fase 3.** Escrever os backends de rollback para macOS (clone APFS) e Windows.
+5. **Fase 3.** Escrever os backends de rollback para macOS (clone APFS) e Windows, ou decidir que o worker C++ continua
+   cuidando dessas plataformas. Corrigir o comentário sobre o `#else` em `crates/noct-native/src/main.rs`. Os detalhes estão
+   em `docs/rust-native-rollback-backends.md`.
 6. **Fase 5.** Portar os adaptadores de provedores e o loop de ferramentas.
 7. **Decisões da fase 8.** Quem guarda as chaves de assinatura. Como substituir os fuses do Electron e a integridade ASAR.
-   As versões mínimas das plataformas, que vão para `docs/compatibility.md`.
+   As versões mínimas das plataformas, que estão propostas em `docs/compatibility.md`.
 8. **Configuração do repositório, responsável pelo projeto.** Decidir se o row gate vira verificação obrigatória na
    `main`. Ele já passou neste branch.
+9. **Responsável pelo projeto.** Decidir a opção de npm audit (`docs/npm-audit-triage.md`).
 
 ### Conflitos entre as fontes
 
-- A ADR 0001 diz "não iniciadas: fases 3 a 9". O código tem o cofre, os contratos e repositórios dos serviços, um backend
-  de rollback para Linux e a primeira fatia do shell. Este README segue o código e as linhas "feito" da própria ADR.
-- A ADR 0001 lista "ligação do gate no CI" como pendente na fase 2. O `row-gate.yml` agora a fornece, embora o job não seja
-  obrigatório.
+- A ADR 0001 dizia "não iniciadas: fases 3 a 9" e não tinha coluna de status. O commit `e86b24b` acrescentou a coluna de
+  status, e este README a usa. A ADR 0001 dá à fase 1 o status "Não revisada nesta atualização", e este README não a
+  revisa de novo.
+- A ADR 0001 listava "ligação do gate no CI" como pendente na fase 2. A ADR agora diz que ela está feita em
+  `row-gate.yml`, embora o job não seja obrigatório.
 - A ADR 0001 está "Proposed", enquanto a ADR 0002 está "Accepted" e a substitui em parte.
-- A decisão 4 da ADR 0001 pede as versões mínimas das plataformas em `docs/compatibility.md`. O arquivo não tem nenhuma.
-- O pedido deste README cita uma "allowlist de provedores". Nenhuma fonte do repositório a define (seção 6).
+- A decisão 4 da ADR 0001 pede as versões mínimas das plataformas em `docs/compatibility.md`. O arquivo agora tem os valores
+  propostos e as fontes deles. A decisão continua aberta.
+- Nenhuma allowlist de provedores está implementada. `docs/provider-allowlist-design.md` é só um desenho (seção 6).
+- A ADR 0002 agora também registra texto sobre estatísticas e versão do schema (commit `c0748e0`) que não trata de
+  credenciais. A descrição do cofre não mudou.
