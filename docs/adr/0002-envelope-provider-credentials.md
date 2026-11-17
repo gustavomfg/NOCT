@@ -162,20 +162,37 @@ Option C: no NOCT schema change and no `user_version` change. The first `ANALYZE
 internal tables `sqlite_stat1` and `sqlite_stat4`. The TypeScript build already creates `sqlite_stat1` through
 `PRAGMA optimize`.
 
-`ANALYZE semantic_units` runs in three places. None of them fails the caller. A failure is written to the
-diagnostic log, and the operation goes on.
+`ANALYZE semantic_units` runs in three places. A failure of the analysis is written to the diagnostic log and
+does not fail the caller: the round still updates, the open still succeeds, and the close still runs `PRAGMA
+optimize` and the WAL checkpoint. The optimize and the checkpoint keep their own errors.
 
 1. **End of a large round.** A round that ends (completed, failed or cancelled) with at least 10,000 indexed units
    analyzes the table after the round is recorded. The update still succeeds when the analysis fails.
+   `a_failed_analysis_after_a_large_round_is_logged_and_the_round_still_updates` (integration) checks it with the hook
+   described under close: the round is recorded, one log entry is written, and no statistics are stored. A read-only
+   connection cannot be used for this: the round's own write would fail first.
+   `a_failed_analysis_after_a_large_round_is_logged_and_returns_nothing` (unit, `statistics.rs`) covers the analysis
+   alone on a read-only connection.
 2. **Open.** When the table has at least 10,000 rows and its statistics are missing or do not describe it, the
    analysis runs in the background, on its own connection. It waits at most `statistics_busy_timeout` for a lock
-   (5 seconds by default, `OpenOptions`).
-3. **Close.** The same check runs on the main connection before `PRAGMA optimize`. The optimize and the WAL
-   checkpoint run even when the check fails, and the optimize is reported first when both fail. Two tests cover
-   this. `the_checkpoint_runs_when_the_optimize_fails` (unit, `runtime.rs`) makes the optimize fail on a read-only
-   connection and checks that the checkpoint still copies every frame of the log. It does not cover a checkpoint
-   that is blocked by another connection; `busy` is reported and not tested. `a_failed_refresh_at_close_is_logged_and_the_next_open_recovers`
-   (integration) checks the log entry and that the next open recovers.
+   (5 seconds by default, `OpenOptions`). `a_background_analysis_blocked_past_a_short_busy_timeout_is_logged_and_reported`
+   (unit, `statistics.rs`) holds a write lock on a second connection, sets the timeout to 10 ms, and checks that the
+   outcome is `Failed` and that one entry is logged.
+3. **Close.** The same check runs on the main connection before `PRAGMA optimize`. Its failure is logged, and the
+   optimize and the WAL checkpoint still run; the optimize is reported first when both fail. Three tests cover this:
+   - `the_checkpoint_runs_when_the_optimize_fails` (unit, `runtime.rs`) makes the optimize fail on a read-only
+     connection and checks that the checkpoint still copies every frame of the log.
+   - `a_failed_statistics_step_at_close_still_runs_the_optimize_and_the_close_succeeds` (integration) denies the first
+     `ANALYZE` check of the connection, which is the refresh at close. The close succeeds, the failure is logged once,
+     and the optimize stores its estimates.
+   - `a_failed_refresh_at_close_is_logged_and_the_next_open_recovers` (integration) uses a read-only connection. The
+     optimize fails too, so the close reports the optimize's error. The log entry and the next open are checked.
+
+   The limits of these tests: a lock held by another connection fails the refresh and the optimize together, so no
+   test shows the optimize running after a lock failure. Denying every `ANALYZE` check also fails the optimize,
+   because `PRAGMA optimize` makes its own check. That is why the hook denies only the first one. A checkpoint blocked
+   by another connection (`busy`) is reported and not tested. The hook is a dev-only dependency feature of `rusqlite`
+   (`hooks`, in `crates/noct-db/Cargo.toml`); the application build does not compile it.
 
 The check compares the statistics with the table. It does not test for missing statistics only. It reads the row
 count of `semantic_units` and the first two figures of the stored statistics of
@@ -201,15 +218,16 @@ limits.
 
 The schema version is 32 everywhere it is held: `shared/constants.ts:1`, `crates/noct-core/src/limits.rs:9`, and
 the last migration, `electron/database/migrations.ts:727` (`version: 32`). Both runtimes refuse a database whose
-`user_version` is above that constant: the Electron runtime at `electron/database/DatabaseRuntime.ts:33`, and the
-Rust runtime at `crates/noct-db/src/runtime.rs:95`. No source file holds 33 as the schema version.
+`user_version` is above that constant. The Electron runtime compares at `electron/database/DatabaseRuntime.ts:33`,
+against the constant it imports at line 5. That file holds no literal 33. The Rust runtime compares at
+`crates/noct-db/src/runtime.rs:101`, against `SUPPORTED_SCHEMA` (`runtime.rs:35`), which is the same constant.
 
 ### Deferred
 
 The index `(workspace, status, id)` is evaluated and is not in the schema. It would be migration 33, the next one
-after version 32. It goes into a versioned migration, in Rust and in TypeScript with fingerprints, only after the
-Electron build no longer reads the database. Electron refuses a database at version 33
-(`electron/database/DatabaseRuntime.ts:33`). The measured effect is in the performance note.
+after the current version 32. It goes into a versioned migration, in Rust and in TypeScript with fingerprints, only
+after the Electron build no longer reads the database. Until then both runtimes refuse a version-33 database,
+because 33 is above their constant of 32. The measured effect is in the performance note.
 
 ## Fuses and ASAR
 

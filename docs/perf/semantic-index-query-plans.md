@@ -92,18 +92,32 @@ analyzed, it stores the estimates that keep the slow plan for one large workspac
 ### Checking the statistics, and refreshing them
 
 The rule in `crates/noct-db/src/statistics.rs` runs at open and at close. It refreshes the statistics only when the
-table is large and the stored figures do not describe it. Measured with one workspace, release build, one run:
+table is large and the stored figures do not describe it. Measured with one workspace, release build, one run (the
+`BENCH` lines below):
 
 | Rows | `PRAGMA optimize` alone: stored rows per workspace | `COUNT(*)` | `COUNT(DISTINCT workspace)` | `ANALYZE`, exact |
 |---|---|---|---|---|
-| 10,000 | 1,409 (exact: 10,000) | 18 µs | 18 µs | 11.4 ms |
-| 50,000 | 1,409 (exact: 50,000) | 35 µs | 15 µs | 45.8 ms |
-| 200,000 | 1,409 (exact: 200,000) | 1.5 ms | 28 µs | 169.5 ms |
+| 10,000 | 1,409 (exact: 10,000) | 18 µs | 17 µs | 11.8 ms |
+| 50,000 | 1,409 (exact: 50,000) | 36 µs | 17 µs | 45.5 ms |
+| 200,000 | 1,409 (exact: 200,000) | 1.6 ms | 27 µs | 169.4 ms |
+
+```
+BENCH rows=10000 count=10000 workspaces=1 optimize_ms=7 sampled=[10000 1409 1409 1409] count_us=18 distinct_us=17 analyze_us=11789 exact=[10000 10000 10000 10000]
+BENCH rows=50000 count=50000 workspaces=1 optimize_ms=8 sampled=[50000 1409 1409 1409] count_us=36 distinct_us=17 analyze_us=45499 exact=[50000 50000 50000 50000]
+BENCH rows=200000 count=200000 workspaces=1 optimize_ms=20 sampled=[200000 1409 1409 1409] count_us=1563 distinct_us=27 analyze_us=169431 exact=[200000 200000 200000 200000]
+```
+
+Reproduce: `cargo test --release -p noct-db --test semantic_statistics measure_statistics_by_size -- --ignored --nocapture`.
+The `sampled` and `exact` columns are the four figures of `sqlite_stat1` for `idx_semantic_units_workspace_status`,
+which is on `(workspace, status, updated_at DESC)`: the table's rows, then the rows per prefix of one, two and three
+columns. The rule reads the first two, the table's rows and the rows per workspace. The `optimize_ms` figure
+is the `PRAGMA optimize` alone, on a table of that size without statistics. Figures change by a few percent between
+runs; the table above is this run.
 
 The table total stored by `PRAGMA optimize` is right at every size. The per-workspace figure is not. A check on the
 total alone would accept these estimates, so the rule compares both figures with the table, within 10%. An
-analysis at every open would cost 11 to 170 ms and write to the database each time. The check reads only, and it
-costs 18 µs to 1.5 ms. That is why it is a check and not an analysis.
+analysis at every open would cost 12 to 170 ms and write to the database each time. The check reads only, and it
+costs 17 µs to 1.6 ms. That is why it is a check and not an analysis.
 
 Detection, one test per state (`crates/noct-db/tests/semantic_statistics.rs`):
 
@@ -116,6 +130,13 @@ Detection, one test per state (`crates/noct-db/tests/semantic_statistics.rs`):
 | Sampled by `PRAGMA optimize`, ten workspaces, 10,000 rows | Analyzed | `opening_a_database_sampled_across_ten_workspaces_analyzes_it` |
 | Exact, uneven workspaces (9,000 and 3,000 rows) | Not analyzed | `opening_a_database_with_exact_uneven_workspaces_starts_no_analysis` |
 | Exact, then the table doubled without close | Analyzed | `opening_a_database_whose_statistics_predate_a_doubling_analyzes_it` |
+
+Failure handling, with the `ANALYZE` check denied by the authorizer hook (`rusqlite`, dev-only feature):
+
+| State | Result | Test |
+|---|---|---|
+| A round of 10,000 units ends, analysis denied | Round recorded, one entry logged, no statistics stored | `a_failed_analysis_after_a_large_round_is_logged_and_the_round_still_updates` |
+| Close of 10,000 rows, first analysis denied | Close succeeds, one entry logged, `PRAGMA optimize` stores estimates | `a_failed_statistics_step_at_close_still_runs_the_optimize_and_the_close_succeeds` |
 
 When the rule is replaced by a total-only check (a temporary mutation, reverted), the two sampled rows fail and the
 others pass. So the per-workspace comparison is what detects the sampled estimates.
@@ -158,3 +179,6 @@ longer reads the database. See the ADR.
   tests reproduce on a Rust-written database. That was not measured on a database the TypeScript build closed.
 - The check reads the workspace figure only. The figure of the (workspace, status) prefix is not checked.
 - The 10% tolerance is a judgement. The check costs were measured once, on this machine.
+- The failure tests inject the failure with an authorizer hook that denies `ANALYZE` checks. A lock held by another
+  connection fails the statistics step and `PRAGMA optimize` together, so no test shows the optimize running after a
+  lock. A checkpoint blocked by another connection is not tested either.
