@@ -454,10 +454,11 @@ No operation calls `Database::measure` yet, so no path pays for the observer tod
 2. **UI framework.** Leptos (recommended here) or Dioxus. Changing this after
    phase 4 is expensive.
 3. **Renderer test harness.** Tauri WebDriver or Playwright against the WASM build.
-4. **Minimum platform versions.** Partly resolved on 2026-11-17. [compatibility.md](../compatibility.md#minimum-platform-versions)
-   records the values that the Tauri documentation states for Windows, WebView2, macOS and Linux.
-   The WebKitGTK version (the spike ran on 2.54) and the macOS floor that NOCT will ship with are
-   still unconfirmed, and that section marks them.
+4. **Minimum platform versions.** Decided on 2026-11-17 by the project owner: Windows 10 and later (x64), macOS 10.15
+   and later, and Linux by its reference distribution, Ubuntu 22.04 and later, with the WebKitGTK 4.1 family.
+   [compatibility.md](../compatibility.md#minimum-platform-versions) records the values and their sources. Still
+   unconfirmed: the WebKitGTK version that Ubuntu 22.04 ships (the spike ran on 2.54), since no CI job runs on Ubuntu
+   22.04; and `bundle.macOS.minimumSystemVersion`, which the repository does not set yet.
 6. **Provider key storage.** *Partly superseded by
    [ADR 0002](0002-envelope-provider-credentials.md).* Proposed: secrets live only in the operating system
    credential store, with no plaintext or application-encrypted fallback. The
