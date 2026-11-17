@@ -68,12 +68,22 @@ The Rust crates do not declare them today. There are two ways to get them:
 
 The owner has not chosen between them. The README of this branch records the related decision on the Windows ACL.
 
-## Durability on macOS: not reviewed
+## Durability on macOS: parity with the C++ worker
 
-`flush` uses `fsync`. On macOS, `fsync(2)` does not ask the drive to flush its cache, and `fcntl(F_FULLFSYNC)` does.
-This branch has not reviewed whether the guarantees of the C++ worker need `F_FULLFSYNC`. The rollback V1 document
-already says that "File/directory fsync acknowledgments are not a power-loss certification" (around line 118).
-Read it before deciding. Windows has the same open question for the directory-level rename, which is not reviewed here.
+Decision: the macOS backend uses `fsync`, as the C++ worker does. It does not use `F_FULLFSYNC`.
+
+Checked on the branch: `F_FULLFSYNC` appears nowhere in `native/`, `electron/`, `scripts/` or `crates/`, and `native/` has
+not changed since `de7dba4`. Every durability call in `native/rollback-boundary.cpp` goes through `flush`, which calls
+`fsync` (line 126). The calls are at lines 188, 194, 196, 234, 250 and 270. The rule for this case is parity, so the
+port keeps `fsync`.
+
+The difference that stays: on macOS, `fsync(2)` does not ask the drive to flush its cache, and `fcntl(F_FULLFSYNC)` does.
+So on macOS, a write that the worker acknowledged may not survive a power loss. The rollback V1 document already says that
+"File/directory fsync acknowledgments are not a power-loss certification" (around line 118). Using `F_FULLFSYNC` is a
+separate change. It would change the C++ worker and the Rust backend together, and it needs its own measurement of its
+cost.
+
+Windows has an open question of its own, for the directory-level rename, which is not reviewed here.
 
 ## Verification gaps
 
