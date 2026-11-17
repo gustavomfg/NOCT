@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (this change) | `f1f5b5f` | `93af490` and `595bb08`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation or changes a memory. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in three tests (the conversation insert, the memory insert's history entry, the update's history entry). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (this change) | `f1f5b5f` | `93af490`, `595bb08` and `a17000d`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory or reads a reply. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in four tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -140,6 +140,31 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 - A correction found while writing this: the two earlier failed-write tests (`conversations_create` and `brain_create`) passed
   without reaching their trigger when the workspace row was missing (a foreign-key error). They now create the workspace first
   and assert the trigger's message, so each one fails only because of the trigger.
+
+### P4 detail: `brain_extract`
+
+- The request is `{ conversationId, content }`. The reply is kept as it is: the request does not trim it. `content` has at most
+  2,000,000 UTF-16 units (`ASSISTANT_CHARACTERS`), as `brainMemoryExtractSchema` allows.
+- The reply is read by `extract_candidates` in `noct-core`, which follows `extractBrainMemoryCandidates`:
+  - the block marker is ASCII-folded, as the `/i` flag of JavaScript is (a long `ſ` does not match the `s`);
+  - a block that is not JSON is skipped; inside a block, an item that does not match the candidate schema is skipped and the
+    others are kept; a single object counts as a one-item list;
+  - `confidence` defaults to 60 and is a whole number from 0 to 100; no other key is allowed;
+  - at most five candidates are kept; every block is removed from the reply, kept or not, and the reply is trimmed.
+- The content rule of a candidate is the one of `brain_create` (`normalize_brain_content`): trimmed, 1 to 8,000 UTF-16 units,
+  and not a credential. The rule now has one definition, used by the three memory commands.
+- The conversation and its project are checked as in `brain_create`. The candidates are stored with
+  `create_candidates`: equivalent memories are skipped, the rest are stored as agent candidates in one transaction.
+- A failed store is not an error. The reply comes back with `memories: []` and the TypeScript warning
+  (`A resposta foi preservada, mas não foi possível salvar as candidatas do Segundo Cérebro.`), as the TypeScript shell does.
+  `warning` is absent when there is none.
+- Known difference, not covered by a test: the request is read as a Rust string. A lone surrogate escape in the reply is
+  refused by the request parser, where `JSON.parse` in the TypeScript shell accepts it.
+- Not ported: the log lines of the TypeScript shell. The interface does not call the command yet.
+- Checks: `crates/noct-core/tests/brain_candidates.rs` (nine tests), `crates/noct-app/tests/services.rs` (three tests),
+  `crates/noct-app/tests/commands_acl.rs` (one test), `crates/noct-db/tests/store.rs` (the batch that is refused as a whole).
+- Tests after this change: 517 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
+  and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P5 detail (first cut)
 

@@ -466,6 +466,71 @@ fn brain_update_is_granted_and_checks_its_request() {
     }
 }
 
+/// The extract command is granted to the main window. It reads a reply's block and stores the candidates; a conversation
+/// that does not exist and a request outside the contract are refused with their codes.
+#[test]
+fn brain_extract_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("brain-extract-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+
+    let reply = "Texto.\n```nocturne-memories\n[{\"kind\":\"learning\",\"scope\":\"workspace\",\"content\":\"Run the row gate\"}]\n```";
+    let extraction = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_extract",
+            json!({ "input": { "conversationId": conversation_id.clone(), "content": reply } }),
+        ),
+    ));
+    assert_eq!(extraction["content"], "Texto.");
+    assert_eq!(extraction["memories"][0]["content"], "Run the row gate");
+    assert!(
+        extraction.get("warning").is_none(),
+        "no warning when the candidates are stored"
+    );
+
+    let unknown = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "brain_extract",
+            json!({ "input": { "conversationId": "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", "content": "x" } }),
+        ),
+    ));
+    assert_eq!(unknown["code"], "unknown-conversation");
+
+    for input in [
+        json!({ "input": { "conversationId": conversation_id.clone(), "content": 5 } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "content": "x", "mode": "build" } }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "brain_extract", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

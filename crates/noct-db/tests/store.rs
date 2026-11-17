@@ -406,3 +406,52 @@ fn a_failed_brain_history_write_on_update_leaves_the_memory_unchanged() {
         "the change is rolled back with its history entry"
     );
 }
+
+#[test]
+fn a_refused_candidate_leaves_none_of_the_batch_stored() {
+    // The candidates of one reply are stored as one unit. The second one is refused by the trigger, so the first
+    // must be rolled back as well.
+    let directory = scratch("store-candidates-unit");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace is saved");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_second_candidate BEFORE INSERT ON brain_memories
+             WHEN NEW.content = 'refuse me'
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let candidates = vec![
+        noct_core::brain_memory::BrainMemoryCandidate {
+            kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+            scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+            content: "Store me first".to_string(),
+            confidence: 60,
+        },
+        noct_core::brain_memory::BrainMemoryCandidate {
+            kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+            scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+            content: "refuse me".to_string(),
+            confidence: 60,
+        },
+    ];
+
+    let error = store
+        .brain_memories()
+        .create_candidates("/work/project", "unused", &candidates)
+        .expect_err("the second candidate is refused");
+    assert!(error.to_string().contains("refused by the test"), "{error}");
+
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM brain_memories", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "the first candidate is rolled back with the batch"
+    );
+}

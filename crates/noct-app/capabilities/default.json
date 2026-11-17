@@ -9,6 +9,7 @@
     "allow-settings-set",
     "allow-workspaces-list",
     "allow-brain-create",
+    "allow-brain-extract",
     "allow-brain-update",
     "allow-conversations-create",
     "allow-conversations-list",

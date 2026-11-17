@@ -6,7 +6,10 @@ use std::sync::{Mutex, MutexGuard};
 
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::Conversation;
-use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
+use noct_core::ipc::brain::{
+    BrainMemoryCreateRequest, BrainMemoryExtractRequest, BrainMemoryExtraction,
+    BrainMemoryUpdateRequest,
+};
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
@@ -132,6 +135,23 @@ pub async fn brain_update(
     blocking(move || {
         let guard = lock(&store)?;
         services::brain_update(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
+/// Reads the memory blocks of an assistant reply and stores its candidates. The argument is `{ conversationId, content }`.
+/// A failure to store the candidates is a reply with a warning, not an error.
+#[tauri::command]
+pub async fn brain_extract(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<BrainMemoryExtraction, CommandError> {
+    let request: BrainMemoryExtractRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::brain_extract(&guard, &default_blocked_roots(), &request)
     })
     .await
 }

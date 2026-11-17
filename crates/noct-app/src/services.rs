@@ -6,10 +6,13 @@ use std::path::PathBuf;
 
 use noct_core::brain_memory::{
     BrainMemory, BrainMemoryScope, BrainMemorySource, CreateBrainMemoryInput,
-    InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition,
+    InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition, extract_candidates,
 };
 use noct_core::contracts::{Conversation, Workspace, WorkspaceAvailability};
-use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
+use noct_core::ipc::brain::{
+    BrainMemoryCreateRequest, BrainMemoryExtractRequest, BrainMemoryExtraction,
+    BrainMemoryUpdateRequest,
+};
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
@@ -287,6 +290,43 @@ pub fn brain_update(
         .brain_memories()
         .update(&request.memory_id, workspace, &input)
         .map_err(|_| CommandError::Persistence)
+}
+
+/// The warning of a reply whose memories could not be stored. It is the TypeScript text. The reply itself is kept.
+const CANDIDATES_NOT_SAVED: &str =
+    "A resposta foi preservada, mas não foi possível salvar as candidatas do Segundo Cérebro.";
+
+/// Reads the memory blocks of an assistant reply and stores its candidates in the project of the conversation. The
+/// conversation and its project are checked as in a conversation write. A failure to store is not an error: the reply
+/// comes back without memories, with the warning, as the TypeScript shell does. The candidates are stored as one unit.
+pub fn brain_extract(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryExtractRequest,
+) -> Result<BrainMemoryExtraction, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let extracted = extract_candidates(&request.content);
+    match store.brain_memories().create_candidates(
+        &conversation.workspace,
+        &request.conversation_id,
+        &extracted.candidates,
+    ) {
+        Ok(memories) => Ok(BrainMemoryExtraction {
+            memories,
+            content: extracted.content,
+            warning: None,
+        }),
+        Err(_) => Ok(BrainMemoryExtraction {
+            memories: Vec::new(),
+            content: extracted.content,
+            warning: Some(CANDIDATES_NOT_SAVED.to_string()),
+        }),
+    }
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

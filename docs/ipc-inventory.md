@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 8 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_update`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 9 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 5 |
-| P4 | 10 |
+| P4 (ported) | 6 |
+| P4 | 9 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -151,7 +151,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `brain:create` | `window.nocturne.brain.create` | `create(conversationId: string, value: { kind: BrainMemoryKind; scope: BrainMemoryScope; content: string }): Promise<BrainMemory>` | zod: brainMemoryCreateSchema | `electron/ipc/registerMemoryIpc.ts:75` | database write | P4 (ported) | Rust command `brain_create`: the conversation must exist and its project must pass the same check as a conversation write. The content has the schema rules: trimmed, 1 to 8,000 UTF-16 units, and not a credential. Stored as a manual candidate, with its history entry in one transaction. No interface control yet. |
 | `brain:update` | `window.nocturne.brain.update` | `update(conversationId: string, memoryId: string, value: Omit<UpdateBrainMemoryInput, 'conversationId'>): Promise<BrainMemory>` | zod: brainMemoryUpdateSchema | `electron/ipc/registerMemoryIpc.ts:95` | database write | P4 (ported) | Rust command `brain_update`: the same conversation and project checks as `brain_create`, and the memory must exist in that project. A status change must follow the lifecycle. The fields that are present are checked as in the schema, and at least one must be present. The credential rule of create applies to the content. No interface control yet. |
 | `brain:delete` | `window.nocturne.brain.delete` | `delete(conversationId: string, memoryId: string): Promise<{ deleted: true }>` | zod: brainMemoryDeleteSchema | `electron/ipc/registerMemoryIpc.ts:116` | database write | P4 |  |
-| `brain:extract` | `window.nocturne.brain.extract` | `extract(conversationId: string, content: string): Promise<{ memories: BrainMemory[]; content: string; warning?: string }>` | zod: brainMemoryExtractSchema | `electron/ipc/registerMemoryIpc.ts:129` | database write | P4 | Local extraction, no provider call. Stores candidate memories. |
+| `brain:extract` | `window.nocturne.brain.extract` | `extract(conversationId: string, content: string): Promise<{ memories: BrainMemory[]; content: string; warning?: string }>` | zod: brainMemoryExtractSchema | `electron/ipc/registerMemoryIpc.ts:129` | database write | P4 (ported) | Rust command `brain_extract`: the reply is read the way `extractBrainMemoryCandidates` reads it, with the same marker, the same five-candidate cap and the same skipped items. The candidates are stored as one unit. A failed store is a reply with the TypeScript warning, not an error. No provider call. |
 | `artifacts:list` | `window.nocturne.artifacts.list` | `list(conversationId: string): Promise<Artifact[]>` | zod: idSchema | `electron/ipc/registerArtifactIpc.ts:22` | read | P3 |  |
 | `artifacts:page` | `window.nocturne.artifacts.page` | `page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Artifact>>` | zod: conversationPageSchema | `electron/ipc/registerArtifactIpc.ts:25` | read | P3 |  |
 | `artifacts:delete` | `window.nocturne.artifacts.delete` | `delete(conversationId: string, artifactId: string): Promise<{ deleted: true }>` | inline .parse | `electron/ipc/registerArtifactIpc.ts:29` | database write | P4 | Confirm whether it also removes files before the port. |

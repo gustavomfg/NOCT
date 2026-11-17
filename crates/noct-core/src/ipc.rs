@@ -446,14 +446,14 @@ pub mod workspaces {
 /// The requests of the brain memory commands.
 pub mod brain {
     use serde::de;
-    use serde::{Deserialize, Deserializer};
+    use serde::{Deserialize, Deserializer, Serialize};
     use serde_json::{Map, Value};
 
     use crate::brain_memory::{
-        BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, is_safe_brain_memory_content,
+        BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, normalize_brain_content,
     };
-    use crate::limits::persistence::BRAIN_MEMORY_CHARACTERS;
-    use crate::text::{js_trim, utf16_len};
+    use crate::limits::persistence::ASSISTANT_CHARACTERS;
+    use crate::text::utf16_len;
     use crate::validation::uuid_text;
 
     const CREATE_FIELDS: &[&str] = &["conversationId", "kind", "scope", "content"];
@@ -512,20 +512,14 @@ pub mod brain {
         serde_json::from_value(value).map_err(E::custom)
     }
 
-    /// The content is trimmed first, as the schema does, and then checked for length and for credentials.
-    fn content_field<E: de::Error>(value: Value) -> Result<String, E> {
+    /// The content as `safeBrainMemoryContent` reads it: trimmed, checked for length and for credentials.
+    pub(super) fn content_field<E: de::Error>(value: Value) -> Result<String, E> {
         let Value::String(text) = value else {
             return Err(E::custom("content must be a string"));
         };
-        let trimmed = js_trim(&text);
-        let units = utf16_len(trimmed) as u64;
-        if units == 0 || units > BRAIN_MEMORY_CHARACTERS {
-            return Err(E::custom("content has from 1 to 8000 characters"));
-        }
-        if !is_safe_brain_memory_content(trimmed) {
-            return Err(E::custom("content looks like a credential"));
-        }
-        Ok(trimmed.to_string())
+        normalize_brain_content(&text).ok_or_else(|| {
+            E::custom("content is from 1 to 8000 characters and is not a credential")
+        })
     }
 
     const UPDATE_FIELDS: &[&str] = &[
@@ -605,5 +599,59 @@ pub mod brain {
             return Err(E::custom("confidence is an integer from 0 to 100"));
         }
         Ok(number as i64)
+    }
+
+    const EXTRACT_FIELDS: &[&str] = &["conversationId", "content"];
+
+    /// A request to read the memory blocks of an assistant reply. `content` is the reply as it is, untrimmed, and at most
+    /// `ASSISTANT_CHARACTERS` UTF-16 units, as `brainMemoryExtractSchema` allows.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct BrainMemoryExtractRequest {
+        pub conversation_id: String,
+        pub content: String,
+    }
+
+    impl<'de> Deserialize<'de> for BrainMemoryExtractRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut content = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "content" => {
+                        let Value::String(text) = value else {
+                            return Err(de::Error::custom("content must be a string"));
+                        };
+                        if utf16_len(&text) as u64 > ASSISTANT_CHARACTERS {
+                            return Err(de::Error::custom("content is too long"));
+                        }
+                        content = Some(text);
+                    }
+                    _ => return Err(de::Error::unknown_field(&key, EXTRACT_FIELDS)),
+                }
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                content: content.ok_or_else(|| de::Error::missing_field("content"))?,
+            })
+        }
+    }
+
+    /// The reply of `brain_extract`: the memories that were stored, the reply without its blocks, and a warning when
+    /// the memories could not be stored. `warning` is absent when there is none, as the TypeScript reply has it.
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BrainMemoryExtraction {
+        pub memories: Vec<BrainMemory>,
+        pub content: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub warning: Option<String>,
     }
 }
