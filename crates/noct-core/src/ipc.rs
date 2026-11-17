@@ -195,12 +195,10 @@ pub mod conversations {
     use serde::{Deserialize, Deserializer, Serialize};
     use serde_json::{Map, Value};
 
+    use super::pages::limit_of;
     use crate::contracts::Conversation;
 
-    /// The bounds of a page. These are contract bounds of the Rust shell, with no TypeScript counterpart:
-    /// the TypeScript conversation page is `COLLECTION_PAGE_LIMITS.conversations`, 100 in `shared/constants.ts`.
-    pub const PAGE_LIMIT_MIN: u64 = 1;
-    pub const PAGE_LIMIT_MAX: u64 = 500;
+    pub use super::pages::{PAGE_LIMIT_MAX, PAGE_LIMIT_MIN};
     /// The longest value of a cursor field, in characters. Timestamps and identifiers are far shorter.
     pub const CURSOR_CHARACTERS_MAX: usize = 128;
 
@@ -242,20 +240,6 @@ pub mod conversations {
         }
     }
 
-    /// A JSON integer from `PAGE_LIMIT_MIN` to `PAGE_LIMIT_MAX`. A fraction, a string or a negative number
-    /// is refused, because `as_u64` returns nothing for them.
-    fn limit_of<E: de::Error>(value: Value) -> Result<usize, E> {
-        value
-            .as_u64()
-            .filter(|limit| (PAGE_LIMIT_MIN..=PAGE_LIMIT_MAX).contains(limit))
-            .and_then(|limit| usize::try_from(limit).ok())
-            .ok_or_else(|| {
-                E::custom(format!(
-                    "limit must be an integer from {PAGE_LIMIT_MIN} to {PAGE_LIMIT_MAX}"
-                ))
-            })
-    }
-
     fn cursor_of<E: de::Error>(value: Value) -> Result<ConversationCursor, E> {
         if value.is_null() {
             return Err(E::custom("cursor must be an object, not null"));
@@ -279,5 +263,96 @@ pub mod conversations {
         pub items: Vec<Conversation>,
         pub has_more: bool,
         pub next_cursor: Option<ConversationCursor>,
+    }
+}
+
+/// The bounds shared by the pages of the shell. `limit` is required and bounded, so a request cannot ask for
+/// an unbounded reply, and `offset` is bounded, so it cannot ask for an unbounded skip.
+pub mod pages {
+    use serde::de;
+    use serde_json::Value;
+
+    /// The bounds of a page. These are contract bounds of the Rust shell, with no TypeScript counterpart:
+    /// the TypeScript conversation page is `COLLECTION_PAGE_LIMITS.conversations`, 100 in `shared/constants.ts`.
+    pub const PAGE_LIMIT_MIN: u64 = 1;
+    pub const PAGE_LIMIT_MAX: u64 = 500;
+    /// The largest offset a page may skip.
+    pub const OFFSET_MAX: u64 = 1_000_000;
+
+    /// A JSON integer from `PAGE_LIMIT_MIN` to `PAGE_LIMIT_MAX`. A fraction, a string or a negative number
+    /// is refused, because `as_u64` returns nothing for them.
+    pub fn limit_of<E: de::Error>(value: Value) -> Result<usize, E> {
+        value
+            .as_u64()
+            .filter(|limit| (PAGE_LIMIT_MIN..=PAGE_LIMIT_MAX).contains(limit))
+            .and_then(|limit| usize::try_from(limit).ok())
+            .ok_or_else(|| {
+                E::custom(format!(
+                    "limit must be an integer from {PAGE_LIMIT_MIN} to {PAGE_LIMIT_MAX}"
+                ))
+            })
+    }
+
+    /// A JSON integer from 0 to `OFFSET_MAX`. An explicit `null` is refused, as the other optional fields are.
+    pub fn offset_of<E: de::Error>(value: Value) -> Result<usize, E> {
+        value
+            .as_u64()
+            .filter(|offset| *offset <= OFFSET_MAX)
+            .and_then(|offset| usize::try_from(offset).ok())
+            .ok_or_else(|| E::custom(format!("offset must be an integer from 0 to {OFFSET_MAX}")))
+    }
+}
+
+/// The page of projects. `workspaces_list` takes a [`WorkspacePageRequest`] and returns a [`WorkspacePage`].
+/// The order is the store's: favorites first, then the most recently opened. An offset is the number of projects
+/// to skip. A project opened between two requests can move across a page boundary, so a reader that needs every
+/// project asks for the maximum limit.
+pub mod workspaces {
+    use serde::de;
+    use serde::{Deserialize, Deserializer, Serialize};
+    use serde_json::{Map, Value};
+
+    use super::pages::{limit_of, offset_of};
+    use crate::contracts::Workspace;
+
+    const REQUEST_FIELDS: &[&str] = &["limit", "offset"];
+
+    /// A request for one page. `limit` is required; `offset` is 0 when it is absent.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct WorkspacePageRequest {
+        pub limit: usize,
+        pub offset: usize,
+    }
+
+    impl<'de> Deserialize<'de> for WorkspacePageRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut limit = None;
+            let mut offset = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "limit" => limit = Some(limit_of::<D::Error>(value)?),
+                    "offset" => offset = Some(offset_of::<D::Error>(value)?),
+                    _ => return Err(de::Error::unknown_field(&key, REQUEST_FIELDS)),
+                }
+            }
+            let limit = limit.ok_or_else(|| de::Error::missing_field("limit"))?;
+            Ok(Self {
+                limit,
+                offset: offset.unwrap_or(0),
+            })
+        }
+    }
+
+    /// One page of projects, in order. `has_more` says whether a project exists after this page. An unknown field
+    /// is refused, as the TypeScript type refuses it.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    pub struct WorkspacePage {
+        pub items: Vec<Workspace>,
+        pub has_more: bool,
     }
 }

@@ -9,6 +9,7 @@ use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
+use noct_core::ipc::workspaces::{WorkspacePage, WorkspacePageRequest};
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::Store;
 
@@ -47,6 +48,36 @@ pub fn workspace_rows(store: &Store) -> Result<Vec<WorkspaceRow>, CommandError> 
         .workspaces()
         .list()
         .map_err(|_| CommandError::Persistence)
+}
+
+/// One page of the saved workspaces, as the rows the page holds and whether another row follows them. The
+/// rows are read from the store in order; the availability of each row is checked later, by the caller, and
+/// only for the rows of this page. That keeps the file-system work bounded by the limit.
+pub fn workspace_page_rows(
+    store: &Store,
+    request: &WorkspacePageRequest,
+) -> Result<(Vec<WorkspaceRow>, bool), CommandError> {
+    let rows = workspace_rows(store)?;
+    let total = rows.len();
+    let start = request.offset.min(total);
+    let end = start.saturating_add(request.limit).min(total);
+    let has_more = end < total;
+    let page = rows.into_iter().skip(start).take(end - start).collect();
+    Ok((page, has_more))
+}
+
+/// One page of projects with their availability. It reads the rows under the store lock, which the caller
+/// holds, and checks the page outside of it. Tests use this whole path; the command splits it at the lock.
+pub fn workspace_page(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &WorkspacePageRequest,
+) -> Result<WorkspacePage, CommandError> {
+    let (rows, has_more) = workspace_page_rows(store, request)?;
+    Ok(WorkspacePage {
+        items: workspaces_from_rows(rows, blocked),
+        has_more,
+    })
 }
 
 /// Each row with its availability. The check reads the file system, so the caller runs it outside the

@@ -1,21 +1,34 @@
-//! The projects the sidebar lists, read with `workspaces_list`. A reply is checked against the contract of
-//! `noct-core` before it is shown. A reply with one entry outside the contract is an error, not a shorter list:
+//! The projects the sidebar lists, read with `workspaces_list`. The reply is a page, checked against the contract
+//! of `noct-core` before it is shown. A reply with one entry outside the contract is an error, not a shorter list:
 //! a project that is missing from the list would mislead the person about what the shell holds.
+//!
+//! The interface asks for the first page at the largest limit the shell accepts, and says so when more projects
+//! follow. Reading the rest of the list is not done yet.
 
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
+use noct_core::ipc::pages::PAGE_LIMIT_MAX;
+use noct_core::ipc::workspaces::WorkspacePage;
 
 use crate::ipc::{self, Failure, Outcome};
 
 /// The command the interface reads the projects with.
 pub const COMMAND: &str = "workspaces_list";
 
+/// The payload of the first page: the command's argument, a page request at the largest limit.
+pub fn first_page_payload() -> String {
+    format!(r#"{{"input":{{"limit":{PAGE_LIMIT_MAX}}}}}"#)
+}
+
 /// What the sidebar's project list shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspacesView {
     Loading,
-    Ready(Vec<Workspace>),
+    Ready(WorkspacePage),
     Failed(Failure),
 }
+
+/// The note under the list when the shell holds more projects than the page shows.
+pub const MORE_NOTE: &str = "Há mais projetos do que esta lista mostra.";
 
 /// The note under a project that is not ready to use. A project that the person has not authorized in this
 /// session says so; the shell marks a restored project unauthorized until it is chosen again.
@@ -24,8 +37,8 @@ const NEEDS_AUTHORIZATION: &str = "Não autorizado. Escolha a pasta de novo para
 /// Turns the outcome of a call into what the sidebar shows.
 pub fn settle(outcome: Outcome) -> WorkspacesView {
     match ipc::reply(outcome) {
-        Ok(text) => match serde_json::from_str::<Vec<Workspace>>(&text) {
-            Ok(list) => WorkspacesView::Ready(list),
+        Ok(text) => match serde_json::from_str::<WorkspacePage>(&text) {
+            Ok(page) => WorkspacesView::Ready(page),
             Err(_) => WorkspacesView::Failed(ipc::invalid_response()),
         },
         Err(failure) => WorkspacesView::Failed(failure),
@@ -97,11 +110,31 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_list_is_a_list_and_not_an_error() {
+    fn an_empty_page_is_a_list_and_not_an_error() {
         assert_eq!(
-            settle(Outcome::Resolved("[]".to_string())),
-            WorkspacesView::Ready(Vec::new())
+            settle(Outcome::Resolved(
+                r#"{"items":[],"hasMore":false}"#.to_string()
+            )),
+            WorkspacesView::Ready(WorkspacePage {
+                items: Vec::new(),
+                has_more: false,
+            })
         );
+    }
+
+    #[test]
+    fn a_page_that_has_more_projects_says_so() {
+        match settle(Outcome::Resolved(
+            r#"{"items":[],"hasMore":true}"#.to_string(),
+        )) {
+            WorkspacesView::Ready(page) => assert!(page.has_more),
+            other => panic!("the page is listed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_first_page_asks_for_the_largest_limit() {
+        assert_eq!(first_page_payload(), r#"{"input":{"limit":500}}"#);
     }
 
     #[test]

@@ -114,29 +114,37 @@ const OUTPUT_SAMPLES = {
       { approvalPolicy: 'on-request', pandocVersion: 3 },
     ],
   },
+  // `workspaces_list` returns a page (`WorkspacePage` in noct-core). The page type is written here, because the
+  // shared types have the list only; the items are checked against `Workspace` as before.
   'workspaces-list': {
-    type: 'Workspace[]',
+    type: '{ items: Workspace[]; hasMore: boolean }',
     valid: [
-      [],
-      [WORKSPACE_ALPHA],
-      [
-        {
-          path: '/work/beta',
-          name: 'beta',
-          favorite: false,
-          authorized: false,
-          availability: 'missing',
-          availabilityMessage: 'A pasta não existe.',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          lastOpenedAt: '2026-01-02T00:00:00.000Z',
-        },
-      ],
+      { items: [], hasMore: false },
+      { items: [WORKSPACE_ALPHA], hasMore: false },
+      {
+        items: [
+          {
+            path: '/work/beta',
+            name: 'beta',
+            favorite: false,
+            authorized: false,
+            availability: 'missing',
+            availabilityMessage: 'A pasta não existe.',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            lastOpenedAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+        hasMore: true,
+      },
     ],
     invalid: [
-      [{ ...WORKSPACE_ALPHA, availability: 'online' }],
-      [{ path: '/work/alpha', name: 'alpha', favorite: true, availability: 'available', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }],
-      [{ ...WORKSPACE_ALPHA, availabilityMessage: null }],
-      [{ ...WORKSPACE_ALPHA, favorite: 'yes' }],
+      { items: [{ ...WORKSPACE_ALPHA, availability: 'online' }], hasMore: false },
+      { items: [{ path: '/work/alpha', name: 'alpha', favorite: true, availability: 'available', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false },
+      { items: [{ ...WORKSPACE_ALPHA, availabilityMessage: null }], hasMore: false },
+      { items: [{ ...WORKSPACE_ALPHA, favorite: 'yes' }], hasMore: false },
+      { items: [], hasMore: 'no' },
+      { items: [] },
+      { items: [], hasMore: false, nextCursor: null },
     ],
   },
   'conversations-list': {

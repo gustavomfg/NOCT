@@ -4,9 +4,9 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use noct_core::contracts::Workspace;
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
+use noct_core::ipc::workspaces::{WorkspacePage, WorkspacePageRequest};
 use noct_db::store::Store;
 use tauri::State;
 
@@ -41,20 +41,26 @@ pub async fn settings_set(
     .await
 }
 
+/// One page of projects. The argument is a page request: a required limit from 1 to 500, and an optional offset.
+/// The unpaginated list is not a command. The store lock is held only while the rows are read; the availability
+/// of the page is checked after it is released, as the file-system check must not hold the store.
 #[tauri::command]
 pub async fn workspaces_list(
     state: State<'_, Persistence>,
-) -> Result<Vec<Workspace>, CommandError> {
+    input: serde_json::Value,
+) -> Result<WorkspacePage, CommandError> {
+    let request: WorkspacePageRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
     let store = state.store.clone();
     blocking(move || {
-        let rows = {
+        let (rows, has_more) = {
             let guard = lock(&store)?;
-            services::workspace_rows(&guard)?
+            services::workspace_page_rows(&guard, &request)?
         };
-        Ok(services::workspaces_from_rows(
-            rows,
-            &default_blocked_roots(),
-        ))
+        Ok(WorkspacePage {
+            items: services::workspaces_from_rows(rows, &default_blocked_roots()),
+            has_more,
+        })
     })
     .await
 }

@@ -32,7 +32,7 @@ const CLASS = {
   'evidence.list': ['read', 'P3', 'Takes a conversation and an execution id.'],
   'workspace.select': ['database write', 'later', 'Opens a native folder dialog and authorises the workspace. Authorisation stays in the main process, and restored workspaces remain unauthorised until reselected.'],
   'workspace.validate': ['filesystem read', 'P3', 'Checks a path and its scope. No authorisation.'],
-  'workspace.list': ['read', 'P3 (ported)', 'Already a Rust command (`workspaces_list`). No ACL, limit or `has_more` yet.'],
+  'workspace.list': ['read', 'P3 (ported)', 'Rust command `workspaces_list`, paged: a required limit (1 to 500) and an offset. `hasMore` says whether more follow. First cut: the interface reads the first page only.'],
   'workspace.remove': ['database write', 'P4', 'Removes a workspace record.'],
   'workspace.favorite': ['database write', 'P4', 'Validated with `workspaceFavoriteSchema`.'],
   'workspace.openTool': ['process/shell', 'later', 'Starts an editor or a terminal in the workspace.'],

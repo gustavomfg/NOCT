@@ -56,9 +56,13 @@ pub fn App() -> impl IntoView {
     let (workspaces_view, set_workspaces_view) = signal(WorkspacesView::Loading);
     let read_workspaces = move || {
         set_workspaces_view.set(WorkspacesView::Loading);
-        ipc::call(workspaces::COMMAND, move |outcome| {
-            set_workspaces_view.set(workspaces::settle(outcome));
-        });
+        ipc::call_with(
+            workspaces::COMMAND,
+            &workspaces::first_page_payload(),
+            move |outcome| {
+                set_workspaces_view.set(workspaces::settle(outcome));
+            },
+        );
     };
     read_workspaces();
 
@@ -228,18 +232,28 @@ fn projects_view(view: WorkspacesView, retry: impl Fn() + Copy + Send + Sync + '
             </div>
         }
         .into_any(),
-        WorkspacesView::Ready(list) if list.is_empty() => view! {
+        WorkspacesView::Ready(page) if page.items.is_empty() => view! {
             <p class="note project__state" data-testid="projects-empty">
                 "Nenhum projeto registrado ainda."
             </p>
         }
         .into_any(),
-        WorkspacesView::Ready(list) => view! {
-            <ul class="projects" data-testid="projects">
-                {list.iter().map(project_item).collect_view()}
-            </ul>
+        WorkspacesView::Ready(page) => {
+            let more = page.has_more.then(|| {
+                view! {
+                    <p class="note project__state" role="status" data-testid="projects-more">
+                        {workspaces::MORE_NOTE}
+                    </p>
+                }
+            });
+            view! {
+                <ul class="projects" data-testid="projects">
+                    {page.items.iter().map(project_item).collect_view()}
+                </ul>
+                {more}
+            }
+            .into_any()
         }
-        .into_any(),
     }
 }
 

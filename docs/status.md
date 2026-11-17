@@ -13,7 +13,7 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 | --- | --- | --- | --- | --- |
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate on `0dafe7c`: success. Shell on `0dafe7c`: running when this was written; see the report. | Reverse gate on CI for `0dafe7c` (row gate running). |
 | P2: IPC inventory | `3f2a9ce` | not yet | not run | Nothing run on CI yet. |
-| P3: read commands | not started | | | |
+| P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
 | P4 to P10 | not started | | | |
 
 ### P1 detail
@@ -36,13 +36,32 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
   invokable channel has an input check, found in the handler or in a helper it calls. Four channels already have a Rust
   command.
 
+### P3 detail (first cut)
+
+- `workspaces_list` takes a page request: `limit` is required, from 1 to 500; `offset` is optional, from 0 to 1,000,000.
+  Any other field, a null offset and a missing limit are refused as invalid input. The reply is `{ items, hasMore }`.
+  The bounds are shared in `noct_core::ipc::pages`, so the project page and the conversation page use one rule.
+- The shell reads the rows of the page under the store lock, then checks the availability of those rows only, so the
+  file-system work is bounded by the limit.
+- The sidebar asks for the first page at 500, lists it, and shows a note when `hasMore` is true. It does not read the
+  rest yet; that is P7.
+- Offset paging, not a cursor: the project order (favorites first, then the latest opened) has no unique key, so a
+  cursor could not be exact either. A project opened between two reads can move across a page boundary. The list is
+  small; this is accepted and recorded.
+- Checks: contract samples for the page, generated from the TypeScript types (`scripts/generate-ipc-samples.mjs`);
+  the command's ACL (main window only); the service tests; the output differential, where one-row pages and
+  maximum-size pages each join back into the whole list, and that list equals the TypeScript list for the nine
+  release lines and the current line; the browser check of the sidebar, with a new scenario for a page that has more.
+
 ## Verified in this round
 
-Local, on the tree of each commit: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
+Local, on the tree of the P3 commit: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
 `cargo clippy -p noct-ui --target wasm32-unknown-unknown -D warnings`, `cargo test --workspace --no-fail-fast`
-(425 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
-`npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node scripts/check-shell-csp.mjs`,
-`node scripts/check-shell-ui.mjs`.
+(437 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
+`npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node --test scripts/*.test.mjs` (7 of 7),
+`node scripts/check-shell-csp.mjs`, `node scripts/check-shell-ui.mjs` (16 scenarios, after `trunk build --release` of
+`crates/noct-ui`), and the output differential: `node scripts/generate-output-differential.mjs`, then
+`cargo test -p noct-app --test output_differential -- --ignored` (passes for the nine release lines and the current line).
 
 CI, from GitHub: `06150a1` passed on all three systems (Rust shell validation: Ubuntu, macOS and Windows) and the row gate.
 
@@ -53,6 +72,10 @@ CI, from GitHub: `06150a1` passed on all three systems (Rust shell validation: U
 - The WebKitGTK version in Ubuntu 22.04.
 - Power-loss durability on macOS and Windows. Neither backend is certified (see the rollback backends document).
 - The Rust rollback backends for macOS and Windows: they do not exist yet.
+- The rest of the project list beyond the first 500 projects (P7).
+- Offset paging over a list whose order has ties: see the P3 detail. It is not checked against concurrent opens.
+- The release build of `crates/noct-ui` prints a wasm-bindgen warning about `strip = true` in the workspace `Cargo.toml`
+  (set since `4cb423e`). It is not changed here.
 
 ## Decisions taken by me
 
@@ -66,3 +89,9 @@ CI, from GitHub: `06150a1` passed on all three systems (Rust shell validation: U
   vault as `stop` or `later`, not as read. It does not port them.
 - `clipboard.readText` is classified as a read of the OS clipboard and left for later, because it sends clipboard
   contents to the renderer.
+- P3 uses an offset, not a cursor, for the project page, because the project order has no unique key. The list is
+  small; the limit is recorded above.
+- `workspaces_list` now takes an input. Its only caller is the sidebar in this repository; the TypeScript application
+  does not call this Rust command.
+- The page type for the TypeScript check is written in `scripts/generate-ipc-samples.mjs`, because the shared types
+  have the list only. No product TypeScript changed.

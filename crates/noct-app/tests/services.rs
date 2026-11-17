@@ -6,9 +6,10 @@ mod common;
 use common::Scratch;
 use noct_app::bootstrap;
 use noct_app::services;
-use noct_core::contracts::WorkspaceAvailability;
+use noct_core::contracts::{Workspace, WorkspaceAvailability};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
+use noct_core::ipc::workspaces::WorkspacePageRequest;
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
 const NOT_A_FOLDER: &str = "O caminho do workspace não é uma pasta.";
@@ -310,5 +311,73 @@ fn conversation_pages_follow_the_cursor_and_report_more() {
     assert_eq!(
         seen, expected,
         "every conversation is returned exactly once"
+    );
+}
+
+/// A project page holds the rows at its offset, in the store's order, and reports more exactly when a row follows
+/// it. Pages of any size join back into the whole list. An offset past the end is an empty page with no more.
+#[test]
+fn workspace_pages_follow_the_offset_and_report_more() {
+    let scratch = Scratch::new("workspace-pages");
+    let folders: Vec<String> = (0..5)
+        .map(|index| {
+            let folder = scratch.path().join(format!("project-{index}"));
+            std::fs::create_dir(&folder).expect("the folder is created");
+            folder.to_string_lossy().into_owned()
+        })
+        .collect();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    for folder in &folders {
+        store.workspaces().touch(folder).expect("saved");
+    }
+    let whole = services::workspaces_from_rows(
+        services::workspace_rows(&store).expect("rows are read"),
+        &[],
+    );
+    let page = |limit: usize, offset: usize| {
+        services::workspace_page(&store, &[], &WorkspacePageRequest { limit, offset })
+            .expect("a page is read")
+    };
+    let paths = |items: &[Workspace]| -> Vec<String> {
+        items.iter().map(|item| item.path.clone()).collect()
+    };
+
+    let first = page(2, 0);
+    assert_eq!(paths(&first.items), paths(&whole[0..2]));
+    assert!(first.has_more, "rows follow the first page");
+
+    let last = page(2, 4);
+    assert_eq!(paths(&last.items), paths(&whole[4..5]));
+    assert!(!last.has_more, "no row follows the last page");
+
+    let exact = page(5, 0);
+    assert_eq!(paths(&exact.items), paths(&whole));
+    assert!(
+        !exact.has_more,
+        "a page that reaches the end reports no more"
+    );
+
+    let past = page(2, 9);
+    assert!(
+        past.items.is_empty(),
+        "an offset past the end is an empty page"
+    );
+    assert!(!past.has_more);
+
+    let mut joined = Vec::new();
+    let mut offset = 0;
+    loop {
+        let next = page(1, offset);
+        joined.extend(paths(&next.items));
+        if !next.has_more {
+            break;
+        }
+        offset += 1;
+    }
+    assert_eq!(
+        joined,
+        paths(&whole),
+        "one-row pages join back into the whole list"
     );
 }

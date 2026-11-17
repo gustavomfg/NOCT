@@ -20,8 +20,9 @@ use common::Scratch;
 use noct_app::bootstrap;
 use noct_app::services;
 use noct_app::workspace_scope::default_blocked_roots;
-use noct_core::contracts::Conversation;
+use noct_core::contracts::{Conversation, Workspace};
 use noct_core::ipc::conversations::{ConversationPageRequest, PAGE_LIMIT_MAX};
+use noct_core::ipc::workspaces::WorkspacePageRequest;
 use noct_db::store::Store;
 use serde_json::{Value, json};
 
@@ -121,16 +122,55 @@ fn conversations_through_pages(store: &Store, limit: usize) -> Vec<Conversation>
     panic!("the pages did not end within {MAX_PAGES} pages");
 }
 
+/// The projects in pages of `limit`, as `workspaces_list` returns them, until a page reports no more.
+fn workspaces_through_pages(store: &Store, limit: usize) -> Vec<Workspace> {
+    /// A walk that does not end is an offset that does not advance. The bases hold a few rows at most.
+    const MAX_PAGES: usize = 10_000;
+    let mut collected = Vec::new();
+    for index in 0..MAX_PAGES {
+        let request = WorkspacePageRequest {
+            limit,
+            offset: index * limit,
+        };
+        let page = services::workspace_page(store, &default_blocked_roots(), &request)
+            .expect("a page of projects is read");
+        assert!(page.items.len() <= limit, "a page holds at most its limit");
+        let has_more = page.has_more;
+        collected.extend(page.items);
+        if !has_more {
+            return collected;
+        }
+    }
+    panic!("the pages did not end within {MAX_PAGES} pages");
+}
+
 /// The four outputs of the first slice for the database in `scratch`, as the commands return them. Opening
-/// the store upgrades a database of an older schema, as it does for the application. The conversations are
-/// read in pages of one row and of the maximum, and the two walks must agree before they are compared with
-/// TypeScript.
+/// the store upgrades a database of an older schema, as it does for the application. The conversations and the
+/// projects are read in pages of one row and of the maximum; the walks must agree with each other and with the
+/// whole list before they are compared with TypeScript.
 fn rust_outputs(scratch: &Scratch) -> Value {
     let persistence = bootstrap::open(scratch.path()).expect("the shell opens the copy");
     let store = persistence.store.lock().expect("the store is not poisoned");
     let settings = services::settings_get(&store).expect("the settings are read");
     let rows = services::workspace_rows(&store).expect("the workspaces are read");
-    let workspaces = services::workspaces_from_rows(rows, &default_blocked_roots());
+    let whole = services::workspaces_from_rows(rows, &default_blocked_roots());
+    let projects_one = workspaces_through_pages(&store, 1);
+    let projects_maximum = workspaces_through_pages(
+        &store,
+        usize::try_from(PAGE_LIMIT_MAX).expect("the page maximum fits in usize"),
+    );
+    let whole_json = serde_json::to_value(&whole).expect("the projects serialize");
+    assert_eq!(
+        serde_json::to_value(&projects_one).expect("the projects serialize"),
+        whole_json,
+        "pages of one row join back into the whole list, in order"
+    );
+    assert_eq!(
+        serde_json::to_value(&projects_maximum).expect("the projects serialize"),
+        whole_json,
+        "pages of the maximum join back into the whole list, in order"
+    );
+    let workspaces = projects_one;
     let one_by_one = conversations_through_pages(&store, 1);
     let by_maximum = conversations_through_pages(
         &store,

@@ -5,7 +5,8 @@
 // mock defines `window.__TAURI_INTERNALS__.invoke`, which is the function the shell's webview defines
 // (tauri-2.12.5/scripts/core.js). Each scenario answers `settings_get` and `workspaces_list` in its own way.
 //
-// What this proves: the interface calls only `settings_get` and `workspaces_list`, each with an empty payload;
+// What this proves: the interface calls only `settings_get` (with an empty payload) and `workspaces_list` (with the
+// first page request, `{ input: { limit: 500 } }`);
 // the settings show their loading state, values, the shell's error and the way to try again; the sidebar lists
 // the projects the shell returns, in order, with the note of each one that cannot be used as it is, and shows its
 // own loading, empty, error and retry states; a reply outside the contract is an error, not a default or a
@@ -63,10 +64,13 @@ const DARK = 'NOCT escuro'
 const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar os dados locais.' }
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
+const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
 const READ_COMMANDS = ['settings_get', 'workspaces_list']
 const EXAMPLE_NAMES = ['frx', 'ovra']
+// The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}' }
 
-// What the shell returns for `workspaces_list`: one project of each kind the sidebar shows.
+// What the shell returns for `workspaces_list`, as the items of its page: one project of each kind the sidebar shows.
 const PROJECTS = [
   {
     path: '/work/alpha',
@@ -137,6 +141,7 @@ const SCENARIOS = [
   { name: 'projects-slow-then-ready', mode: 'ready', theme: 'light', projects: 'slow', expectTheme: 'light' },
   { name: 'projects-error-then-retry', mode: 'ready', theme: 'light', projects: 'error-then-retry', expectTheme: 'light' },
   { name: 'projects-reply-outside-the-contract', mode: 'ready', theme: 'light', projects: 'invalid', expectTheme: 'light' },
+  { name: 'projects-with-more-to-come', mode: 'ready', theme: 'light', projects: 'ready', more: true, expectTheme: 'light' },
 ]
 
 const TYPES = {
@@ -174,10 +179,12 @@ function installMock(config) {
   if (config.scenario.mode === 'no-runtime') return
 
   const modeOf = (command) => (command === 'workspaces_list' ? config.scenario.projects : config.scenario.mode)
-  const replyOf = (command) => (command === 'workspaces_list' ? config.projects : config.settings)
+  // `workspaces_list` answers with a page: the items, and whether more follow them.
+  const replyOf = (command) =>
+    command === 'workspaces_list' ? { items: config.projects, hasMore: config.scenario.more === true } : config.settings
   const invalidOf = (command) =>
     command === 'workspaces_list'
-      ? [{ path: '/work/x', name: 'x', favorite: false, authorized: true, availability: 'online', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }]
+      ? { items: [{ path: '/work/x', name: 'x', favorite: false, authorized: true, availability: 'online', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false }
       : { approvalPolicy: 'always' }
 
   window.__TAURI_INTERNALS__ = {
@@ -192,7 +199,7 @@ function installMock(config) {
               resolve(replyOf(command))
               break
             case 'empty':
-              resolve([])
+              resolve(command === 'workspaces_list' ? { items: [], hasMore: false } : [])
               break
             case 'error-then-retry':
               if (attempt === 1) reject(config.shellError)
@@ -334,6 +341,13 @@ try {
           check((await items.nth(1).locator('.project__note').textContent())?.trim() === PROJECTS_UNAVAILABLE, 'a missing project shows the shell message')
           check((await items.nth(2).locator('.project__note').textContent())?.trim() === NEEDS_AUTHORIZATION, 'a project not authorized in this session asks for its folder again')
           check((await items.nth(1).locator('.path').textContent())?.trim() === '/work/beta', 'each project shows its folder')
+          // The note under the list appears exactly when the shell says more projects follow the page.
+          const more = page.getByTestId('projects-more')
+          const moreShown = await more.count()
+          check(moreShown === (scenario.more === true ? 1 : 0), 'the list says more projects follow only when the page has more')
+          if (scenario.more === true) {
+            check((await more.textContent())?.trim() === MORE_PROJECTS, 'the note says more projects follow')
+          }
         }
       }
 
@@ -454,7 +468,10 @@ try {
         const count = (command) => calls.filter((call) => call.command === command).length
         check(calls.length >= 2, 'the interface calls the shell for settings and projects')
         check(calls.every((call) => READ_COMMANDS.includes(call.command)), 'only the two read commands are called')
-        check(calls.every((call) => JSON.stringify(call.payload) === '{}'), 'the payloads are empty')
+        check(
+          calls.every((call) => JSON.stringify(call.payload) === PAYLOAD_OF[call.command]),
+          'each read is sent its own payload: settings_get none, workspaces_list the first page at the largest limit',
+        )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
         check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
       }

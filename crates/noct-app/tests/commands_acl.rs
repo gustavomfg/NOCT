@@ -86,9 +86,13 @@ fn the_main_window_runs_the_granted_commands() {
     assert_eq!(
         ok_json(get_ipc_response(
             &main,
-            request(&main, "workspaces_list", json!({}))
+            request(
+                &main,
+                "workspaces_list",
+                json!({ "input": { "limit": 500 } })
+            )
         )),
-        json!([])
+        json!({ "items": [], "hasMore": false })
     );
     assert_eq!(
         ok_json(get_ipc_response(
@@ -125,6 +129,32 @@ fn conversations_list_refuses_page_requests_outside_the_contract() {
         let error = error_of(get_ipc_response(
             &main,
             request(&main, "conversations_list", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
+/// The project page is checked before the store is read, like the conversation page. The limit is required, the
+/// offset is bounded, and an unknown field or a null offset is refused.
+#[test]
+fn workspaces_list_refuses_page_requests_outside_the_contract() {
+    let scratch = Scratch::new("workspace-page");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+
+    for input in [
+        json!({ "input": {} }),
+        json!({ "input": { "limit": 0 } }),
+        json!({ "input": { "limit": 501 } }),
+        json!({ "input": { "limit": "10" } }),
+        json!({ "input": { "limit": 10, "offset": null } }),
+        json!({ "input": { "limit": 10, "offset": 1_000_001 } }),
+        json!({ "input": { "limit": 10, "cursor": {} } }),
+        json!({ "input": null }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "workspaces_list", input.clone()),
         ));
         assert_eq!(error["code"], "invalid-input", "{input} is refused");
     }

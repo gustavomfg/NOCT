@@ -2,9 +2,10 @@
 //! `scripts/generate-ipc-samples.mjs` writes from the TypeScript side. The settings inputs are the ones
 //! zod accepts and refuses; the outputs are the ones the TypeScript types accept and refuse.
 
-use noct_core::contracts::{Conversation, Workspace};
+use noct_core::contracts::Conversation;
 use noct_core::ipc::commands;
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
+use noct_core::ipc::workspaces::WorkspacePage;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -77,13 +78,13 @@ fn settings_get_outputs_are_the_app_settings_the_typescript_type_accepts() {
 }
 
 #[test]
-fn workspaces_list_outputs_are_the_workspaces_the_typescript_type_accepts() {
+fn workspaces_list_outputs_are_the_pages_the_typescript_types_accept() {
     let fixture = fixture(WORKSPACES_LIST);
     for sample in samples(&fixture, "valid") {
-        accepts::<Vec<Workspace>>(&sample);
+        accepts::<WorkspacePage>(&sample);
     }
     for sample in samples(&fixture, "invalid") {
-        refuses::<Vec<Workspace>>(&sample);
+        refuses::<WorkspacePage>(&sample);
     }
 }
 

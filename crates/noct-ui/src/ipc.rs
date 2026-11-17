@@ -101,8 +101,13 @@ type Done = Rc<RefCell<Option<Box<dyn FnOnce(Outcome)>>>>;
 
 /// Calls `command` with an empty payload and hands its outcome to `done`, exactly once.
 pub fn call(command: &str, done: impl FnOnce(Outcome) + 'static) {
+    call_with(command, "{}", done);
+}
+
+/// Calls `command` with `payload`, a JSON object, and hands its outcome to `done`, exactly once.
+pub fn call_with(command: &str, payload: &str, done: impl FnOnce(Outcome) + 'static) {
     let done: Done = Rc::new(RefCell::new(Some(Box::new(done))));
-    let payload = json_parse("{}");
+    let payload = json_parse(payload);
 
     let on_resolved = {
         let done = Rc::clone(&done);
