@@ -70,8 +70,9 @@ The ADR's criterion for phase 8 is "signed packages validated on three platforms
   decision".
 - **The shell has not run in a window on Windows or macOS**, so the criterion "validated on three platforms" cannot be
   met yet.
-- **The minimum platform versions are proposed, not decided.** ADR 0001, decision 4, is partly resolved.
-  [`docs/compatibility.md`](docs/compatibility.md#minimum-platform-versions) has proposed floors and the Tauri
+- **The platform floors are decided: Windows 10 and later, macOS 10.15 and later, and Ubuntu 22.04 and later for Linux.**
+  ADR 0001, decision 4, is resolved for them. No CI job runs on Ubuntu 22.04.
+  [`docs/compatibility.md`](docs/compatibility.md#minimum-platform-versions) has the decision and the Tauri
   statements behind them. Tauri gives no WebKitGTK version, and its macOS pages give two different values.
 
 ## 3. Verification
@@ -335,7 +336,7 @@ The Windows and macOS jobs run the build, the workspace tests and the release bu
   It partly supersedes decision 6 of ADR 0001.
 - [Running the Rust shell locally](docs/rust-shell.md). The run modes, what is verified, the manual check, the gaps in CI,
   and the known approximations.
-- [Minimum platform versions](docs/compatibility.md#minimum-platform-versions). The proposed floors, the Tauri pages they
+- [Minimum platform versions](docs/compatibility.md#minimum-platform-versions). The decided floors, the Tauri pages they
   cite, and what is not confirmed.
 - [Row gate in CI](docs/rust-row-gate-workflow.md). The workflow, its decisions, the test in which TypeScript reads and
   writes what Rust wrote, and what is not verified.
@@ -364,7 +365,7 @@ The Windows and macOS jobs run the build, the workspace tests and the release bu
    `docs/rust-native-rollback-backends.md`.
 6. **Phase 5.** Port the provider adapters and the tool loop.
 7. **Phase 8 decisions.** Who holds the signing keys. How the Electron fuses and ASAR integrity are replaced. The minimum
-   platform versions, which are proposed in `docs/compatibility.md`.
+   platform versions are decided in `docs/compatibility.md`; the macOS bundle setting is still to be written.
 8. **Repository setting, owner.** Decide whether the row gate becomes a required check on `main`. It has passed on this
    branch.
 9. **Owner.** Decide the npm audit option (`docs/npm-audit-triage.md`).
@@ -377,8 +378,8 @@ The Windows and macOS jobs run the build, the workspace tests and the release bu
 - ADR 0001 used to list "CI wiring for the gate" as remaining in phase 2. The ADR now says it is done in `row-gate.yml`,
   although the job is not required.
 - ADR 0001 is "Proposed", while ADR 0002 is "Accepted" and partly supersedes it.
-- ADR 0001, decision 4, asks for the minimum platform versions in `docs/compatibility.md`. The file now has proposed values
-  and their sources. The decision is still open.
+- ADR 0001, decision 4, asked for the minimum platform versions in `docs/compatibility.md`. The file now has the decided
+  values and their sources. The ADR text has not been updated yet.
 - No provider allowlist is implemented. `docs/provider-allowlist-design.md` is a design only (section 6).
 - ADR 0002 now also records statistics and schema-version text (commit `c0748e0`) that does not concern credentials. The
   description of the vault is unchanged.

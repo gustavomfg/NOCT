@@ -70,8 +70,9 @@ O critério da ADR para a fase 8 é "pacotes assinados validados em três plataf
   de uma decisão explícita".
 - **O shell não rodou numa janela no Windows nem no macOS**, então o critério "validado em três plataformas" ainda não
   pode ser cumprido.
-- **As versões mínimas das plataformas são propostas, não decididas.** A decisão 4 da ADR 0001 está parcialmente
-  resolvida. [`docs/compatibility.pt-BR.md`](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma) tem os pisos propostos e as
+- **Os pisos de plataforma estão decididos: Windows 10 ou posterior, macOS 10.15 ou posterior, e Ubuntu 22.04 ou posterior para Linux.**
+  A decisão 4 da ADR 0001 está resolvida para eles. Nenhum job do CI roda em Ubuntu 22.04.
+  [`docs/compatibility.pt-BR.md`](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma) tem a decisão e as
   afirmações do Tauri em que se apoiam. O Tauri não informa a versão do WebKitGTK, e as páginas de macOS dele dão dois
   valores diferentes.
 
@@ -341,7 +342,7 @@ Os jobs de Windows e macOS rodam o build, os testes do workspace e o build de re
   Accepted. Substitui em parte a decisão 6 da ADR 0001.
 - [Rodando o shell Rust localmente](docs/rust-shell.md). Os modos de execução, o que foi conferido, a verificação manual,
   as lacunas do CI e as aproximações conhecidas.
-- [Versões mínimas de plataforma](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma). Os pisos propostos, as páginas do
+- [Versões mínimas de plataforma](docs/compatibility.pt-BR.md#versões-mínimas-de-plataforma). Os pisos decididos, as páginas do
   Tauri que eles citam, e o que não está confirmado.
 - [Row gate no CI](docs/rust-row-gate-workflow.md). O workflow, as decisões, o teste em que o TypeScript lê e escreve o que o
   Rust escreveu, e o que não foi conferido.
@@ -370,7 +371,7 @@ Os jobs de Windows e macOS rodam o build, os testes do workspace e o build de re
    em `docs/rust-native-rollback-backends.md`.
 6. **Fase 5.** Portar os adaptadores de provedores e o loop de ferramentas.
 7. **Decisões da fase 8.** Quem guarda as chaves de assinatura. Como substituir os fuses do Electron e a integridade ASAR.
-   As versões mínimas das plataformas, que estão propostas em `docs/compatibility.md`.
+   As versões mínimas das plataformas, que estão decididas em `docs/compatibility.md`; a configuração do bundle para macOS ainda será escrita.
 8. **Configuração do repositório, responsável pelo projeto.** Decidir se o row gate vira verificação obrigatória na
    `main`. Ele já passou neste branch.
 9. **Responsável pelo projeto.** Decidir a opção de npm audit (`docs/npm-audit-triage.md`).
@@ -383,8 +384,8 @@ Os jobs de Windows e macOS rodam o build, os testes do workspace e o build de re
 - A ADR 0001 listava "ligação do gate no CI" como pendente na fase 2. A ADR agora diz que ela está feita em
   `row-gate.yml`, embora o job não seja obrigatório.
 - A ADR 0001 está "Proposed", enquanto a ADR 0002 está "Accepted" e a substitui em parte.
-- A decisão 4 da ADR 0001 pede as versões mínimas das plataformas em `docs/compatibility.md`. O arquivo agora tem os valores
-  propostos e as fontes deles. A decisão continua aberta.
+- A decisão 4 da ADR 0001 pedia as versões mínimas das plataformas em `docs/compatibility.md`. O arquivo agora tem os
+  valores decididos e as fontes deles. O texto da ADR ainda não foi atualizado.
 - Nenhuma allowlist de provedores está implementada. `docs/provider-allowlist-design.md` é só um desenho (seção 6).
 - A ADR 0002 agora também registra texto sobre estatísticas e versão do schema (commit `c0748e0`) que não trata de
   credenciais. A descrição do cofre não mudou.
