@@ -118,7 +118,7 @@ Not seen in any window, on any platform:
 - the sidebar with real workspaces, and the current layout;
 - the minimum window size as the window manager enforces it;
 - the navigation policy in a running webview;
-- the commands called from a running window (`settings_get`, `settings_set` for the theme, `workspaces_list`,
+- the commands called from a running window (`settings_get`, `settings_set` for the theme and the settings of Ajustes, `workspaces_list`,
   `conversations_list` and `workspace_set_favorite`). The browser check uses a mocked shell and the Rust tests use
   Tauri's mock runtime;
 - the cost of the glass layer, which was not measured;

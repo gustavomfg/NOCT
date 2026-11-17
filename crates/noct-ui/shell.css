@@ -594,6 +594,21 @@ button {
   overflow-wrap: anywhere;
 }
 
+.select {
+  min-height: 40px;
+  min-width: 10rem;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.select:disabled {
+  color: var(--muted);
+}
+
 .composer-wrap {
   padding: 8px 32px 28px;
 }

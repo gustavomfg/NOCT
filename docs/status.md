@@ -19,7 +19,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (`ecebef1`), `workspace_remove` (`44f2fbf`), `brain_delete` (`1028507`), `artifacts_delete` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec`, `e9064c4`, `ecebef1`, `44f2fbf` and `1028507`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, deletes a conversation, removes a project, deletes a memory, or deletes an artifact. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). Each delete has its own failed-write test: a refused `workspaces`, `brain_memories` or `artifacts` delete leaves the row in place. |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
-| P7: UI slices | `Construir` and `Documentar` not yet available (this change; the rest of P7 follows) | | | |
+| P7: UI slices | `1103543` (`Construir` and `Documentar` not yet available), editable Ajustes (this change) | `1103543` | Shell and row gate on `1103543`: success on Ubuntu, Windows and macOS; row gate success. | Real window. Chromium is the approximation the check uses. |
 | P8: updater | stopped in round 1 | | | |
 | P9: release dry run | stopped in round 1 | | | |
 | P10: documents | `85f4cb4`, `5748b33`, `f1f5b5f`, `4a62c3c` | `4a62c3c` | Shell and row gate on `4a62c3c`: success on Ubuntu, Windows and macOS; row gate success. | The phase table is not revised beyond ADR decision 4, the counts and the command list. |
@@ -328,6 +328,31 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   `-D warnings` for `wasm32-unknown-unknown` passed; the workspace has fmt, clippy `-D warnings`, and 578 tests passed, 0
   failed, 19 ignored.
 - Not verified: a real window. Chromium is an approximation of the webview.
+
+### P7 detail: editable Ajustes
+
+- Ajustes edits Idioma, Segurança do agente and Diagnóstico. Each change is one `settings_set` with that field alone, and
+  the area shows the settings the shell replies with.
+- Each select carries the value the contract uses (`pt-BR` and `en`; `untrusted` and `on-request`; `on` and `off` for the
+  boolean). A choice is read back from that value, never from its words. Tests: `the_choices_carry_the_values_the_contract_uses`
+  and `a_choice_is_read_back_from_the_value_the_select_carries` in `crates/noct-ui/src/settings.rs`.
+- While a save runs, the area says `Salvando…`. A refused save shows the shell's message in an alert, and the select goes back
+  to the saved value: the reactive state is notified again, so the controls read the settings the shell holds.
+- Tema is not a select here. It keeps its one control, the sidebar button, which changes the theme on screen, saves it, and
+  shows a refused save beside it. The Tema row shows the saved theme.
+- A correction: the note of Ajustes said the theme button changed the theme "for this session only". The button saves the
+  theme, and the check has always required the save. The note, `rust-shell.md` and the code comments now say it saves.
+- The mock keeps the settings the shell holds: a save changes them, and the next reply shows the change. Before, a save
+  returned the same settings, so a check could not see a change come back.
+- Scenarios: still 17. The `full` scenario saves each of the three settings and checks the payload and the value the reply
+  shows. `theme-not-saved-says-so` refuses a language save and checks the alert and the revert. The save count is split:
+  theme saves (2 in `full`, 1 refused) and Ajustes saves (3 in `full`, 1 refused).
+- A mutation check: without the revert of a refused save, `theme-not-saved-says-so` fails on `the language goes back to the
+  saved value`. The source was restored and the Trunk build was run again.
+- Checks: `cargo test -p noct-ui` 30 passed; clippy with `-D warnings` for `wasm32-unknown-unknown`; `trunk build --release`;
+  `node scripts/check-shell-ui.mjs` 17 of 17; the workspace has fmt, clippy with `-D warnings`, and 581 tests passed, 0
+  failed, 19 ignored.
+- Not verified: a real window, and how a native select looks in the webview of each system. Chromium only.
 
 ### P4 detail: `artifacts_delete`
 

@@ -1,23 +1,94 @@
-//! The settings the interface shows, read with `settings_get`. A reply is checked against the contract of
-//! `noct-core` before it is shown. A reply that does not match is an error, not a default: a wrong value
+//! The settings the interface shows and edits, with `settings_get` and `settings_set`. A reply is checked against the
+//! contract of `noct-core` before it is shown. A reply that does not match is an error, not a default: a wrong value
 //! shown as the saved one would mislead the person.
 
 use noct_core::ipc::settings::{AppLanguage, AppSettings, AppTheme, ApprovalPolicy};
+use serde_json::{Map, Value, json};
 
 use crate::ipc::{self, Failure, Outcome};
 
 /// The command the interface reads its settings with.
 pub const COMMAND: &str = "settings_get";
 
-/// The command that saves a setting. The sidebar theme button is its only caller for now.
+/// The command that saves a setting. The theme button and the settings area save through it, one setting per call.
 pub const SET_COMMAND: &str = "settings_set";
 
-/// The argument of the save: the theme and nothing else, so the theme button changes no other setting.
-pub fn theme_request(theme: AppTheme) -> String {
-    serde_json::json!({ "input": { "theme": theme } }).to_string()
+/// The text of a setting the shell has no value for.
+pub const NOT_INFORMED: &str = "Não informado";
+
+/// The choices of the language select: the value the contract uses, the value the select carries, and the words the
+/// person reads. A choice is read back from the value the select carries, never from its words.
+pub const LANGUAGE_CHOICES: [(AppLanguage, &str, &str); 2] = [
+    (AppLanguage::PtBr, "pt-BR", "Português (Brasil)"),
+    (AppLanguage::En, "en", "English"),
+];
+
+/// The choices of the agent safety select. The words are those of the React settings (`settings.approveFileChanges`
+/// and `settings.approveFileChangesHint`).
+pub const APPROVAL_CHOICES: [(ApprovalPolicy, &str, &str); 2] = [
+    (
+        ApprovalPolicy::Untrusted,
+        "untrusted",
+        "Pedir aprovação antes de cada alteração de arquivo",
+    ),
+    (
+        ApprovalPolicy::OnRequest,
+        "on-request",
+        "Comandos sempre exigem aprovação",
+    ),
+];
+
+/// The choices of the diagnostic select.
+pub const DIAGNOSTIC_CHOICES: [(bool, &str, &str); 2] =
+    [(true, "on", "Ativo"), (false, "off", "Inativo")];
+
+/// The value of the select that shows `value`.
+pub fn choice_value<T: Copy + PartialEq>(
+    choices: &[(T, &'static str, &'static str)],
+    value: T,
+) -> &'static str {
+    choices
+        .iter()
+        .find(|&&(choice, _, _)| choice == value)
+        .map_or("", |&(_, select, _)| select)
 }
 
-/// The settings the shell holds after a save, or the shell's error to show beside the button that saved.
+/// The choice that the select's value names, or none for a value the select does not carry.
+pub fn choice_of<T: Copy>(choices: &[(T, &'static str, &'static str)], select: &str) -> Option<T> {
+    choices
+        .iter()
+        .find(|&&(_, value, _)| value == select)
+        .map(|&(choice, _, _)| choice)
+}
+
+/// The argument of a save: one setting and nothing else, so a change saves only what changed.
+pub fn save_request(field: &str, value: Value) -> String {
+    let mut input = Map::new();
+    input.insert(field.to_string(), value);
+    json!({ "input": input }).to_string()
+}
+
+/// The argument of the theme save.
+pub fn theme_request(theme: AppTheme) -> String {
+    save_request("theme", json!(theme))
+}
+
+/// The argument of the language save.
+pub fn language_request(language: AppLanguage) -> String {
+    save_request("language", json!(language))
+}
+
+/// The argument of the agent safety save.
+pub fn approval_request(policy: ApprovalPolicy) -> String {
+    save_request("approvalPolicy", json!(policy))
+}
+
+/// The argument of the diagnostic save.
+pub fn diagnostic_request(enabled: bool) -> String {
+    save_request("diagnosticMode", json!(enabled))
+}
+
+/// The settings the shell holds after a save, or the shell's error to show beside the control that saved.
 pub fn saved(outcome: Outcome) -> Result<SettingsView, Failure> {
     match settle(outcome) {
         SettingsView::Failed(failure) => Err(failure),
@@ -33,8 +104,6 @@ pub enum SettingsView {
     Failed(Failure),
 }
 
-const NOT_INFORMED: &str = "Não informado";
-
 /// Turns the outcome of a call into what the settings area shows.
 pub fn settle(outcome: Outcome) -> SettingsView {
     match ipc::reply(outcome) {
@@ -46,30 +115,8 @@ pub fn settle(outcome: Outcome) -> SettingsView {
     }
 }
 
-/// The rows the settings area shows, in order: the label and the value as the person reads them.
-pub fn rows(settings: &AppSettings) -> Vec<(&'static str, String)> {
-    vec![
-        ("Tema", theme_label(settings.theme).to_string()),
-        ("Idioma", language_label(settings.language).to_string()),
-        (
-            "Segurança do agente",
-            approval_label(settings.approval_policy).to_string(),
-        ),
-        (
-            "Diagnóstico",
-            diagnostic_label(settings.diagnostic_mode).to_string(),
-        ),
-        (
-            "Pandoc",
-            settings
-                .pandoc_version
-                .clone()
-                .unwrap_or_else(|| NOT_INFORMED.to_string()),
-        ),
-    ]
-}
-
-fn theme_label(theme: Option<AppTheme>) -> &'static str {
+/// The words of the theme the settings hold. The theme changes with the sidebar button, so it is read here, not edited.
+pub fn theme_label(theme: Option<AppTheme>) -> &'static str {
     match theme {
         Some(AppTheme::Dark) => "NOCT escuro",
         Some(AppTheme::Light) => "NOCT claro",
@@ -77,36 +124,18 @@ fn theme_label(theme: Option<AppTheme>) -> &'static str {
     }
 }
 
-fn language_label(language: Option<AppLanguage>) -> &'static str {
-    match language {
-        Some(AppLanguage::PtBr) => "Português (Brasil)",
-        Some(AppLanguage::En) => "English",
-        None => NOT_INFORMED,
-    }
-}
-
-/// The wording of the agent safety option in the React settings (`settings.approveFileChanges` and
-/// `settings.approveFileChangesHint`).
-fn approval_label(policy: ApprovalPolicy) -> &'static str {
-    match policy {
-        ApprovalPolicy::Untrusted => "Pedir aprovação antes de cada alteração de arquivo",
-        ApprovalPolicy::OnRequest => "Comandos sempre exigem aprovação",
-    }
-}
-
-fn diagnostic_label(enabled: Option<bool>) -> &'static str {
-    match enabled {
-        Some(true) => "Ativo",
-        Some(false) => "Inativo",
-        None => NOT_INFORMED,
-    }
+/// The version of Pandoc the shell found, or the words for none.
+pub fn pandoc_label(settings: &AppSettings) -> String {
+    settings
+        .pandoc_version
+        .clone()
+        .unwrap_or_else(|| NOT_INFORMED.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ipc::{UNAVAILABLE_MESSAGE, UNEXPECTED_MESSAGE, UNKNOWN_MESSAGE};
-    use serde_json::Value;
 
     /// The shared contract of the settings reply: the cases `noct-core` accepts and refuses.
     const CONTRACT: &str = include_str!("../../noct-core/tests/fixtures/ipc/settings-get.json");
@@ -222,28 +251,62 @@ mod tests {
     }
 
     #[test]
-    fn the_rows_read_the_saved_values_as_the_person_reads_them() {
+    fn each_setting_is_saved_alone() {
+        assert_eq!(
+            language_request(AppLanguage::En),
+            r#"{"input":{"language":"en"}}"#
+        );
+        assert_eq!(
+            approval_request(ApprovalPolicy::OnRequest),
+            r#"{"input":{"approvalPolicy":"on-request"}}"#
+        );
+        assert_eq!(
+            diagnostic_request(false),
+            r#"{"input":{"diagnosticMode":false}}"#
+        );
+    }
+
+    #[test]
+    fn the_choices_carry_the_values_the_contract_uses() {
+        for (language, select, _) in LANGUAGE_CHOICES {
+            assert_eq!(
+                serde_json::to_value(language).expect("serializes"),
+                json!(select)
+            );
+        }
+        for (policy, select, _) in APPROVAL_CHOICES {
+            assert_eq!(
+                serde_json::to_value(policy).expect("serializes"),
+                json!(select)
+            );
+        }
+    }
+
+    #[test]
+    fn a_choice_is_read_back_from_the_value_the_select_carries() {
+        assert_eq!(choice_of(&LANGUAGE_CHOICES, "en"), Some(AppLanguage::En));
+        assert_eq!(choice_of(&DIAGNOSTIC_CHOICES, "off"), Some(false));
+        assert_eq!(
+            choice_of(&LANGUAGE_CHOICES, "English"),
+            None,
+            "the words are not a value"
+        );
+        assert_eq!(choice_value(&LANGUAGE_CHOICES, AppLanguage::PtBr), "pt-BR");
+        assert_eq!(choice_value(&DIAGNOSTIC_CHOICES, true), "on");
+    }
+
+    #[test]
+    fn the_theme_and_pandoc_read_as_the_person_reads_them() {
         let settings = AppSettings {
             approval_policy: ApprovalPolicy::Untrusted,
             diagnostic_mode: Some(true),
             theme: Some(AppTheme::Light),
             language: Some(AppLanguage::En),
-            pandoc_version: None,
+            pandoc_version: Some("3.1.2".to_string()),
         };
 
-        assert_eq!(
-            rows(&settings),
-            vec![
-                ("Tema", "NOCT claro".to_string()),
-                ("Idioma", "English".to_string()),
-                (
-                    "Segurança do agente",
-                    "Pedir aprovação antes de cada alteração de arquivo".to_string()
-                ),
-                ("Diagnóstico", "Ativo".to_string()),
-                ("Pandoc", NOT_INFORMED.to_string()),
-            ]
-        );
+        assert_eq!(theme_label(settings.theme), "NOCT claro");
+        assert_eq!(pandoc_label(&settings), "3.1.2");
     }
 
     #[test]
@@ -251,10 +314,13 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(r#"{"approvalPolicy":"on-request"}"#)
             .expect("the contract accepts it");
 
-        let shown = rows(&settings);
-
-        assert_eq!(shown[0], ("Tema", NOT_INFORMED.to_string()));
-        assert_eq!(shown[1], ("Idioma", NOT_INFORMED.to_string()));
-        assert_eq!(shown[3], ("Diagnóstico", NOT_INFORMED.to_string()));
+        assert_eq!(theme_label(settings.theme), NOT_INFORMED);
+        assert_eq!(pandoc_label(&settings), NOT_INFORMED);
+        assert_eq!(
+            settings
+                .language
+                .map_or("", |language| choice_value(&LANGUAGE_CHOICES, language)),
+            ""
+        );
     }
 }

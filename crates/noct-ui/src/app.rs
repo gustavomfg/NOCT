@@ -51,6 +51,25 @@ pub fn App() -> impl IntoView {
     };
     read_settings();
 
+    // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
+    // shell replied with. A refused save says so, and its controls go back to the settings the shell holds.
+    let (saving, set_saving) = signal(false);
+    let (save_error, set_save_error) = signal(None::<String>);
+    let save_setting = move |payload: String| {
+        set_saving.set(true);
+        set_save_error.set(None);
+        ipc::call_with(settings::SET_COMMAND, &payload, move |outcome| {
+            set_saving.set(false);
+            match settings::saved(outcome) {
+                Ok(view) => set_settings_view.set(view),
+                Err(failure) => {
+                    set_save_error.set(Some(failure.message));
+                    set_settings_view.update(|_| {});
+                }
+            }
+        });
+    };
+
     let (workspaces_view, set_workspaces_view) = signal(WorkspacesView::Loading);
     let read_workspaces = move || {
         set_workspaces_view.set(WorkspacesView::Loading);
@@ -181,7 +200,7 @@ pub fn App() -> impl IntoView {
                     <div class="stack">
                         {move || {
                             if settings_open.get() {
-                                settings_panel(settings_view, read_settings).into_any()
+                                settings_panel(settings_view, saving, save_error, save_setting, read_settings).into_any()
                             } else {
                                 match mode.get() {
                                     Mode::Review => review_panel().into_any(),
@@ -342,13 +361,23 @@ fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView
 
 fn settings_panel(
     settings_view: ReadSignal<SettingsView>,
+    saving: ReadSignal<bool>,
+    save_error: ReadSignal<Option<String>>,
+    save: impl Fn(String) + Copy + Send + Sync + 'static,
     retry: impl Fn() + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
+    let ready = move || matches!(settings_view.get(), SettingsView::Ready(_));
+    let saved = move || match settings_view.get() {
+        SettingsView::Ready(settings) => Some(settings),
+        SettingsView::Loading | SettingsView::Failed(_) => None,
+    };
     view! {
         <div class="stack" data-testid="settings">
             <div>
                 <h1 class="h1">"Ajustes"</h1>
-                <p class="lead">"Preferências salvas. O NOCT lê estes valores ao abrir a janela."</p>
+                <p class="lead">
+                    "Preferências salvas. Cada mudança é salva ao acontecer, e o NOCT lê estes valores ao abrir a janela."
+                </p>
             </div>
             <section class="card" aria-label="Preferências salvas">
                 {move || match settings_view.get() {
@@ -370,20 +399,123 @@ fn settings_panel(
                         </div>
                     }
                     .into_any(),
-                    SettingsView::Ready(saved) => view! {
-                        <dl class="settings-facts" data-testid="settings-values">
-                            {settings::rows(&saved)
-                                .into_iter()
-                                .map(|(label, value)| view! { <dt>{label}</dt><dd>{value}</dd> })
+                    SettingsView::Ready(_) => ().into_any(),
+                }}
+                <dl class="settings-facts" data-testid="settings-values" hidden=move || !ready()>
+                    <dt>"Tema"</dt>
+                    <dd>{move || settings::theme_label(saved().and_then(|settings| settings.theme))}</dd>
+                    <dt><label for="setting-language">"Idioma"</label></dt>
+                    <dd>
+                        <select
+                            id="setting-language"
+                            class="select"
+                            disabled=move || !ready()
+                            prop:value=move || {
+                                saved()
+                                    .and_then(|settings| settings.language)
+                                    .map_or("", |language| {
+                                        settings::choice_value(&settings::LANGUAGE_CHOICES, language)
+                                    })
+                            }
+                            on:change=move |event| {
+                                let choice = settings::choice_of(
+                                    &settings::LANGUAGE_CHOICES,
+                                    &event_target_value(&event),
+                                );
+                                if let Some(language) = choice {
+                                    save(settings::language_request(language));
+                                }
+                            }
+                        >
+                            <option value="" disabled>{settings::NOT_INFORMED}</option>
+                            {settings::LANGUAGE_CHOICES
+                                .iter()
+                                .map(|(_, value, label)| view! { <option value=*value>{*label}</option> })
                                 .collect_view()}
-                        </dl>
-                    }
-                    .into_any(),
+                        </select>
+                    </dd>
+                    <dt><label for="setting-approval">"Segurança do agente"</label></dt>
+                    <dd>
+                        <select
+                            id="setting-approval"
+                            class="select"
+                            disabled=move || !ready()
+                            prop:value=move || {
+                                saved().map_or("", |settings| {
+                                    settings::choice_value(&settings::APPROVAL_CHOICES, settings.approval_policy)
+                                })
+                            }
+                            on:change=move |event| {
+                                let choice = settings::choice_of(
+                                    &settings::APPROVAL_CHOICES,
+                                    &event_target_value(&event),
+                                );
+                                if let Some(policy) = choice {
+                                    save(settings::approval_request(policy));
+                                }
+                            }
+                        >
+                            {settings::APPROVAL_CHOICES
+                                .iter()
+                                .map(|(_, value, label)| view! { <option value=*value>{*label}</option> })
+                                .collect_view()}
+                        </select>
+                    </dd>
+                    <dt><label for="setting-diagnostic">"Diagnóstico"</label></dt>
+                    <dd>
+                        <select
+                            id="setting-diagnostic"
+                            class="select"
+                            disabled=move || !ready()
+                            prop:value=move || {
+                                saved()
+                                    .and_then(|settings| settings.diagnostic_mode)
+                                    .map_or("", |enabled| {
+                                        settings::choice_value(&settings::DIAGNOSTIC_CHOICES, enabled)
+                                    })
+                            }
+                            on:change=move |event| {
+                                let choice = settings::choice_of(
+                                    &settings::DIAGNOSTIC_CHOICES,
+                                    &event_target_value(&event),
+                                );
+                                if let Some(enabled) = choice {
+                                    save(settings::diagnostic_request(enabled));
+                                }
+                            }
+                        >
+                            <option value="" disabled>{settings::NOT_INFORMED}</option>
+                            {settings::DIAGNOSTIC_CHOICES
+                                .iter()
+                                .map(|(_, value, label)| view! { <option value=*value>{*label}</option> })
+                                .collect_view()}
+                        </select>
+                    </dd>
+                    <dt>"Pandoc"</dt>
+                    <dd>
+                        {move || {
+                            saved().map_or(settings::NOT_INFORMED.to_string(), |settings| {
+                                settings::pandoc_label(&settings)
+                            })
+                        }}
+                    </dd>
+                </dl>
+                {move || {
+                    saving.get().then(|| {
+                        view! {
+                            <p class="note" role="status" data-testid="settings-saving">"Salvando…"</p>
+                        }
+                    })
+                }}
+                {move || {
+                    save_error.get().map(|message| {
+                        view! {
+                            <p class="note" role="alert" data-testid="settings-save-error">{message}</p>
+                        }
+                    })
                 }}
             </section>
-            <p class="note">
-                "O botão de tema da barra lateral muda só esta sessão. A linha Tema mostra a preferência salva."
-            </p>
+            <p class="note">"O tema muda pelo botão da barra lateral, que o troca e o salva."</p>
         </div>
     }
 }

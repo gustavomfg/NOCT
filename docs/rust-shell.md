@@ -123,8 +123,12 @@ reference and is not production code. The source of the window is `crates/noct-u
 - **Modes:** Revisar, Construir and Documentar in a segmented control (`aria-pressed`). A mode leaves Ajustes.
 - **Question box:** fixed at the bottom of the window, with a label. It says that questions are not answered yet.
 - **Ajustes:** the settings the shell returns (`settings_get`), with the loading state, the shell's error and
-  "Tentar novamente". The theme button changes the theme for the session only; the Tema row shows the saved
-  setting.
+  "Tentar novamente". Idioma, Segurança do agente and Diagnóstico are selects. Each change is saved alone with
+  `settings_set` (`{ input: { language } }`, `{ input: { approvalPolicy } }`, `{ input: { diagnosticMode } }`), and the
+  area shows the settings the shell replies with. While the save runs it says so; a refused save says so with the
+  shell's message, and the select goes back to the saved value. The Tema row shows the saved theme. The theme changes
+  with the sidebar button, which changes it on screen and saves it (`{ input: { theme } }`); a theme the shell refuses
+  is shown beside that button.
 - **Theme:** the saved setting (`settings_get`). A setting never chosen follows the system. The attribute
   `data-theme` on `<html>` selects the colours.
 - **Example data:** the models, the vault state and the findings are EXAMPLE values in `crates/noct-ui/src/examples.rs`.
@@ -134,10 +138,10 @@ reference and is not production code. The source of the window is `crates/noct-u
 
 **Verified in Chromium** (`node scripts/check-shell-ui.mjs`, run in CI on Linux, against the Trunk build under the
 shipped policy): the seventeen scenarios pass. The mock answers `settings_get` and `workspaces_list` separately, and
-the check requires that the interface calls only those two, each with an empty payload, and `settings_set` with the theme
-alone when the sidebar button is pressed. The scenarios cover the
+the check requires that the interface calls only those two, each with an empty payload, and `settings_set` with one
+setting and nothing else for each change: the theme button, or a select in Ajustes. The scenarios cover the
 settings as ready, loading then ready, error then retry, a reply outside the contract, a page outside the shell, the
-theme from the saved setting and from the system, the sidebar theme button, the modes and Ajustes with their pressed
+theme from the saved setting and from the system, the sidebar theme button, the saves of each setting in Ajustes (each one alone, the reply shown, a refused one says so and goes back), the modes and Ajustes with their pressed
 and current states, Construir and Documentar as not available yet with no approval, revert or confirmation control, the question box, the projects (order, favourite tag, notes, the loading, empty, error and retry
 states, a reply outside the contract, and no example name), the keyboard focus, a hovered card that does not move, the
 layout at the minimum window size and at 1440x920 without horizontal scroll, the glass switch, reduced motion, and

@@ -6,9 +6,10 @@
 // (tauri-2.12.5/scripts/core.js). Each scenario answers `settings_get` and `workspaces_list` in its own way.
 //
 // What this proves: the interface calls only `settings_get` (with an empty payload), `workspaces_list` (with the
-// first page request, `{ input: { limit: 500 } }`), and `settings_set` (with the theme and nothing else, once for
-// each press of the theme button);
-// the settings show their loading state, values, the shell's error and the way to try again; the sidebar lists
+// first page request, `{ input: { limit: 500 } }`), and `settings_set` (with the one setting that changed, once for
+// each change: the theme button, or a setting in Ajustes);
+// the settings show their loading state, values, the shell's error and the way to try again; each setting in Ajustes is
+// saved alone and shows the settings the shell replies with, and a refused change says so and goes back to the saved value; the sidebar lists
 // the projects the shell returns, in order, with the note of each one that cannot be used as it is, and shows its
 // own loading, empty, error and retry states; a reply outside the contract is an error, not a default or a
 // shorter list; a page outside the shell says so; the theme follows the saved setting or the system, and the
@@ -114,18 +115,6 @@ function settingsSaved(theme) {
   }
 }
 
-// The Tema row shows the saved setting, not the theme in use: a setting never chosen reads as not informed.
-function shownFor(savedTheme) {
-  const themeRow = savedTheme === 'dark' ? DARK : savedTheme === 'light' ? LIGHT : 'Não informado'
-  return [
-    ['Tema', themeRow],
-    ['Idioma', 'English'],
-    ['Segurança do agente', 'Pedir aprovação antes de cada alteração de arquivo'],
-    ['Diagnóstico', 'Ativo'],
-    ['Pandoc', '3.1.2'],
-  ]
-}
-
 // `mode` says how `settings_get` answers, and `projects` how `workspaces_list` answers (default `ready`). `full`
 // runs the interaction checks, which need the settings to show.
 const SCENARIOS = [
@@ -183,14 +172,20 @@ function installMock(config) {
   if (config.scenario.mode === 'no-runtime') return
 
   const modeOf = (command) => (command === 'workspaces_list' ? config.scenario.projects : config.scenario.mode)
+  // The settings the shell holds: a save changes them, and the next read or save shows the change.
+  const saved = { ...config.settings }
   // `workspaces_list` answers with a page: the items, and whether more follow them.
   // The cursor of a page with more is the key of its last project, as the shell writes it.
   const cursorOf = (items) => {
     const last = items[items.length - 1]
     return last ? { favorite: last.favorite, lastOpenedAt: last.lastOpenedAt, path: last.path } : null
   }
-  const replyOf = (command) => {
-    if (command !== 'workspaces_list') return config.settings
+  const replyOf = (command, payload) => {
+    if (command === 'settings_set') {
+      Object.assign(saved, payload.input)
+      return { ...saved }
+    }
+    if (command !== 'workspaces_list') return saved
     const more = config.scenario.more === true
     return { items: config.projects, hasMore: more, nextCursor: more ? cursorOf(config.projects) : null }
   }
@@ -210,20 +205,20 @@ function installMock(config) {
         const answer = () => {
           switch (mode) {
             case 'ready':
-              resolve(replyOf(command))
+              resolve(replyOf(command, payload))
               break
             case 'empty':
               resolve(command === 'workspaces_list' ? { items: [], hasMore: false, nextCursor: null } : [])
               break
             case 'error-then-retry':
               if (attempt === 1) reject(config.shellError)
-              else resolve(replyOf(command))
+              else resolve(replyOf(command, payload))
               break
             case 'invalid':
               resolve(invalidOf(command))
               break
             case 'slow':
-              window.__noctReleases[command] = () => resolve(replyOf(command))
+              window.__noctReleases[command] = () => resolve(replyOf(command, payload))
               break
           }
         }
@@ -294,9 +289,14 @@ try {
           await alert.getByRole('button', { name: 'Tentar novamente' }).click()
         }
         await values.waitFor({ timeout: 8000 })
-        for (const [label, value] of shownFor(scenario.theme)) {
+        // Tema and Pandoc are read as text. Idioma, Segurança do agente and Diagnóstico are selects, and carry their values.
+        const themeRow = scenario.theme === 'dark' ? DARK : scenario.theme === 'light' ? LIGHT : 'Não informado'
+        for (const [label, value] of [['Tema', themeRow], ['Pandoc', '3.1.2']]) {
           const pair = page.locator('dt', { hasText: label }).locator('xpath=following-sibling::dd[1]')
           check((await pair.textContent())?.trim() === value, `${label} shows ${value}`)
+        }
+        for (const [label, value] of [['Idioma', 'en'], ['Segurança do agente', 'untrusted'], ['Diagnóstico', 'on']]) {
+          check((await page.getByLabel(label).inputValue()) === value, `${label} selects ${value}`)
         }
       }
 
@@ -304,14 +304,14 @@ try {
         const alert = page.getByTestId('settings-error')
         await alert.waitFor({ timeout: 8000 })
         check((await alert.textContent())?.includes('O NOCT respondeu de forma inesperada.'), 'an unexpected reply is an error')
-        check(await values.count() === 0, 'an unexpected reply shows no values')
+        check(!(await values.isVisible()), 'an unexpected reply shows no values')
       }
 
       if (scenario.mode === 'no-runtime') {
         const alert = page.getByTestId('settings-error')
         await alert.waitFor({ timeout: 8000 })
         check((await alert.textContent())?.includes('Não foi possível falar com o NOCT'), 'a page outside the shell says so')
-        check(await values.count() === 0, 'no values are shown without the shell')
+        check(!(await values.isVisible()), 'no values are shown without the shell')
         const projectsAlert = page.getByTestId('projects-error')
         await projectsAlert.waitFor({ timeout: 8000 })
         check((await projectsAlert.textContent())?.includes('Não foi possível falar com o NOCT'), 'the sidebar says a page outside the shell has no projects')
@@ -395,6 +395,13 @@ try {
         await alert.waitFor({ timeout: 8000 })
         check((await alert.textContent())?.includes(SHELL_ERROR.message), 'a theme that is not saved says so with the shell message')
         check((await html.getAttribute('data-theme')) === 'dark', 'the theme still changes on screen when the save is refused')
+        // A setting the shell does not save says so, and its control goes back to the saved value.
+        await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
+        await page.getByLabel('Idioma').selectOption('pt-BR')
+        const refused = page.getByTestId('settings-save-error')
+        await refused.waitFor({ timeout: 8000 })
+        check((await refused.textContent())?.includes(SHELL_ERROR.message), 'a setting that is not saved says so with the shell message')
+        check((await page.getByLabel('Idioma').inputValue()) === 'en', 'the language goes back to the saved value')
       }
 
       if (scenario.full) {
@@ -418,6 +425,21 @@ try {
         check((await page.getByRole('button', { name: 'Ajustes', exact: true }).getAttribute('aria-current')) === 'page', 'Ajustes is the current page while open')
         check((await pressed('Documentar')) === 'false', 'no mode is pressed while Ajustes is open')
         check(await values.isVisible(), 'Ajustes shows the saved values')
+        // Ajustes saves each change at once, with the one setting that changed, and shows the settings the shell replied with.
+        for (const [label, value, expected] of [
+          ['Idioma', 'pt-BR', '{"input":{"language":"pt-BR"}}'],
+          ['Segurança do agente', 'on-request', '{"input":{"approvalPolicy":"on-request"}}'],
+          ['Diagnóstico', 'off', '{"input":{"diagnosticMode":false}}'],
+        ]) {
+          const before = await page.evaluate(() => window.__noctCalls.length)
+          await page.getByLabel(label).selectOption(value)
+          await page.waitForFunction((count) => window.__noctCalls.length > count, before)
+          await page.waitForFunction(() => !document.querySelector('[data-testid="settings-saving"]'))
+          const last = await page.evaluate(() => window.__noctCalls.filter((call) => call.command === 'settings_set').at(-1))
+          check(JSON.stringify(last?.payload) === expected, `${label} is saved alone`)
+          check((await page.getByLabel(label).inputValue()) === value, `${label} shows the value the shell replied with`)
+        }
+        check((await page.getByTestId('settings-save-error').count()) === 0, 'a saved change shows no error')
         await page.getByRole('button', { name: 'Revisar', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Revisão', level: 1 }).isVisible(), 'a mode leaves Ajustes')
 
@@ -508,7 +530,7 @@ try {
       if (scenario.mode !== 'no-runtime') {
         const count = (command) => calls.filter((call) => call.command === command).length
         check(calls.length >= 2, 'the interface calls the shell for settings and projects')
-        check(calls.every((call) => [...READ_COMMANDS, 'settings_set'].includes(call.command)), 'only the read commands and the theme save are called')
+        check(calls.every((call) => [...READ_COMMANDS, 'settings_set'].includes(call.command)), 'only the read commands and the setting saves are called')
         const reads = calls.filter((call) => call.command !== 'settings_set')
         check(
           reads.every((call) => JSON.stringify(call.payload) === PAYLOAD_OF[call.command]),
@@ -516,12 +538,18 @@ try {
         )
         const saves = [...savesBeforeReload, ...calls.filter((call) => call.command === 'settings_set')]
         check(
-          saves.every((call) => /^\{"input":\{"theme":"(light|dark)"\}\}$/.test(JSON.stringify(call.payload))),
-          'a theme save sends the theme and nothing else',
+          saves.every((call) => /^\{"input":\{"(theme":"(light|dark)"|language":"(pt-BR|en)"|approvalPolicy":"(untrusted|on-request)"|diagnosticMode":(true|false))\}\}$/.test(JSON.stringify(call.payload))),
+          'each save sends one setting and nothing else',
         )
+        const themeSaves = saves.filter((call) => Object.hasOwn(call.payload.input, 'theme'))
         check(
-          saves.length === (scenario.full ? 2 : scenario.saveFails ? 1 : 0),
-          `the theme is saved once for each press of the theme button (saves: ${saves.length})`,
+          themeSaves.length === (scenario.full ? 2 : scenario.saveFails ? 1 : 0),
+          `the theme is saved once for each press of the theme button (saves: ${themeSaves.length})`,
+        )
+        const settingSaves = saves.length - themeSaves.length
+        check(
+          settingSaves === (scenario.full ? 3 : scenario.saveFails ? 1 : 0),
+          `each change in Ajustes is saved once (saves: ${settingSaves})`,
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
         check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
