@@ -182,11 +182,19 @@ function installMock(config) {
 
   const modeOf = (command) => (command === 'workspaces_list' ? config.scenario.projects : config.scenario.mode)
   // `workspaces_list` answers with a page: the items, and whether more follow them.
-  const replyOf = (command) =>
-    command === 'workspaces_list' ? { items: config.projects, hasMore: config.scenario.more === true } : config.settings
+  // The cursor of a page with more is the key of its last project, as the shell writes it.
+  const cursorOf = (items) => {
+    const last = items[items.length - 1]
+    return last ? { favorite: last.favorite, lastOpenedAt: last.lastOpenedAt, path: last.path } : null
+  }
+  const replyOf = (command) => {
+    if (command !== 'workspaces_list') return config.settings
+    const more = config.scenario.more === true
+    return { items: config.projects, hasMore: more, nextCursor: more ? cursorOf(config.projects) : null }
+  }
   const invalidOf = (command) =>
     command === 'workspaces_list'
-      ? { items: [{ path: '/work/x', name: 'x', favorite: false, authorized: true, availability: 'online', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false }
+      ? { items: [{ path: '/work/x', name: 'x', favorite: false, authorized: true, availability: 'online', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false, nextCursor: null }
       : { approvalPolicy: 'always' }
 
   window.__TAURI_INTERNALS__ = {
@@ -203,7 +211,7 @@ function installMock(config) {
               resolve(replyOf(command))
               break
             case 'empty':
-              resolve(command === 'workspaces_list' ? { items: [], hasMore: false } : [])
+              resolve(command === 'workspaces_list' ? { items: [], hasMore: false, nextCursor: null } : [])
               break
             case 'error-then-retry':
               if (attempt === 1) reject(config.shellError)

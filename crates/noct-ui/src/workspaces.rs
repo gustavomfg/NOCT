@@ -113,20 +113,23 @@ mod tests {
     fn an_empty_page_is_a_list_and_not_an_error() {
         assert_eq!(
             settle(Outcome::Resolved(
-                r#"{"items":[],"hasMore":false}"#.to_string()
+                r#"{"items":[],"hasMore":false,"nextCursor":null}"#.to_string()
             )),
             WorkspacesView::Ready(WorkspacePage {
                 items: Vec::new(),
                 has_more: false,
+                next_cursor: None,
             })
         );
     }
 
     #[test]
     fn a_page_that_has_more_projects_says_so() {
-        match settle(Outcome::Resolved(
-            r#"{"items":[],"hasMore":true}"#.to_string(),
-        )) {
+        let cursor =
+            r#"{"favorite":false,"lastOpenedAt":"2026-01-02T00:00:00.000Z","path":"/work/alpha"}"#;
+        match settle(Outcome::Resolved(format!(
+            r#"{{"items":[],"hasMore":true,"nextCursor":{cursor}}}"#
+        ))) {
             WorkspacesView::Ready(page) => assert!(page.has_more),
             other => panic!("the page is listed, got {other:?}"),
         }

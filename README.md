@@ -257,7 +257,7 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 | `cargo fmt --all -- --check` | Passed |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Passed |
 | `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passed |
-| `cargo test --workspace --no-fail-fast` | 456 passed, 0 failed, 19 ignored |
+| `cargo test --workspace --no-fail-fast` | 460 passed, 0 failed, 19 ignored |
 | `cargo tree -p noct-app -e normal -i rusqlite -f '{p} features={f}'`, and `cargo tree --workspace -e normal -f '{p} {f}' \| grep -c hooks` | `rusqlite` 0.42.0 without `hooks`. The grep counts 0. The `hooks` feature is a dev-dependency of `noct-db` (commit `c0748e0`), so it is not in the release graph. |
 | `node --test scripts/run-rust-shell.test.mjs` | 7 passed |
 | `node scripts/verify-row-gate.mjs` | 10 passed, then `scripts/verify-rust-written-gate.mjs` passed, exit 0 |

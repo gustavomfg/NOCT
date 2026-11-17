@@ -1,9 +1,10 @@
 {
-  "source": "shared/types.ts ({ items: Workspace[]; hasMore: boolean })",
+  "source": "shared/types.ts ({ items: Workspace[]; hasMore: boolean; nextCursor: { favorite: boolean; lastOpenedAt: string; path: string } | null })",
   "valid": [
     {
       "items": [],
-      "hasMore": false
+      "hasMore": false,
+      "nextCursor": null
     },
     {
       "items": [
@@ -17,7 +18,8 @@
           "lastOpenedAt": "2026-01-02T00:00:00.000Z"
         }
       ],
-      "hasMore": false
+      "hasMore": false,
+      "nextCursor": null
     },
     {
       "items": [
@@ -32,7 +34,12 @@
           "lastOpenedAt": "2026-01-02T00:00:00.000Z"
         }
       ],
-      "hasMore": true
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": false,
+        "lastOpenedAt": "2026-01-02T00:00:00.000Z",
+        "path": "/work/beta"
+      }
     }
   ],
   "invalid": [
@@ -48,7 +55,8 @@
           "lastOpenedAt": "2026-01-02T00:00:00.000Z"
         }
       ],
-      "hasMore": false
+      "hasMore": false,
+      "nextCursor": null
     },
     {
       "items": [
@@ -61,7 +69,8 @@
           "lastOpenedAt": "2026-01-02T00:00:00.000Z"
         }
       ],
-      "hasMore": false
+      "hasMore": false,
+      "nextCursor": null
     },
     {
       "items": [
@@ -76,7 +85,8 @@
           "availabilityMessage": null
         }
       ],
-      "hasMore": false
+      "hasMore": false,
+      "nextCursor": null
     },
     {
       "items": [
@@ -90,19 +100,53 @@
           "lastOpenedAt": "2026-01-02T00:00:00.000Z"
         }
       ],
-      "hasMore": false
+      "hasMore": false,
+      "nextCursor": null
     },
     {
       "items": [],
-      "hasMore": "no"
+      "hasMore": "no",
+      "nextCursor": null
     },
     {
       "items": []
     },
     {
       "items": [],
+      "hasMore": false
+    },
+    {
+      "items": [],
       "hasMore": false,
-      "nextCursor": null
+      "nextCursor": null,
+      "offset": 0
+    },
+    {
+      "items": [],
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": false,
+        "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+      }
+    },
+    {
+      "items": [],
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": "no",
+        "lastOpenedAt": "2026-01-02T00:00:00.000Z",
+        "path": "/work/beta"
+      }
+    },
+    {
+      "items": [],
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": false,
+        "lastOpenedAt": "2026-01-02T00:00:00.000Z",
+        "path": "/work/beta",
+        "id": "x"
+      }
     }
   ]
 }

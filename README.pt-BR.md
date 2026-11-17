@@ -262,7 +262,7 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 | `cargo fmt --all -- --check` | Passou |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Passou |
 | `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings` | Passou |
-| `cargo test --workspace --no-fail-fast` | 456 passaram, 0 falharam, 19 ignorados |
+| `cargo test --workspace --no-fail-fast` | 460 passaram, 0 falharam, 19 ignorados |
 | `cargo tree -p noct-app -e normal -i rusqlite -f '{p} features={f}'`, e `cargo tree --workspace -e normal -f '{p} {f}' \| grep -c hooks` | `rusqlite` 0.42.0 sem `hooks`. O grep conta 0. A feature `hooks` é dev-dependency do `noct-db` (commit `c0748e0`), então não entra no grafo de release. |
 | `node --test scripts/run-rust-shell.test.mjs` | 7 passaram |
 | `node scripts/verify-row-gate.mjs` | 10 passaram, depois `scripts/verify-rust-written-gate.mjs` passou, saída 0 |

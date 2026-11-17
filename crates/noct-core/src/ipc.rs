@@ -198,9 +198,7 @@ pub mod conversations {
     use super::pages::limit_of;
     use crate::contracts::Conversation;
 
-    pub use super::pages::{PAGE_LIMIT_MAX, PAGE_LIMIT_MIN};
-    /// The longest value of a cursor field, in characters. Timestamps and identifiers are far shorter.
-    pub const CURSOR_CHARACTERS_MAX: usize = 128;
+    pub use super::pages::{CURSOR_CHARACTERS_MAX, PAGE_LIMIT_MAX, PAGE_LIMIT_MIN};
 
     const REQUEST_FIELDS: &[&str] = &["limit", "cursor"];
 
@@ -267,7 +265,7 @@ pub mod conversations {
 }
 
 /// The bounds shared by the pages of the shell. `limit` is required and bounded, so a request cannot ask for
-/// an unbounded reply, and `offset` is bounded, so it cannot ask for an unbounded skip.
+/// an unbounded reply. Every page is read from a key cursor, so no request skips rows by count.
 pub mod pages {
     use serde::de;
     use serde_json::Value;
@@ -276,8 +274,8 @@ pub mod pages {
     /// the TypeScript conversation page is `COLLECTION_PAGE_LIMITS.conversations`, 100 in `shared/constants.ts`.
     pub const PAGE_LIMIT_MIN: u64 = 1;
     pub const PAGE_LIMIT_MAX: u64 = 500;
-    /// The largest offset a page may skip.
-    pub const OFFSET_MAX: u64 = 1_000_000;
+    /// The longest value of a cursor field that is a timestamp or an identifier, in characters. Both are far shorter.
+    pub const CURSOR_CHARACTERS_MAX: usize = 128;
 
     /// A JSON integer from `PAGE_LIMIT_MIN` to `PAGE_LIMIT_MAX`. A fraction, a string or a negative number
     /// is refused, because `as_u64` returns nothing for them.
@@ -292,36 +290,42 @@ pub mod pages {
                 ))
             })
     }
-
-    /// A JSON integer from 0 to `OFFSET_MAX`. An explicit `null` is refused, as the other optional fields are.
-    pub fn offset_of<E: de::Error>(value: Value) -> Result<usize, E> {
-        value
-            .as_u64()
-            .filter(|offset| *offset <= OFFSET_MAX)
-            .and_then(|offset| usize::try_from(offset).ok())
-            .ok_or_else(|| E::custom(format!("offset must be an integer from 0 to {OFFSET_MAX}")))
-    }
 }
 
 /// The page of projects. `workspaces_list` takes a [`WorkspacePageRequest`] and returns a [`WorkspacePage`].
-/// The order is the store's: favorites first, then the most recently opened. An offset is the number of projects
-/// to skip. A project opened between two requests can move across a page boundary, so a reader that needs every
-/// project asks for the maximum limit.
+/// The order is favorites first, then the most recently opened, then the path. The path only breaks ties, which the
+/// TypeScript list leaves to SQLite, so the order is total. A cursor is the key of the last project of a page; the
+/// next page holds the projects after that key, so a project opened between two requests does not shift the rows
+/// the walk has already read. A project whose key changes between two pages can still be skipped or read twice.
 pub mod workspaces {
     use serde::de;
     use serde::{Deserialize, Deserializer, Serialize};
     use serde_json::{Map, Value};
 
-    use super::pages::{limit_of, offset_of};
+    use super::pages::{CURSOR_CHARACTERS_MAX, limit_of};
     use crate::contracts::Workspace;
 
-    const REQUEST_FIELDS: &[&str] = &["limit", "offset"];
+    const REQUEST_FIELDS: &[&str] = &["limit", "cursor"];
 
-    /// A request for one page. `limit` is required; `offset` is 0 when it is absent.
+    /// The longest project path a request may carry, in characters. The TypeScript handler of `workspace.watch`
+    /// takes the same bound, 4,000 characters, so both sides refuse the same paths.
+    pub const PATH_CHARACTERS_MAX: usize = 4_000;
+
+    /// The key of the last project of a page. The next page holds the projects after it.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    pub struct WorkspaceCursor {
+        pub favorite: bool,
+        pub last_opened_at: String,
+        pub path: String,
+    }
+
+    /// A request for one page. `limit` is required; `cursor` is absent for the first page, and an explicit `null`
+    /// is refused, as the other optional fields of the contracts are.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct WorkspacePageRequest {
         pub limit: usize,
-        pub offset: usize,
+        pub cursor: Option<WorkspaceCursor>,
     }
 
     impl<'de> Deserialize<'de> for WorkspacePageRequest {
@@ -331,34 +335,58 @@ pub mod workspaces {
         {
             let fields = Map::<String, Value>::deserialize(deserializer)?;
             let mut limit = None;
-            let mut offset = None;
+            let mut cursor = None;
             for (key, value) in fields {
                 match key.as_str() {
                     "limit" => limit = Some(limit_of::<D::Error>(value)?),
-                    "offset" => offset = Some(offset_of::<D::Error>(value)?),
+                    "cursor" => cursor = Some(cursor_of::<D::Error>(value)?),
                     _ => return Err(de::Error::unknown_field(&key, REQUEST_FIELDS)),
                 }
             }
             let limit = limit.ok_or_else(|| de::Error::missing_field("limit"))?;
-            Ok(Self {
-                limit,
-                offset: offset.unwrap_or(0),
-            })
+            Ok(Self { limit, cursor })
         }
     }
 
-    /// One page of projects, in order. `has_more` says whether a project exists after this page. An unknown field
-    /// is refused, as the TypeScript type refuses it.
+    fn cursor_of<E: de::Error>(value: Value) -> Result<WorkspaceCursor, E> {
+        if value.is_null() {
+            return Err(E::custom("cursor must be an object, not null"));
+        }
+        let cursor: WorkspaceCursor = serde_json::from_value(value).map_err(E::custom)?;
+        let bounded = [
+            (&cursor.last_opened_at, CURSOR_CHARACTERS_MAX),
+            (&cursor.path, PATH_CHARACTERS_MAX),
+        ];
+        for (text, max) in bounded {
+            let length = text.chars().count();
+            if length == 0 || length > max {
+                return Err(E::custom(format!(
+                    "cursor fields have from 1 to {max} characters"
+                )));
+            }
+        }
+        Ok(cursor)
+    }
+
+    /// One page of projects, in order. `has_more` says whether a project exists after this page, and `next_cursor`
+    /// is present exactly when it does. An unknown field is refused, as the TypeScript type refuses it.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
     pub struct WorkspacePage {
         pub items: Vec<Workspace>,
         pub has_more: bool,
+        /// Required in the reply, even when it is `null`: serde reads a missing `Option` as `None`, which would
+        /// accept a reply the TypeScript type refuses.
+        #[serde(deserialize_with = "present_or_null")]
+        pub next_cursor: Option<WorkspaceCursor>,
     }
 
-    /// The longest project path a request may carry, in characters. The TypeScript handler of `workspace.watch`
-    /// takes the same bound, 4,000 characters, so both sides refuse the same paths.
-    pub const PATH_CHARACTERS_MAX: usize = 4_000;
+    fn present_or_null<'de, D>(deserializer: D) -> Result<Option<WorkspaceCursor>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<WorkspaceCursor>::deserialize(deserializer)
+    }
 
     const FAVORITE_FIELDS: &[&str] = &["workspace", "favorite"];
 

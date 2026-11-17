@@ -10,7 +10,7 @@ use noct_app::services;
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
-use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePageRequest};
+use noct_core::ipc::workspaces::{WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePageRequest};
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
 const NOT_A_FOLDER: &str = "O caminho do workspace não é uma pasta.";
@@ -315,10 +315,11 @@ fn conversation_pages_follow_the_cursor_and_report_more() {
     );
 }
 
-/// A project page holds the rows at its offset, in the store's order, and reports more exactly when a row follows
-/// it. Pages of any size join back into the whole list. An offset past the end is an empty page with no more.
+/// A project page holds the rows after the cursor of the page before it, in the store's order, and reports more
+/// exactly when a row follows it. Its `nextCursor` is the key of its last row. Pages of any size join back into the
+/// whole list, and a favorite comes first.
 #[test]
-fn workspace_pages_follow_the_offset_and_report_more() {
+fn workspace_pages_follow_the_cursor_and_report_more() {
     let scratch = Scratch::new("workspace-pages");
     let folders: Vec<String> = (0..5)
         .map(|index| {
@@ -332,55 +333,144 @@ fn workspace_pages_follow_the_offset_and_report_more() {
     for folder in &folders {
         store.workspaces().touch(folder).expect("saved");
     }
-    let whole = services::workspaces_from_rows(
-        services::workspace_rows(&store).expect("rows are read"),
-        &[],
-    );
-    let page = |limit: usize, offset: usize| {
-        services::workspace_page(&store, &[], &WorkspacePageRequest { limit, offset })
+    store
+        .workspaces()
+        .set_favorite(&folders[3], true)
+        .expect("the favorite is stored");
+    let rows = services::workspace_rows(&store).expect("rows are read");
+    let whole = services::workspaces_from_rows(rows.clone(), &[]);
+    assert_eq!(whole[0].path, folders[3], "the favorite comes first");
+    let page = |limit: usize, cursor: Option<WorkspaceCursor>| {
+        services::workspace_page(&store, &[], &WorkspacePageRequest { limit, cursor })
             .expect("a page is read")
     };
     let paths = |items: &[Workspace]| -> Vec<String> {
         items.iter().map(|item| item.path.clone()).collect()
     };
 
-    let first = page(2, 0);
+    let first = page(2, None);
     assert_eq!(paths(&first.items), paths(&whole[0..2]));
     assert!(first.has_more, "rows follow the first page");
+    let key = first
+        .next_cursor
+        .clone()
+        .expect("a page with more rows has a cursor");
+    assert_eq!(
+        key.path, rows[1].path,
+        "the cursor is the key of the last row"
+    );
+    assert_eq!(key.favorite, rows[1].favorite);
+    assert_eq!(key.last_opened_at, rows[1].last_opened_at);
 
-    let last = page(2, 4);
-    assert_eq!(paths(&last.items), paths(&whole[4..5]));
-    assert!(!last.has_more, "no row follows the last page");
-
-    let exact = page(5, 0);
+    let exact = page(5, None);
     assert_eq!(paths(&exact.items), paths(&whole));
     assert!(
-        !exact.has_more,
-        "a page that reaches the end reports no more"
+        !exact.has_more && exact.next_cursor.is_none(),
+        "a page that reaches the end reports no more and no cursor"
     );
 
-    let past = page(2, 9);
-    assert!(
-        past.items.is_empty(),
-        "an offset past the end is an empty page"
-    );
-    assert!(!past.has_more);
-
-    let mut joined = Vec::new();
-    let mut offset = 0;
-    loop {
-        let next = page(1, offset);
-        joined.extend(paths(&next.items));
-        if !next.has_more {
-            break;
+    for limit in [1, 2, 5] {
+        let mut joined = Vec::new();
+        let mut cursor = None;
+        loop {
+            let next = page(limit, cursor.clone());
+            assert!(next.items.len() <= limit, "a page holds at most its limit");
+            assert_eq!(
+                next.next_cursor.is_some(),
+                next.has_more,
+                "nextCursor is present exactly when hasMore is"
+            );
+            joined.extend(paths(&next.items));
+            if !next.has_more {
+                break;
+            }
+            cursor = next.next_cursor;
         }
-        offset += 1;
+        assert_eq!(
+            joined,
+            paths(&whole),
+            "pages of {limit} join back into the whole list"
+        );
     }
-    assert_eq!(
-        joined,
-        paths(&whole),
-        "one-row pages join back into the whole list"
+
+    let after_the_last = page(
+        2,
+        Some(WorkspaceCursor {
+            favorite: false,
+            last_opened_at: String::new(),
+            path: "\u{10ffff}".to_string(),
+        }),
     );
+    assert!(
+        after_the_last.items.is_empty(),
+        "a cursor after the last project is an empty page"
+    );
+    assert!(!after_the_last.has_more);
+}
+
+/// Projects with the same favorite flag and the same opening time are ordered by path, so every project is read once
+/// through the pages, whatever their size. The TypeScript list leaves such ties to SQLite; the Rust order does not.
+#[test]
+fn workspace_pages_break_ties_by_path_so_every_project_is_read_once() {
+    let scratch = Scratch::new("workspace-ties");
+    let folders: Vec<String> = (0..4)
+        .map(|index| {
+            let folder = scratch.path().join(format!("tie-{index}"));
+            std::fs::create_dir(&folder).expect("the folder is created");
+            folder.to_string_lossy().into_owned()
+        })
+        .collect();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    for folder in &folders {
+        store.workspaces().touch(folder).expect("saved");
+    }
+    store
+        .connection()
+        .execute_batch("UPDATE workspaces SET last_opened_at = '2026-01-02T00:00:00.000Z'")
+        .expect("every project gets the same opening time");
+    store
+        .workspaces()
+        .set_favorite(&folders[2], true)
+        .expect("the favorite is stored");
+
+    let mut expected = vec![folders[2].clone()];
+    let mut others: Vec<String> = folders
+        .iter()
+        .filter(|folder| **folder != folders[2])
+        .cloned()
+        .collect();
+    others.sort();
+    expected.extend(others);
+
+    let whole: Vec<String> = services::workspace_rows(&store)
+        .expect("rows are read")
+        .into_iter()
+        .map(|row| row.path)
+        .collect();
+    assert_eq!(whole, expected, "the favorite, then the paths in order");
+
+    for limit in [1, 3] {
+        let mut joined = Vec::new();
+        let mut cursor = None;
+        loop {
+            let next = services::workspace_page(
+                &store,
+                &[],
+                &WorkspacePageRequest {
+                    limit,
+                    cursor: cursor.clone(),
+                },
+            )
+            .expect("a page is read");
+            joined.extend(next.items.into_iter().map(|item| item.path));
+            if !next.has_more {
+                break;
+            }
+            cursor = next.next_cursor;
+        }
+        assert_eq!(joined, expected, "pages of {limit} read every project once");
+    }
 }
 
 /// A favorite is stored for a saved project, and the list shows it first. A project that is not saved is refused,

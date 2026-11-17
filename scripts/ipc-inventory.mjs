@@ -32,7 +32,7 @@ const CLASS = {
   'evidence.list': ['read', 'P3', 'Takes a conversation and an execution id.'],
   'workspace.select': ['database write', 'later', 'Opens a native folder dialog and authorises the workspace. Authorisation stays in the main process, and restored workspaces remain unauthorised until reselected.'],
   'workspace.validate': ['filesystem read', 'P3', 'Checks a path and its scope. No authorisation.'],
-  'workspace.list': ['read', 'P3 (ported)', 'Rust command `workspaces_list`, paged: a required limit (1 to 500) and an offset. `hasMore` says whether more follow. First cut: the interface reads the first page only.'],
+  'workspace.list': ['read', 'P3 (ported)', 'Rust command `workspaces_list`, paged: a required limit (1 to 500) and an optional cursor, the key of the last project of the previous page. `hasMore` says whether more follow, and `nextCursor` is the key that asks for them. The order breaks ties by path, which the TypeScript list does not. First cut: the interface reads the first page only.'],
   'workspace.remove': ['database write', 'P4', 'Removes a workspace record.'],
   'workspace.favorite': ['database write', 'P4 (ported)', 'Rust command `workspace_set_favorite`: the project must be saved, and the request has the same fields and bounds as `workspaceFavoriteSchema`. No interface control yet.'],
   'workspace.openTool': ['process/shell', 'later', 'Starts an editor or a terminal in the workspace.'],

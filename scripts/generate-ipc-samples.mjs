@@ -117,10 +117,10 @@ const OUTPUT_SAMPLES = {
   // `workspaces_list` returns a page (`WorkspacePage` in noct-core). The page type is written here, because the
   // shared types have the list only; the items are checked against `Workspace` as before.
   'workspaces-list': {
-    type: '{ items: Workspace[]; hasMore: boolean }',
+    type: '{ items: Workspace[]; hasMore: boolean; nextCursor: { favorite: boolean; lastOpenedAt: string; path: string } | null }',
     valid: [
-      { items: [], hasMore: false },
-      { items: [WORKSPACE_ALPHA], hasMore: false },
+      { items: [], hasMore: false, nextCursor: null },
+      { items: [WORKSPACE_ALPHA], hasMore: false, nextCursor: null },
       {
         items: [
           {
@@ -135,16 +135,21 @@ const OUTPUT_SAMPLES = {
           },
         ],
         hasMore: true,
+        nextCursor: { favorite: false, lastOpenedAt: '2026-01-02T00:00:00.000Z', path: '/work/beta' },
       },
     ],
     invalid: [
-      { items: [{ ...WORKSPACE_ALPHA, availability: 'online' }], hasMore: false },
-      { items: [{ path: '/work/alpha', name: 'alpha', favorite: true, availability: 'available', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false },
-      { items: [{ ...WORKSPACE_ALPHA, availabilityMessage: null }], hasMore: false },
-      { items: [{ ...WORKSPACE_ALPHA, favorite: 'yes' }], hasMore: false },
-      { items: [], hasMore: 'no' },
+      { items: [{ ...WORKSPACE_ALPHA, availability: 'online' }], hasMore: false, nextCursor: null },
+      { items: [{ path: '/work/alpha', name: 'alpha', favorite: true, availability: 'available', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false, nextCursor: null },
+      { items: [{ ...WORKSPACE_ALPHA, availabilityMessage: null }], hasMore: false, nextCursor: null },
+      { items: [{ ...WORKSPACE_ALPHA, favorite: 'yes' }], hasMore: false, nextCursor: null },
+      { items: [], hasMore: 'no', nextCursor: null },
       { items: [] },
-      { items: [], hasMore: false, nextCursor: null },
+      { items: [], hasMore: false },
+      { items: [], hasMore: false, nextCursor: null, offset: 0 },
+      { items: [], hasMore: true, nextCursor: { favorite: false, lastOpenedAt: '2026-01-02T00:00:00.000Z' } },
+      { items: [], hasMore: true, nextCursor: { favorite: 'no', lastOpenedAt: '2026-01-02T00:00:00.000Z', path: '/work/beta' } },
+      { items: [], hasMore: true, nextCursor: { favorite: false, lastOpenedAt: '2026-01-02T00:00:00.000Z', path: '/work/beta', id: 'x' } },
     ],
   },
   'conversations-list': {

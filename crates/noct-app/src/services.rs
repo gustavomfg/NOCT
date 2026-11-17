@@ -9,7 +9,9 @@ use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
-use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
+use noct_core::ipc::workspaces::{
+    WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest,
+};
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::Store;
 
@@ -50,20 +52,56 @@ pub fn workspace_rows(store: &Store) -> Result<Vec<WorkspaceRow>, CommandError> 
         .map_err(|_| CommandError::Persistence)
 }
 
-/// One page of the saved workspaces, as the rows the page holds and whether another row follows them. The
-/// rows are read from the store in order; the availability of each row is checked later, by the caller, and
-/// only for the rows of this page. That keeps the file-system work bounded by the limit.
+/// One page of the saved workspaces, as the rows the page holds and whether another row follows them. The store
+/// reads `limit` rows after the request's cursor, plus one to learn whether a row follows; so the read is bounded
+/// by the limit, not by the number of projects. The availability of each row is checked later, by the caller, and
+/// only for the rows of this page.
 pub fn workspace_page_rows(
     store: &Store,
     request: &WorkspacePageRequest,
 ) -> Result<(Vec<WorkspaceRow>, bool), CommandError> {
-    let rows = workspace_rows(store)?;
-    let total = rows.len();
-    let start = request.offset.min(total);
-    let end = start.saturating_add(request.limit).min(total);
-    let has_more = end < total;
-    let page = rows.into_iter().skip(start).take(end - start).collect();
-    Ok((page, has_more))
+    let after = request.cursor.as_ref().map(|cursor| {
+        (
+            cursor.favorite,
+            cursor.last_opened_at.as_str(),
+            cursor.path.as_str(),
+        )
+    });
+    let mut rows = store
+        .workspaces()
+        .page_after(after, request.limit.saturating_add(1))
+        .map_err(|_| CommandError::Persistence)?;
+    let has_more = rows.len() > request.limit;
+    rows.truncate(request.limit);
+    Ok((rows, has_more))
+}
+
+/// The key of a project row, as the cursor of the page that ends with it.
+fn cursor_of(row: &WorkspaceRow) -> WorkspaceCursor {
+    WorkspaceCursor {
+        favorite: row.favorite,
+        last_opened_at: row.last_opened_at.clone(),
+        path: row.path.clone(),
+    }
+}
+
+/// The page of rows the store returned, with their availability. The cursor is the key of the last row, and it is
+/// present only when a row follows the page.
+pub fn workspace_page_from_rows(
+    rows: Vec<WorkspaceRow>,
+    has_more: bool,
+    blocked: &[PathBuf],
+) -> WorkspacePage {
+    let next_cursor = if has_more {
+        rows.last().map(cursor_of)
+    } else {
+        None
+    };
+    WorkspacePage {
+        items: workspaces_from_rows(rows, blocked),
+        has_more,
+        next_cursor,
+    }
 }
 
 /// Marks a saved project as a favorite, or unmarks it. The project must be saved: a request for a path that is not
@@ -93,10 +131,7 @@ pub fn workspace_page(
     request: &WorkspacePageRequest,
 ) -> Result<WorkspacePage, CommandError> {
     let (rows, has_more) = workspace_page_rows(store, request)?;
-    Ok(WorkspacePage {
-        items: workspaces_from_rows(rows, blocked),
-        has_more,
-    })
+    Ok(workspace_page_from_rows(rows, has_more, blocked))
 }
 
 /// Each row with its availability. The check reads the file system, so the caller runs it outside the

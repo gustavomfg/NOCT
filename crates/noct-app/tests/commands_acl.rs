@@ -92,7 +92,7 @@ fn the_main_window_runs_the_granted_commands() {
                 json!({ "input": { "limit": 500 } })
             )
         )),
-        json!({ "items": [], "hasMore": false })
+        json!({ "items": [], "hasMore": false, "nextCursor": null })
     );
     assert_eq!(
         ok_json(get_ipc_response(
@@ -147,9 +147,10 @@ fn workspaces_list_refuses_page_requests_outside_the_contract() {
         json!({ "input": { "limit": 0 } }),
         json!({ "input": { "limit": 501 } }),
         json!({ "input": { "limit": "10" } }),
-        json!({ "input": { "limit": 10, "offset": null } }),
-        json!({ "input": { "limit": 10, "offset": 1_000_001 } }),
+        json!({ "input": { "limit": 10, "offset": 0 } }),
+        json!({ "input": { "limit": 10, "cursor": null } }),
         json!({ "input": { "limit": 10, "cursor": {} } }),
+        json!({ "input": { "limit": 10, "cursor": { "favorite": false, "lastOpenedAt": "2026-01-02T00:00:00.000Z" } } }),
         json!({ "input": null }),
     ] {
         let error = error_of(get_ipc_response(

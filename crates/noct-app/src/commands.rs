@@ -69,10 +69,11 @@ pub async fn workspaces_list(
                 let guard = lock(&store)?;
                 services::workspace_page_rows(&guard, &request)?
             };
-            Ok(WorkspacePage {
-                items: services::workspaces_from_rows(rows, &default_blocked_roots()),
+            Ok(services::workspace_page_from_rows(
+                rows,
                 has_more,
-            })
+                &default_blocked_roots(),
+            ))
         })
     })
     .await

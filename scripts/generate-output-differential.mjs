@@ -77,6 +77,10 @@ function relocate(value, gate) {
 function readOutputs(database, inspectWorkspaceScope) {
   const saved = database.getSettings()
   const settings = project({ ...saved, diagnosticMode: saved.diagnosticMode === 'true' }, SETTINGS_FIELDS)
+  const orderKeys = database.listWorkspaces().map((workspace) => `${workspace.favorite}|${workspace.lastOpenedAt}`)
+  if (new Set(orderKeys).size !== orderKeys.length) {
+    throw new Error('two projects share a favorite flag and an opening time, so their TypeScript order is not defined')
+  }
   const workspaces = database.listWorkspaces().map((workspace) => {
     const inspection = inspectWorkspaceScope(workspace.path)
     return project(
@@ -128,10 +132,27 @@ function addReadingState(database, readDirectory) {
     language: 'en',
     pandocVersion: '3.1.2',
   })
-  database.touchWorkspace(path.join(readDirectory, 'missing-project'))
+  const missing = path.join(readDirectory, 'missing-project')
+  database.touchWorkspace(missing)
   const notes = path.join(readDirectory, 'notes.txt')
   fs.writeFileSync(notes, 'not a folder\n')
   database.touchWorkspace(notes)
+  orderWorkspaces(readDirectory, { favorite: missing, plain: notes })
+}
+
+// Projects with distinct opening times, and one favorite, so the pages of the Rust side cross the boundary between
+// favorites and the rest. The project order is favorites first, then the most recently opened; SQLite does not define
+// the order of two rows with the same key, so the rows are written with keys of their own.
+function orderWorkspaces(readDirectory, { favorite, plain }) {
+  const Database = requireFromRoot('better-sqlite3')
+  const raw = new Database(path.join(readDirectory, 'nocturne.db'))
+  try {
+    const update = raw.prepare('UPDATE workspaces SET favorite=?, last_opened_at=? WHERE path=?')
+    update.run(1, new Date(Date.UTC(2026, 2, 1, 10, 0)).toISOString(), favorite)
+    update.run(0, new Date(Date.UTC(2026, 2, 1, 9, 0)).toISOString(), plain)
+  } finally {
+    raw.close()
+  }
 }
 
 export function generate() {

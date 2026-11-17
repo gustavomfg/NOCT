@@ -122,24 +122,31 @@ fn conversations_through_pages(store: &Store, limit: usize) -> Vec<Conversation>
     panic!("the pages did not end within {MAX_PAGES} pages");
 }
 
-/// The projects in pages of `limit`, as `workspaces_list` returns them, until a page reports no more.
+/// The projects in pages of `limit`, as `workspaces_list` returns them, through the cursor of each page, until a
+/// page reports no more. Each page must report a `nextCursor` exactly when it reports `hasMore`.
 fn workspaces_through_pages(store: &Store, limit: usize) -> Vec<Workspace> {
-    /// A walk that does not end is an offset that does not advance. The bases hold a few rows at most.
+    /// A walk that does not end is a cursor that does not advance. The bases hold a few rows at most.
     const MAX_PAGES: usize = 10_000;
     let mut collected = Vec::new();
-    for index in 0..MAX_PAGES {
+    let mut cursor = None;
+    for _ in 0..MAX_PAGES {
         let request = WorkspacePageRequest {
             limit,
-            offset: index * limit,
+            cursor: cursor.clone(),
         };
         let page = services::workspace_page(store, &default_blocked_roots(), &request)
             .expect("a page of projects is read");
         assert!(page.items.len() <= limit, "a page holds at most its limit");
-        let has_more = page.has_more;
+        assert_eq!(
+            page.next_cursor.is_some(),
+            page.has_more,
+            "nextCursor is present exactly when hasMore is"
+        );
         collected.extend(page.items);
-        if !has_more {
+        if !page.has_more {
             return collected;
         }
+        cursor = page.next_cursor;
     }
     panic!("the pages did not end within {MAX_PAGES} pages");
 }
@@ -155,16 +162,19 @@ fn rust_outputs(scratch: &Scratch) -> Value {
     let rows = services::workspace_rows(&store).expect("the workspaces are read");
     let whole = services::workspaces_from_rows(rows, &default_blocked_roots());
     let projects_one = workspaces_through_pages(&store, 1);
+    let projects_two = workspaces_through_pages(&store, 2);
     let projects_maximum = workspaces_through_pages(
         &store,
         usize::try_from(PAGE_LIMIT_MAX).expect("the page maximum fits in usize"),
     );
     let whole_json = serde_json::to_value(&whole).expect("the projects serialize");
-    assert_eq!(
-        serde_json::to_value(&projects_one).expect("the projects serialize"),
-        whole_json,
-        "pages of one row join back into the whole list, in order"
-    );
+    for (walk, limit) in [(&projects_one, "one"), (&projects_two, "two")] {
+        assert_eq!(
+            serde_json::to_value(walk).expect("the projects serialize"),
+            whole_json,
+            "pages of {limit} row join back into the whole list, in order"
+        );
+    }
     assert_eq!(
         serde_json::to_value(&projects_maximum).expect("the projects serialize"),
         whole_json,
