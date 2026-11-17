@@ -14,19 +14,21 @@ use noct_core::ipc::settings::from_saved;
 use noct_db::OpenOptions;
 use noct_db::diagnostics::DiagnosticSink;
 use noct_db::file_log::FileLogSink;
+use noct_db::observer::OperationObserver;
 use noct_db::store::Store;
 use thiserror::Error;
 
-use crate::logging::DiagnosticGate;
+use crate::logging::{DiagnosticGate, ShellObserver};
 
 /// The environment variable that names the data directory. It must be an absolute path.
 pub const DATA_DIRECTORY_VARIABLE: &str = "NOCT_DATA_DIR";
 
 /// The open persistence of the shell. The store is shared by the commands, and the gate is the sink the
-/// store writes its diagnostics to.
+/// store writes its diagnostics to. The observer measures the commands and warns through the same gate.
 pub struct Persistence {
     pub store: Arc<Mutex<Store>>,
     pub diagnostics: Arc<DiagnosticGate>,
+    pub observer: Arc<dyn OperationObserver>,
 }
 
 #[derive(Debug, Error)]
@@ -86,6 +88,7 @@ pub fn open_with_profile(
     warn_if_outside_profile(log.as_ref(), directory, profile);
     let diagnostics = Arc::new(DiagnosticGate::new(log, false));
     let sink: Arc<dyn DiagnosticSink> = diagnostics.clone();
+    let observer: Arc<dyn OperationObserver> = Arc::new(ShellObserver::new(sink.clone()));
     let store = Store::open_with(
         directory,
         OpenOptions {
@@ -99,6 +102,7 @@ pub fn open_with_profile(
     Ok(Persistence {
         store: Arc::new(Mutex::new(store)),
         diagnostics,
+        observer,
     })
 }
 

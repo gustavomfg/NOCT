@@ -93,8 +93,9 @@ pub trait OperationObserver: Send + Sync + Debug {
 }
 
 /// The warning policy of `electron/main.ts`: a failed operation, or one that takes at least
-/// [`SLOW_OPERATION_MS`], is written to the sink. The others are not warned.
-pub(crate) fn warn_on_attention(metric: &OperationMetric, sink: &dyn DiagnosticSink) {
+/// [`SLOW_OPERATION_MS`], is written to the sink. The others are not warned. The shell applies the same policy to
+/// its own operations, so the two warn alike.
+pub fn warn_on_attention(metric: &OperationMetric, sink: &dyn DiagnosticSink) {
     if metric.failed || metric.duration_ms >= SLOW_OPERATION_MS {
         sink.warn(
             OPERATION_EVENT,

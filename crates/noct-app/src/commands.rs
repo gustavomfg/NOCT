@@ -12,15 +12,22 @@ use tauri::State;
 
 use crate::bootstrap::Persistence;
 use crate::error::CommandError;
+use crate::logging::measured;
 use crate::services;
 use crate::workspace_scope::default_blocked_roots;
+
+// The commands below are measured under the names the TypeScript runtime gives the same reads and writes
+// (`noct_db::observer::CATALOG`). A command with no such name is not measured; see docs/status.md.
 
 #[tauri::command]
 pub async fn settings_get(state: State<'_, Persistence>) -> Result<AppSettings, CommandError> {
     let store = state.store.clone();
+    let observer = state.observer.clone();
     blocking(move || {
-        let guard = lock(&store)?;
-        services::settings_get(&guard)
+        measured(observer.as_ref(), "settings.get", || {
+            let guard = lock(&store)?;
+            services::settings_get(&guard)
+        })
     })
     .await
 }
@@ -34,9 +41,12 @@ pub async fn settings_set(
         serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
     let store = state.store.clone();
     let diagnostics = state.diagnostics.clone();
+    let observer = state.observer.clone();
     blocking(move || {
-        let guard = lock(&store)?;
-        services::settings_set(&guard, &diagnostics, &update)
+        measured(observer.as_ref(), "settings.set", || {
+            let guard = lock(&store)?;
+            services::settings_set(&guard, &diagnostics, &update)
+        })
     })
     .await
 }
@@ -52,14 +62,17 @@ pub async fn workspaces_list(
     let request: WorkspacePageRequest =
         serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
     let store = state.store.clone();
+    let observer = state.observer.clone();
     blocking(move || {
-        let (rows, has_more) = {
-            let guard = lock(&store)?;
-            services::workspace_page_rows(&guard, &request)?
-        };
-        Ok(WorkspacePage {
-            items: services::workspaces_from_rows(rows, &default_blocked_roots()),
-            has_more,
+        measured(observer.as_ref(), "workspaces.list", || {
+            let (rows, has_more) = {
+                let guard = lock(&store)?;
+                services::workspace_page_rows(&guard, &request)?
+            };
+            Ok(WorkspacePage {
+                items: services::workspaces_from_rows(rows, &default_blocked_roots()),
+                has_more,
+            })
         })
     })
     .await
@@ -92,9 +105,12 @@ pub async fn conversations_list(
     let request: ConversationPageRequest =
         serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
     let store = state.store.clone();
+    let observer = state.observer.clone();
     blocking(move || {
-        let guard = lock(&store)?;
-        services::conversations_page(&guard, &request)
+        measured(observer.as_ref(), "conversations.page", || {
+            let guard = lock(&store)?;
+            services::conversations_page(&guard, &request)
+        })
     })
     .await
 }

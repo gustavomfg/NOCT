@@ -15,7 +15,8 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 | P2: IPC inventory | `3f2a9ce` | not yet | not run | Nothing run on CI yet. |
 | P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
 | P4: database writes | first cut: `workspace_set_favorite` (its own commit) and the theme button saving through `settings_set` (see `git log`). | not yet | not run | No control sets a favorite yet. Only the theme is saved from the page. A failed write is not forced in a test. |
-| P5 to P10 | not started | | | |
+| P5: observability | first cut: the commands with a catalog name are measured and their warnings go through the diagnostic gate. This commit. | not yet | not run | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
+| P6 to P10 | not started | | | |
 
 ### P1 detail
 
@@ -71,15 +72,32 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 - The browser check of the sidebar counts the saves: two for a full run, one for a refused save, none otherwise. The
   full run reloads the page, so the saves made before the reload are kept.
 
+### P5 detail (first cut)
+
+- `ShellObserver` (in `crates/noct-app/src/logging.rs`) applies the database's warning policy to each measured
+  operation: a failed one, or one that takes at least 50 ms, is written as a warning through the diagnostic gate. The
+  policy function, `warn_on_attention`, is now public in `noct_db::observer`, so the database and the shell warn alike.
+- `measured` times a command and reports it once, when the command ends. A panic counts as a failure, as the
+  database's measurement counts it.
+- The commands are measured under the TypeScript names, from `noct_db::observer::CATALOG`: `settings.get`,
+  `settings.set`, `workspaces.list`, and `conversations.page` for the page of conversations.
+- `workspace_set_favorite` is not measured. Its TypeScript path calls the repository directly and has no name in the
+  catalog, so no name is invented for it.
+- A warning names the operation and its duration. It has no path, no value and no error text.
+- Checks: `crates/noct-app/tests/observation.rs` (six tests: the success, the failure, the panic, the catalog names,
+  the warning for a failed command with no path, and the threshold).
+
 ## Verified in this round
 
-Local, on the tree of the P4 first cut: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
+Local, on the tree of the P5 first cut: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
 `cargo clippy -p noct-ui --target wasm32-unknown-unknown -D warnings`, `cargo test --workspace --no-fail-fast`
-(450 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
+(456 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
 `npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node --test scripts/*.test.mjs` (7 of 7),
 `node scripts/check-shell-csp.mjs`, `node scripts/check-shell-ui.mjs` (17 scenarios, after `trunk build --release` of
 `crates/noct-ui`), and the output differential: `node scripts/generate-output-differential.mjs`, then
 `cargo test -p noct-app --test output_differential -- --ignored` (passes for the nine release lines and the current line).
+The TypeScript, Vitest, CSP and browser checks were last run on the theme-save commit. The P5 commit changes none of
+their files, so their results stand.
 
 CI, from GitHub: `06150a1` passed on all three systems (Rust shell validation: Ubuntu, macOS and Windows) and the row gate.
 
