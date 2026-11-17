@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`) | `f1f5b5f` | Same run: success on all three systems; row gate success. | No control sets a favorite yet. A failed write is not forced in a test. |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (this change) | `f1f5b5f` | Same run: success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in one test (the conversation insert). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -77,6 +77,26 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 - The command is granted to the main window only. The interface does not call it yet.
 - The sidebar theme button saves the theme with `settings_set` (`{ input: { theme } }`). A save the shell refuses keeps the
   theme on screen and shows the shell's message beside the button.
+
+### P4 detail: `conversations_create`
+
+- The argument is the project path as a string, the same as `conversations.create(workspace)`. An empty or non-string
+  argument is invalid input before the store is read.
+- The project must be saved, authorized, available (`workspace_scope::inspect`) and outside the blocked roots. Any of these
+  refusals is `unknown-workspace`, and nothing is written. The TypeScript shell gives a different message for each refusal;
+  the Rust shell gives the one message of `unknown-workspace` for all of them.
+- The workspace row and the conversation are written in one transaction (`Store::create_conversation`). A refused
+  conversation insert rolls the workspace row back too. The test installs a trigger that refuses the insert and checks that
+  no workspace row remains. With the transaction removed, the test fails.
+- **Not ported:** the `.nocturne` workspace context that the TypeScript shell creates before the insert (`project.json`,
+  `memory.md`, `rules.md`, with project detection). The Rust command writes the database only. This is a gap against the
+  TypeScript behaviour, and it belongs with the context commands (`memory:get`, `memory:set`, later). The inventory says so.
+- The command is granted to the main window only. The interface does not call it yet.
+- Checks: `crates/noct-app/tests/services.rs` (two tests), `crates/noct-app/tests/commands_acl.rs` (one test),
+  `crates/noct-db/tests/store.rs` (the failed write). The command is not measured and has no fixture in `noct-core`: its
+  argument is a bare string, and its output is the existing `Conversation` contract.
+- Local validation: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace`
+  (480 passed, 0 failed, 19 ignored; this change adds four tests), `node scripts/generate-ipc-samples.mjs --check`.
 
 ### P5 detail (first cut)
 

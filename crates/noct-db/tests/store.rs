@@ -269,3 +269,32 @@ fn a_refused_artifact_rolls_back_the_whole_turn() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_refused_conversation_insert_leaves_the_workspace_unsaved() {
+    // The workspace row and the conversation are written in one transaction. The trigger refuses the second
+    // insert, so the first must be rolled back as well.
+    let directory = scratch("store-create-conversation-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_conversations BEFORE INSERT ON conversations
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    assert!(
+        store.create_conversation("/work/project").is_err(),
+        "the refused insert is an error"
+    );
+
+    let saved: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        saved, 0,
+        "the workspace opened by the same call is rolled back"
+    );
+}

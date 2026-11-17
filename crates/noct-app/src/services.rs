@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use noct_core::contracts::{Conversation, Workspace};
+use noct_core::contracts::{Conversation, Workspace, WorkspaceAvailability};
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
@@ -154,6 +154,42 @@ pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec
             }
         })
         .collect()
+}
+
+/// Creates a conversation in a project that is saved, authorized and available. The folder must pass the scope check
+/// with the blocked roots, and the project must be saved and authorized. Either refusal is `UnknownWorkspace`, and
+/// nothing is written. The write opens the project and creates the conversation in one transaction.
+///
+/// The TypeScript shell also creates the `.nocturne` workspace context here. The Rust shell does not do that yet, so
+/// this command writes the database only. The gap is recorded in `docs/status.md`.
+pub fn conversation_create(
+    store: &Store,
+    blocked: &[PathBuf],
+    workspace: &str,
+) -> Result<Conversation, CommandError> {
+    if workspace.is_empty() {
+        return Err(CommandError::InvalidInput);
+    }
+    let inspection = workspace_scope::inspect(workspace, blocked);
+    if !matches!(inspection.availability, WorkspaceAvailability::Available) {
+        return Err(CommandError::UnknownWorkspace);
+    }
+    let authorized = workspace_rows(store)?
+        .iter()
+        .any(|row| row.path == workspace && row.authorized);
+    if !authorized {
+        return Err(CommandError::UnknownWorkspace);
+    }
+    let row = store
+        .create_conversation(workspace)
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(Conversation {
+        id: row.id,
+        title: row.title,
+        workspace: row.workspace,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

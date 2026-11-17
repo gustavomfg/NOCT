@@ -523,3 +523,107 @@ fn a_favorite_is_stored_for_a_saved_project_and_refused_for_one_that_is_not() {
         "no row is written for the refused path"
     );
 }
+
+#[test]
+fn a_conversation_is_created_in_a_saved_authorized_folder() {
+    let scratch = Scratch::new("conversation-create");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let path = project.to_string_lossy().into_owned();
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+
+    let created =
+        services::conversation_create(&store, &[], &path).expect("the conversation is created");
+
+    assert_eq!(created.title, "Nova conversa");
+    assert_eq!(created.workspace, path);
+    assert_eq!(created.created_at, created.updated_at);
+    assert_eq!(created.id.len(), 36, "the id is a hyphenated UUID");
+    let stored: i64 = store
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM conversations WHERE id=?1 AND workspace=?2",
+            [created.id.as_str(), path.as_str()],
+            |row| row.get(0),
+        )
+        .expect("the count is read");
+    assert_eq!(stored, 1, "the conversation is stored under its project");
+}
+
+#[test]
+fn a_conversation_is_refused_unless_its_folder_is_saved_authorized_available_and_not_blocked() {
+    let scratch = Scratch::new("conversation-refused");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let conversations = |store: &noct_db::store::Store| -> i64 {
+        store
+            .connection()
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .expect("the count is read")
+    };
+
+    assert!(
+        matches!(
+            services::conversation_create(&store, &[], &path),
+            Err(CommandError::UnknownWorkspace)
+        ),
+        "a folder that is not saved"
+    );
+    assert_eq!(conversations(&store), 0);
+
+    store
+        .connection()
+        .execute(
+            "INSERT INTO workspaces(path,name,authorized,created_at,last_opened_at)
+             VALUES(?1,'project',0,'2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')",
+            [path.as_str()],
+        )
+        .expect("the unauthorized row is saved");
+    assert!(
+        matches!(
+            services::conversation_create(&store, &[], &path),
+            Err(CommandError::UnknownWorkspace)
+        ),
+        "a saved row that is not authorized"
+    );
+    assert_eq!(conversations(&store), 0);
+
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is authorized");
+    assert!(
+        matches!(
+            services::conversation_create(&store, std::slice::from_ref(&project), &path),
+            Err(CommandError::UnknownWorkspace)
+        ),
+        "a folder on the blocked list"
+    );
+    assert_eq!(conversations(&store), 0);
+
+    std::fs::remove_dir(&project).expect("the folder is removed");
+    assert!(
+        matches!(
+            services::conversation_create(&store, &[], &path),
+            Err(CommandError::UnknownWorkspace)
+        ),
+        "a saved folder that is no longer available"
+    );
+    assert_eq!(conversations(&store), 0);
+
+    assert!(
+        matches!(
+            services::conversation_create(&store, &[], ""),
+            Err(CommandError::InvalidInput)
+        ),
+        "an empty path is invalid input"
+    );
+}

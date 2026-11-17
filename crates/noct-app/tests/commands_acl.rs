@@ -228,6 +228,73 @@ fn workspace_set_favorite_is_granted_and_checks_its_request() {
     }
 }
 
+/// The conversation command is granted to the main window. It takes the project path as a string, refuses any other
+/// shape before the store is read, and refuses a project that is not saved or not available with its own code. Only
+/// the accepted request writes a row.
+#[test]
+fn conversations_create_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("conversation-create-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversations = || -> i64 {
+        app.state::<Persistence>()
+            .store
+            .lock()
+            .expect("the store is not poisoned")
+            .connection()
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .expect("the count is read")
+    };
+
+    let created = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    assert_eq!(created["title"], "Nova conversa");
+    assert_eq!(created["workspace"], saved.as_str());
+    assert!(created["id"].as_str().is_some_and(|id| id.len() == 36));
+    assert_eq!(conversations(), 1, "the accepted request writes one row");
+
+    let unknown = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": "/synthetic/never-saved" }),
+        ),
+    ));
+    assert_eq!(unknown["code"], "unknown-workspace");
+    assert_eq!(unknown["message"], "Pasta do projeto não encontrada.");
+
+    for input in [
+        json!({ "input": "" }),
+        json!({ "input": 1 }),
+        json!({ "input": null }),
+        json!({ "input": { "workspace": saved.clone() } }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "conversations_create", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+    assert_eq!(conversations(), 1, "the refused requests write nothing");
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

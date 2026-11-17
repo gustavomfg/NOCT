@@ -5,6 +5,7 @@
 pub const SETTINGS_GET: &str = "settings_get";
 pub const SETTINGS_SET: &str = "settings_set";
 pub const WORKSPACES_LIST: &str = "workspaces_list";
+pub const CONVERSATIONS_CREATE: &str = "conversations_create";
 pub const CONVERSATIONS_LIST: &str = "conversations_list";
 pub const WORKSPACE_SET_FAVORITE: &str = "workspace_set_favorite";
 
@@ -12,6 +13,7 @@ pub const ALL: &[&str] = &[
     SETTINGS_GET,
     SETTINGS_SET,
     WORKSPACES_LIST,
+    CONVERSATIONS_CREATE,
     CONVERSATIONS_LIST,
     WORKSPACE_SET_FAVORITE,
 ];

@@ -179,10 +179,13 @@ impl Store {
         Workspaces::new(self.connection())
     }
 
-    /// Opens the workspace if it is not known yet, then creates a conversation in it.
+    /// Opens the workspace if it is not known yet, then creates a conversation in it. Both writes run in one
+    /// transaction: a failed conversation insert leaves the workspace row as it was.
     pub fn create_conversation(&self, workspace: &str) -> Result<ConversationRow> {
-        self.workspaces().touch(workspace)?;
-        self.conversations().create(workspace)
+        transaction::run(self.connection(), |conn| {
+            Workspaces::new(conn).touch(workspace)?;
+            Conversations::new(conn).create(workspace)
+        })
     }
 
     /// Stores an assistant reply, its markdown copy and its artifacts in one transaction. A

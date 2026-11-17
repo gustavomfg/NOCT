@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use noct_core::contracts::Conversation;
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
@@ -75,6 +76,25 @@ pub async fn workspaces_list(
                 &default_blocked_roots(),
             ))
         })
+    })
+    .await
+}
+
+/// Creates a conversation in a saved project. The argument is the project path as a string, which is the contract
+/// the TypeScript shell uses. The store lock covers the scope check, the saved check and the write.
+#[tauri::command]
+pub async fn conversations_create(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<Conversation, CommandError> {
+    let workspace = match input {
+        serde_json::Value::String(text) => text,
+        _ => return Err(CommandError::InvalidInput),
+    };
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::conversation_create(&guard, &default_blocked_roots(), &workspace)
     })
     .await
 }

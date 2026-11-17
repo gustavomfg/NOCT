@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 5 (`workspaces_list`, `conversations_list`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 6 (`workspaces_list`, `conversations_list`, `conversations_create`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 2 |
-| P4 | 13 |
+| P4 (ported) | 3 |
+| P4 | 12 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -129,7 +129,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `changeControl:changed` | `window.nocturne.changeControl.onChanged (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `electron/ipc/registerAiIpc.ts:269` | event | event |  |
 | `conversations:list` | `window.nocturne.conversations.list` | `list(): Promise<Conversation[]>` | none (no input) | `electron/ipc/registerConversationIpc.ts:24` | read | P3 (ported) | Already a Rust command (`conversations_list`), paged: a required limit from 1 to 500 and a cursor. |
 | `conversations:page` | `window.nocturne.conversations.page` | `page(offset?: number, limit?: number): Promise<CollectionPage<Conversation>>` | zod: pageSchema | `electron/ipc/registerConversationIpc.ts:25` | read | P3 | Paginated. |
-| `conversations:create` | `window.nocturne.conversations.create` | `create(workspace: string): Promise<Conversation>` | inline .parse | `electron/ipc/registerConversationIpc.ts:29` | database write | P4 | Creates a conversation for a workspace. |
+| `conversations:create` | `window.nocturne.conversations.create` | `create(workspace: string): Promise<Conversation>` | inline .parse | `electron/ipc/registerConversationIpc.ts:29` | database write | P4 (ported) | Rust command `conversations_create`: the argument is the project path. The project must be saved, authorized and available, and it must pass the scope check with the blocked roots. The `.nocturne` workspace context is not created yet; the command writes the database only. |
 | `conversations:messages` | `window.nocturne.conversations.messages` | `messages(id: string): Promise<Message[]>` | zod: idSchema | `electron/ipc/registerConversationIpc.ts:34` | read | P3 | Returns every message with no limit. The port uses the paged form. |
 | `conversations:messagePage` | `window.nocturne.conversations.messagePage` | `messagePage(id: string, offset?: number, limit?: number): Promise<MessagePage>` | inline .parse | `electron/ipc/registerConversationIpc.ts:37` | read | P3 | Paginated. |
 | `conversations:delete` | `window.nocturne.conversations.delete` | `delete(id: string): Promise<void>` | zod: idSchema | `electron/ipc/registerConversationIpc.ts:45` | database write | P4 | Deletes a conversation and its messages. |

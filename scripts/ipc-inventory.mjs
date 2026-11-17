@@ -74,7 +74,7 @@ const CLASS = {
   'changeControl.changed': ['event', 'event', ''],
   'conversations.list': ['read', 'P3 (ported)', 'Already a Rust command (`conversations_list`), paged: a required limit from 1 to 500 and a cursor.'],
   'conversations.page': ['read', 'P3', 'Paginated.'],
-  'conversations.create': ['database write', 'P4', 'Creates a conversation for a workspace.'],
+  'conversations.create': ['database write', 'P4 (ported)', 'Rust command `conversations_create`: the argument is the project path. The project must be saved, authorized and available, and it must pass the scope check with the blocked roots. The `.nocturne` workspace context is not created yet; the command writes the database only.'],
   'conversations.messages': ['read', 'P3', 'Returns every message with no limit. The port uses the paged form.'],
   'conversations.messagePage': ['read', 'P3', 'Paginated.'],
   'conversations.delete': ['database write', 'P4', 'Deletes a conversation and its messages.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
