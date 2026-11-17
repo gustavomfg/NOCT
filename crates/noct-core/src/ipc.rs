@@ -14,6 +14,8 @@ use serde::de::{self, DeserializeOwned};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
+use crate::limits::persistence::ASSISTANT_CHARACTERS;
+use crate::text::utf16_len;
 use crate::wire::present;
 
 /// The Tauri command names of the slice. Each replaces the channel named in `shared/ipc/channels.ts`:
@@ -443,6 +445,50 @@ pub mod workspaces {
     }
 }
 
+/// The request of the commands that read an assistant reply: `brain_extract` and `suggestions_create`. The reply is kept
+/// as it is, and it has at most `ASSISTANT_CHARACTERS` UTF-16 units, as both TypeScript schemas allow. An unknown field
+/// is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyRequest {
+    pub conversation_id: String,
+    pub content: String,
+}
+
+const REPLY_FIELDS: &[&str] = &["conversationId", "content"];
+
+impl<'de> Deserialize<'de> for ReplyRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let fields = Map::<String, Value>::deserialize(deserializer)?;
+        let mut conversation_id = None;
+        let mut content = None;
+        for (key, value) in fields {
+            match key.as_str() {
+                "conversationId" => {
+                    conversation_id = Some(brain::uuid_field::<D::Error>("conversationId", value)?)
+                }
+                "content" => {
+                    let Value::String(text) = value else {
+                        return Err(de::Error::custom("content must be a string"));
+                    };
+                    if utf16_len(&text) as u64 > ASSISTANT_CHARACTERS {
+                        return Err(de::Error::custom("content is too long"));
+                    }
+                    content = Some(text);
+                }
+                _ => return Err(de::Error::unknown_field(&key, REPLY_FIELDS)),
+            }
+        }
+        Ok(Self {
+            conversation_id: conversation_id
+                .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+            content: content.ok_or_else(|| de::Error::missing_field("content"))?,
+        })
+    }
+}
+
 /// The requests of the brain memory commands.
 pub mod brain {
     use serde::de;
@@ -452,8 +498,6 @@ pub mod brain {
     use crate::brain_memory::{
         BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, normalize_brain_content,
     };
-    use crate::limits::persistence::ASSISTANT_CHARACTERS;
-    use crate::text::utf16_len;
     use crate::validation::uuid_text;
 
     const CREATE_FIELDS: &[&str] = &["conversationId", "kind", "scope", "content"];
@@ -601,49 +645,6 @@ pub mod brain {
         Ok(number as i64)
     }
 
-    const EXTRACT_FIELDS: &[&str] = &["conversationId", "content"];
-
-    /// A request to read the memory blocks of an assistant reply. `content` is the reply as it is, untrimmed, and at most
-    /// `ASSISTANT_CHARACTERS` UTF-16 units, as `brainMemoryExtractSchema` allows.
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct BrainMemoryExtractRequest {
-        pub conversation_id: String,
-        pub content: String,
-    }
-
-    impl<'de> Deserialize<'de> for BrainMemoryExtractRequest {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let fields = Map::<String, Value>::deserialize(deserializer)?;
-            let mut conversation_id = None;
-            let mut content = None;
-            for (key, value) in fields {
-                match key.as_str() {
-                    "conversationId" => {
-                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
-                    }
-                    "content" => {
-                        let Value::String(text) = value else {
-                            return Err(de::Error::custom("content must be a string"));
-                        };
-                        if utf16_len(&text) as u64 > ASSISTANT_CHARACTERS {
-                            return Err(de::Error::custom("content is too long"));
-                        }
-                        content = Some(text);
-                    }
-                    _ => return Err(de::Error::unknown_field(&key, EXTRACT_FIELDS)),
-                }
-            }
-            Ok(Self {
-                conversation_id: conversation_id
-                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
-                content: content.ok_or_else(|| de::Error::missing_field("content"))?,
-            })
-        }
-    }
-
     /// The reply of `brain_extract`: the memories that were stored, the reply without its blocks, and a warning when
     /// the memories could not be stored. `warning` is absent when there is none, as the TypeScript reply has it.
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -652,6 +653,27 @@ pub mod brain {
         pub memories: Vec<BrainMemory>,
         pub content: String,
         #[serde(skip_serializing_if = "Option::is_none")]
+        pub warning: Option<String>,
+    }
+}
+
+/// The reply of the suggestion commands.
+pub mod suggestions {
+    use serde::{Deserialize, Serialize};
+
+    use crate::suggestions::{ReviewComparison, Suggestion};
+
+    /// The reply of `suggestions_create`. A reply with a review snapshot carries the suggestions and the comparison with
+    /// the previous review. A reply without a usable snapshot carries no suggestions and a warning, and keeps the earlier
+    /// ones. `comparison` and `warning` are absent when they do not apply, as the TypeScript reply has them.
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SuggestionCreation {
+        pub suggestions: Vec<Suggestion>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub comparison: Option<ReviewComparison>,
+        pub content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         pub warning: Option<String>,
     }
 }

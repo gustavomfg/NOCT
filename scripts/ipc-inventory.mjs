@@ -102,7 +102,7 @@ const CLASS = {
   'artifacts.delete': ['database write', 'P4', 'Confirm whether it also removes files before the port.'],
   'suggestions.list': ['read', 'P3', ''],
   'suggestions.page': ['read', 'P3', ''],
-  'suggestions.create': ['database write', 'P4', 'Local extraction, no provider call. Stores suggestions.'],
+  'suggestions.create': ['database write', 'P4 (ported)', 'Rust command `suggestions_create`: the reply is read by `extract_suggestions`, which follows `extractSuggestions` and `suggestionInputSchema`, with the same marker rules, the same strict items and the same two warnings. A structured reply is reconciled with the history of its conversation (`reconcile`, with the renderer-provided content unable to resolve missing suggestions), and the comparison text is appended to the reply. A reply without a usable snapshot stores nothing. The request is the shared `ReplyRequest` of `brain_extract`. Not ported: the log line of the TypeScript shell.'],
   'suggestions.status': ['database write', 'P4', 'Changes a suggestion status.'],
   'data.export': ['filesystem write', 'later', 'Writes a full backup to a file the user picks. It holds user data.'],
   'data.import': ['database write', 'later', 'Reads a backup file and replaces data. Sensitive; it needs its own review.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,10 +327,9 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** `settings.set` (already a Rust command; wire the theme button), `conversations.create`,')
-out.push('   `conversations.delete`, `workspace.favorite`, `workspace.remove`, `brain.create`, `brain.update`, `brain.delete`,')
-out.push('   `brain.extract`, `suggestions.create`, `suggestions.status`, `artifacts.delete`, `models.setBindings`,')
-out.push('   `ai.saveAssistant`, `changeControl.editHunk`. Each one tests that a failed write rolls back and that unknown fields are rejected.')
+out.push('3. **P4, database writes.** Still to port: `suggestions.status`, `models.setBindings`, `ai.saveAssistant`,')
+out.push('   `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,')
+out.push('   `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')
 out.push('   and the operation observer for the commands already ported.')
 out.push('5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and')

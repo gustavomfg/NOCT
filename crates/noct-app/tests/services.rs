@@ -11,11 +11,11 @@ use noct_core::brain_memory::{
     BrainMemoryKind, BrainMemoryScope, BrainMemorySource, BrainMemoryStatus,
 };
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
-use noct_core::ipc::brain::{
-    BrainMemoryCreateRequest, BrainMemoryExtractRequest, BrainMemoryUpdateRequest,
-};
+use noct_core::ipc::ReplyRequest;
+use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
+use noct_core::ipc::suggestions::SuggestionCreation;
 use noct_core::ipc::workspaces::{WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePageRequest};
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
@@ -936,7 +936,7 @@ fn brain_extract_stores_the_candidates_of_a_reply_and_skips_the_known_ones() {
     let extraction = services::brain_extract(
         &store,
         &[],
-        &BrainMemoryExtractRequest {
+        &ReplyRequest {
             conversation_id: conversation.id.clone(),
             content: reply.to_string(),
         },
@@ -985,7 +985,7 @@ fn a_reply_whose_memories_cannot_be_stored_is_kept_with_a_warning() {
     let extraction = services::brain_extract(
         &store,
         &[],
-        &BrainMemoryExtractRequest {
+        &ReplyRequest {
             conversation_id: conversation.id.clone(),
             content: reply.to_string(),
         },
@@ -1015,9 +1015,111 @@ fn brain_extract_names_a_conversation_that_does_not_exist() {
     let refused = services::brain_extract(
         &store,
         &[],
-        &BrainMemoryExtractRequest {
+        &ReplyRequest {
             conversation_id: "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d".to_string(),
             content: "Resposta.".to_string(),
+        },
+    );
+    assert!(matches!(refused, Err(CommandError::UnknownConversation)));
+}
+
+#[test]
+fn suggestions_create_reconciles_a_review_with_the_previous_one() {
+    let scratch = Scratch::new("suggestions-create");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let review = |body: &str| ReplyRequest {
+        conversation_id: conversation.id.clone(),
+        content: format!(
+            "Revisão.\n```nocturne-suggestions\n[{{\"title\":\"Missing tests\",\"description\":\"d\",\"reasoning\":\"r\",\"category\":\"testing\",\"severity\":\"medium\"{body}}}]\n```"
+        ),
+    };
+
+    let first: SuggestionCreation =
+        services::suggestions_create(&store, &[], &review("")).expect("the review is read");
+    assert_eq!(first.suggestions.len(), 1);
+    assert_eq!(first.warning, None);
+    let comparison = first
+        .comparison
+        .as_ref()
+        .expect("a review carries its comparison");
+    assert_eq!(comparison.new_suggestions.len(), 1);
+    assert!(
+        first
+            .content
+            .starts_with("Revisão.\n\n### Comparação com a revisão anterior\n\n- Novas: 1"),
+        "{}",
+        first.content
+    );
+
+    let second =
+        services::suggestions_create(&store, &[], &review("")).expect("the review is read");
+    let comparison = second.comparison.as_ref().expect("comparison");
+    assert_eq!(
+        comparison.persistent_suggestions.len(),
+        1,
+        "the same finding persists"
+    );
+    assert_eq!(comparison.new_suggestions.len(), 0);
+}
+
+#[test]
+fn a_reply_without_a_snapshot_keeps_the_earlier_suggestions_and_says_so() {
+    let scratch = Scratch::new("suggestions-absent");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+
+    let reply = ReplyRequest {
+        conversation_id: conversation.id.clone(),
+        content: "  Só texto.  ".to_string(),
+    };
+    let created = services::suggestions_create(&store, &[], &reply).expect("the reply is read");
+    assert!(created.suggestions.is_empty());
+    assert_eq!(created.comparison, None);
+    assert_eq!(created.content, "Só texto.");
+    assert_eq!(
+        created.warning.as_deref(),
+        Some(
+            "A resposta não trouxe um snapshot estruturado; sugestões anteriores foram preservadas."
+        )
+    );
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM suggestions", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "nothing is stored for a reply without a snapshot"
+    );
+}
+
+#[test]
+fn suggestions_create_names_a_conversation_that_does_not_exist() {
+    let scratch = Scratch::new("suggestions-missing");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let refused = services::suggestions_create(
+        &store,
+        &[],
+        &ReplyRequest {
+            conversation_id: "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d".to_string(),
+            content: "x".to_string(),
         },
     );
     assert!(matches!(refused, Err(CommandError::UnknownConversation)));

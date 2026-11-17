@@ -455,3 +455,55 @@ fn a_refused_candidate_leaves_none_of_the_batch_stored() {
         "the first candidate is rolled back with the batch"
     );
 }
+
+#[test]
+fn a_failed_suggestion_decision_write_leaves_no_suggestion_behind() {
+    // A review's suggestions and their first decision entries are written in one transaction. The trigger refuses the
+    // decision entry, so the suggestion must be rolled back as well.
+    let directory = scratch("store-suggestions-rollback");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_suggestion_decisions BEFORE INSERT ON suggestion_decisions
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let input = noct_core::suggestions::SuggestionInput {
+        title: "Missing tests".to_string(),
+        description: "d".to_string(),
+        reasoning: "r".to_string(),
+        category: noct_core::suggestions::SuggestionCategory::Testing,
+        severity: noct_core::suggestions::SuggestionSeverity::Medium,
+        affected_files: Vec::new(),
+        proposed_changes: String::new(),
+        expected_benefits: Vec::new(),
+        complexity: noct_core::suggestions::SuggestionLevel::Medium,
+        risk: noct_core::suggestions::SuggestionLevel::Medium,
+        evidence: None,
+        confidence: None,
+        source: None,
+        responsible: None,
+    };
+
+    let error = store
+        .suggestions()
+        .reconcile(&conversation.id, "/work/project", &[input], false)
+        .expect_err("the refused decision entry is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM suggestions", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "the suggestion written by the same call is rolled back"
+    );
+}

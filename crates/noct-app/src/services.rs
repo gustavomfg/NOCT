@@ -9,17 +9,19 @@ use noct_core::brain_memory::{
     InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition, extract_candidates,
 };
 use noct_core::contracts::{Conversation, Workspace, WorkspaceAvailability};
+use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::brain::{
-    BrainMemoryCreateRequest, BrainMemoryExtractRequest, BrainMemoryExtraction,
-    BrainMemoryUpdateRequest,
+    BrainMemoryCreateRequest, BrainMemoryExtraction, BrainMemoryUpdateRequest,
 };
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
+use noct_core::ipc::suggestions::SuggestionCreation;
 use noct_core::ipc::workspaces::{
     WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest,
 };
+use noct_core::suggestions::{SuggestionSnapshot, extract_suggestions, review_comparison_markdown};
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::Store;
 
@@ -302,7 +304,7 @@ const CANDIDATES_NOT_SAVED: &str =
 pub fn brain_extract(
     store: &Store,
     blocked: &[PathBuf],
-    request: &BrainMemoryExtractRequest,
+    request: &ReplyRequest,
 ) -> Result<BrainMemoryExtraction, CommandError> {
     let conversation = store
         .conversations()
@@ -327,6 +329,63 @@ pub fn brain_extract(
             warning: Some(CANDIDATES_NOT_SAVED.to_string()),
         }),
     }
+}
+
+/// The warnings of a reply without a usable review snapshot. They are the TypeScript texts, and the earlier suggestions
+/// are kept.
+const SNAPSHOT_INVALID: &str =
+    "O snapshot de sugestões é inválido ou incompleto; sugestões anteriores foram preservadas.";
+const SNAPSHOT_ABSENT: &str =
+    "A resposta não trouxe um snapshot estruturado; sugestões anteriores foram preservadas.";
+
+/// Reads the review snapshot of a reply and reconciles its suggestions with the conversation's history. The conversation
+/// and its project are checked as in a conversation write. A reply without a usable snapshot stores nothing: it comes
+/// back with the warning and its text. The comparison with the previous review is appended to the text, as in TypeScript.
+pub fn suggestions_create(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &ReplyRequest,
+) -> Result<SuggestionCreation, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let extracted = extract_suggestions(&request.content);
+    if !extracted.structured {
+        let warning = match extracted.snapshot {
+            SuggestionSnapshot::Invalid => SNAPSHOT_INVALID,
+            SuggestionSnapshot::Valid | SuggestionSnapshot::Absent => SNAPSHOT_ABSENT,
+        };
+        return Ok(SuggestionCreation {
+            suggestions: Vec::new(),
+            comparison: None,
+            content: extracted.content,
+            warning: Some(warning.to_string()),
+        });
+    }
+    let reconciliation = store
+        .suggestions()
+        .reconcile(
+            &request.conversation_id,
+            &conversation.workspace,
+            &extracted.suggestions,
+            false,
+        )
+        .map_err(|_| CommandError::Persistence)?;
+    let markdown = review_comparison_markdown(&reconciliation.comparison);
+    let content = [extracted.content.as_str(), markdown.as_str()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    Ok(SuggestionCreation {
+        suggestions: reconciliation.suggestions,
+        comparison: Some(reconciliation.comparison),
+        content,
+        warning: None,
+    })
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

@@ -5,7 +5,7 @@ use noct_core::brain_memory::{
     BrainMemoryKind, BrainMemoryScope, EXTRACTED_CANDIDATES_MAX, extract_candidates,
     normalize_brain_content,
 };
-use noct_core::ipc::brain::BrainMemoryExtractRequest;
+use noct_core::ipc::ReplyRequest;
 use serde_json::json;
 
 const CONVERSATION: &str = "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d";
@@ -144,7 +144,7 @@ fn the_content_rule_trims_then_checks_length_and_credentials() {
 
 #[test]
 fn the_extract_request_keeps_the_reply_as_it_is() {
-    let request: BrainMemoryExtractRequest = serde_json::from_value(json!({
+    let request: ReplyRequest = serde_json::from_value(json!({
         "conversationId": CONVERSATION,
         "content": "  reply with spaces  \n",
     }))
@@ -155,9 +155,9 @@ fn the_extract_request_keeps_the_reply_as_it_is() {
     );
 
     let too_long = json!({ "conversationId": CONVERSATION, "content": "a".repeat(2_000_001) });
-    assert!(serde_json::from_value::<BrainMemoryExtractRequest>(too_long).is_err());
+    assert!(serde_json::from_value::<ReplyRequest>(too_long).is_err());
     let bad_id = json!({ "conversationId": "not-a-uuid", "content": "x" });
-    assert!(serde_json::from_value::<BrainMemoryExtractRequest>(bad_id).is_err());
+    assert!(serde_json::from_value::<ReplyRequest>(bad_id).is_err());
     let extra = json!({ "conversationId": CONVERSATION, "content": "x", "mode": "build" });
-    assert!(serde_json::from_value::<BrainMemoryExtractRequest>(extra).is_err());
+    assert!(serde_json::from_value::<ReplyRequest>(extra).is_err());
 }

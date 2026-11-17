@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (this change) | `f1f5b5f` | `93af490`, `595bb08` and `a17000d`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory or reads a reply. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in four tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d` and `9ebcbc9`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, or reads a reply or its suggestions. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in five tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -164,6 +164,41 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 - Checks: `crates/noct-core/tests/brain_candidates.rs` (nine tests), `crates/noct-app/tests/services.rs` (three tests),
   `crates/noct-app/tests/commands_acl.rs` (one test), `crates/noct-db/tests/store.rs` (the batch that is refused as a whole).
 - Tests after this change: 517 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
+  and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `suggestions_create`
+
+- The request is `{ conversationId, content }`, the shared `ReplyRequest` of `brain_extract`, with the same
+  `ASSISTANT_CHARACTERS` bound on `content`. The reply is kept as it is.
+- The reply is read by `extract_suggestions` in `noct-core`, which follows `extractSuggestions` in `shared/suggestions.ts`:
+  - one marker and one block, read strictly: every item must match `suggestionInputSchema`, or the whole block is refused.
+    Two markers, or a block that is not an array, is invalid;
+  - without a marker, a JSON fence at the very end of the reply is read the same way;
+  - the marker is ASCII-folded and ends at a word boundary; the block marker does not need the boundary;
+  - a valid snapshot is removed from the reply and the reply is trimmed. An invalid one leaves the reply as it is, trimmed.
+- The item schema is ported field by field: lengths in UTF-16 units after the trim (zod order), the title sanitized
+  after its 200-unit check, `affectedFiles` at most 100, `expectedBenefits` at most 20, `evidence` at most 50 with no
+  unknown key in an item, `proposedChanges` at most 100,000 units and not trimmed, `confidence` a whole number from 0
+  to 100 (`80.0` is 80), and the defaults of the schema (`medium`, `[]`, `60`, `Análise do agente`, `Agente de revisão`).
+  An unknown key on the item is ignored, as zod strips it.
+- A structured reply is reconciled by `Suggestions::reconcile` with `resolve_missing = false`, as the TypeScript handler
+  does. The reply comes back with the suggestions, the comparison, and the content: the trimmed text and
+  `review_comparison_markdown`, joined by a blank line, with the empty part left out.
+- A reply without a usable snapshot stores nothing and comes back with `suggestions: []`, its trimmed text and one of the
+  two TypeScript warnings. It has no `comparison` key, as the TypeScript reply has none.
+- The conversation and its project are checked as in `brain_extract`: a conversation that does not exist is
+  `unknown-conversation`, and a project that is not saved, authorized, available or allowed is `unknown-workspace`.
+- Unlike `brain_extract`, a store failure is an error, not a warning: the TypeScript handler has no fallback for it either,
+  and the whole reconciliation is one transaction.
+- Known difference, not covered by a test: the same lone-surrogate difference as `brain_extract`.
+- Not ported: the `logger.info` line of the TypeScript handler. The interface does not call the command yet.
+- Shared types moved for this change, with no change of behavior: `ReplyRequest` now lives at `noct_core::ipc` (it was
+  under `ipc::brain`), and `ascii_insensitive` now lives in `noct_core::text`, used by the memory and suggestion parsers.
+- Checks: `crates/noct-core/tests/suggestion_extraction.rs` (eleven tests: the strict block, the fallback, the markers, the
+  schema bounds and defaults, the edge values, and the comparison text), `crates/noct-app/tests/services.rs` (three tests,
+  one of them a second review that keeps the same finding as persistent), `crates/noct-app/tests/commands_acl.rs` (one
+  test), `crates/noct-db/tests/store.rs` (a refused decision entry rolls back the suggestion written by the same call).
+- Tests after this change: 533 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
   and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P5 detail (first cut)

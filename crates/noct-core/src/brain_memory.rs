@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::limits::persistence::BRAIN_MEMORY_CHARACTERS;
-use crate::text::{JS_WHITESPACE_CLASS, js_trim, utf16_len};
+use crate::text::{JS_WHITESPACE_CLASS, ascii_insensitive, js_trim, utf16_len};
 
 /// The search tokens a retrieval keeps, as the TypeScript repository does.
 const SEARCH_TOKENS: usize = 12;
@@ -232,20 +232,6 @@ static MEMORY_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
     ))
     .expect("the memory block pattern is valid")
 });
-
-/// A literal that matches its ASCII letters in either case and nothing else, as JavaScript's `/i` without `u` does.
-fn ascii_insensitive(literal: &str) -> String {
-    literal
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphabetic() {
-                format!("[{}{}]", c.to_ascii_lowercase(), c.to_ascii_uppercase())
-            } else {
-                regex::escape(&c.to_string())
-            }
-        })
-        .collect()
-}
 
 /// Reads the memory blocks of a reply. A block that is not JSON is skipped. Inside a block, an item that does not
 /// match the candidate schema is skipped and the others are kept, and a single object counts as a one-item list. At

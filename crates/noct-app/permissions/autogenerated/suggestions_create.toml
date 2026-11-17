@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggestions-create"
+description = "Enables the suggestions_create command without any pre-configured scope."
+commands.allow = ["suggestions_create"]
+
+[[permission]]
+identifier = "deny-suggestions-create"
+description = "Denies the suggestions_create command without any pre-configured scope."
+commands.deny = ["suggestions_create"]

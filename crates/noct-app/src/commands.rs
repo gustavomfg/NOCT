@@ -6,12 +6,13 @@ use std::sync::{Mutex, MutexGuard};
 
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::Conversation;
+use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::brain::{
-    BrainMemoryCreateRequest, BrainMemoryExtractRequest, BrainMemoryExtraction,
-    BrainMemoryUpdateRequest,
+    BrainMemoryCreateRequest, BrainMemoryExtraction, BrainMemoryUpdateRequest,
 };
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
+use noct_core::ipc::suggestions::SuggestionCreation;
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
 use noct_db::store::Store;
 use tauri::State;
@@ -146,12 +147,29 @@ pub async fn brain_extract(
     state: State<'_, Persistence>,
     input: serde_json::Value,
 ) -> Result<BrainMemoryExtraction, CommandError> {
-    let request: BrainMemoryExtractRequest =
+    let request: ReplyRequest =
         serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
     let store = state.store.clone();
     blocking(move || {
         let guard = lock(&store)?;
         services::brain_extract(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
+/// Reads the review snapshot of an assistant reply and reconciles its suggestions. The argument is
+/// `{ conversationId, content }`. A reply without a usable snapshot is a reply with a warning, not an error.
+#[tauri::command]
+pub async fn suggestions_create(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<SuggestionCreation, CommandError> {
+    let request: ReplyRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::suggestions_create(&guard, &default_blocked_roots(), &request)
     })
     .await
 }

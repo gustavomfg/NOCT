@@ -531,6 +531,74 @@ fn brain_extract_is_granted_and_checks_its_request() {
     }
 }
 
+/// The suggestions command is granted to the main window. It reads a review snapshot and reconciles it; a conversation
+/// that does not exist and a request outside the contract are refused with their codes.
+#[test]
+fn suggestions_create_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("suggestions-create-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+
+    let reply = "Revisão.\n```nocturne-suggestions\n[{\"title\":\"Pin the toolchain\",\"description\":\"d\",\"reasoning\":\"r\",\"category\":\"dependency\",\"severity\":\"low\"}]\n```";
+    let creation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "suggestions_create",
+            json!({ "input": { "conversationId": conversation_id.clone(), "content": reply } }),
+        ),
+    ));
+    assert_eq!(creation["suggestions"][0]["title"], "Pin the toolchain");
+    assert_eq!(creation["suggestions"][0]["status"], "new");
+    assert_eq!(
+        creation["comparison"]["newSuggestions"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+    assert!(creation.get("warning").is_none());
+
+    let unknown = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "suggestions_create",
+            json!({ "input": { "conversationId": "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", "content": "x" } }),
+        ),
+    ));
+    assert_eq!(unknown["code"], "unknown-conversation");
+
+    for input in [
+        json!({ "input": { "conversationId": conversation_id.clone(), "content": null } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "content": "x", "mode": "review" } }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "suggestions_create", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");
