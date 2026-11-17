@@ -270,7 +270,7 @@ O launcher é `scripts/run-rust-shell.mjs`. As opções são `--data-dir <caminh
 | `trunk build --release` em `crates/noct-ui` | Passou |
 | `cargo build -p noct-app --release --features custom-protocol` | Passou. O binário embute o arquivo wasm. |
 | `node scripts/check-shell-csp.mjs` | Passou |
-| `node scripts/check-shell-ui.mjs` | 14 de 14 cenários passaram |
+| `node scripts/check-shell-ui.mjs` | 17 de 17 cenários passaram |
 | `node scripts/generate-log-redaction-fixture.mjs --check` | Passou |
 | `node scripts/generate-ipc-samples.mjs --check` | Passou |
 | `cargo deny check` | Passou (advisories, bans, licenses, sources) |

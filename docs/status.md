@@ -19,7 +19,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (`ecebef1`), `workspace_remove` (`44f2fbf`), `brain_delete` (`1028507`), `artifacts_delete` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec`, `e9064c4`, `ecebef1`, `44f2fbf` and `1028507`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, deletes a conversation, removes a project, deletes a memory, or deletes an artifact. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). Each delete has its own failed-write test: a refused `workspaces`, `brain_memories` or `artifacts` delete leaves the row in place. |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
-| P7: UI slices | not started in round 1 | | | |
+| P7: UI slices | `Construir` and `Documentar` not yet available (this change; the rest of P7 follows) | | | |
 | P8: updater | stopped in round 1 | | | |
 | P9: release dry run | stopped in round 1 | | | |
 | P10: documents | `85f4cb4`, `5748b33`, `f1f5b5f`, `4a62c3c` | `4a62c3c` | Shell and row gate on `4a62c3c`: success on Ubuntu, Windows and macOS; row gate success. | The phase table is not revised beyond ADR decision 4, the counts and the command list. |
@@ -309,6 +309,25 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   the listing after the delete), `crates/noct-db/tests/store.rs` (a refused delete leaves the conversation in place).
 - Tests after this change: 566 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with
   `-D warnings` and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P7 detail: Construir and Documentar not yet available
+
+- Construir and Documentar no longer show the example command, the example diff, or the approval, revert and confirmation
+  controls. Each shows its heading, its description, and the note `Ainda não disponível nesta versão. Nada é executado nem
+  gravado nesta tela.` (`data-testid="unavailable"`).
+- Why: the approval, revert and confirmation buttons changed local state only. A control that looks approvable and runs
+  nothing misleads the person about what happened, so it is removed rather than labelled.
+- Removed with them: `EXAMPLE_COMMAND`, `EXAMPLE_BUILD_FILE`, `EXAMPLE_BUILD_DIFF`, `EXAMPLE_DOC_FILE`, `EXAMPLE_DOC_DIFF`, the
+  diff types and their two line renderers. The findings, the model and the vault stay as EXAMPLE data, unchanged.
+- Scenarios: 17 (16 before). The new `build-and-document-not-yet-available` checks each mode's heading and note, that it
+  offers no Aprovar, Negar, Reverter or Confirmar alteração control, and that no `.diff`, `.prose` or `.cmd` element is shown.
+  The `full` scenario no longer clicks Aprovar or Confirmar alteração.
+- A mutation check: a hidden Aprovar button put back into the unavailable panel makes the new scenario fail on both modes.
+  The source was restored, and the Trunk build was run again.
+- Checks: `trunk build --release` in `crates/noct-ui` passed; `node scripts/check-shell-ui.mjs` 17 of 17; clippy with
+  `-D warnings` for `wasm32-unknown-unknown` passed; the workspace has fmt, clippy `-D warnings`, and 578 tests passed, 0
+  failed, 19 ignored.
+- Not verified: a real window. Chromium is an approximation of the webview.
 
 ### P4 detail: `artifacts_delete`
 

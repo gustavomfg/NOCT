@@ -1,17 +1,14 @@
 //! The window: the sidebar, the three modes, the settings (Ajustes) and the fixed question box, laid out as in
 //! docs/New_Design/mockup-vidro-painel.html. The sidebar's projects come from `workspaces_list`
-//! (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The findings, the diffs, the model and
-//! the vault are EXAMPLE data (`examples.rs`). No control in this window runs a command or writes a file: the
-//! approval, the revert and the confirmation are shown, not carried out.
+//! (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The findings, the model and the vault
+//! are EXAMPLE data (`examples.rs`). The build and document modes are not available yet: they say so and offer no
+//! control for the work, so nothing in this window runs a command or writes a file.
 
 use leptos::prelude::*;
 use noct_core::contracts::Workspace;
 
 use crate::dom;
-use crate::examples::{
-    DiffKind, DiffLine, EXAMPLE_BUILD_DIFF, EXAMPLE_BUILD_FILE, EXAMPLE_COMMAND, EXAMPLE_DOC_DIFF,
-    EXAMPLE_DOC_FILE, EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_VAULT,
-};
+use crate::examples::{EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_VAULT};
 use crate::ipc;
 use crate::settings::{self, SettingsView};
 use crate::theme::Theme;
@@ -37,7 +34,6 @@ pub fn App() -> impl IntoView {
 
     let (mode, set_mode) = signal(Mode::Review);
     let (settings_open, set_settings_open) = signal(false);
-    let (approved, set_approved) = signal(false);
     let (asked, set_asked) = signal(false);
 
     let (settings_view, set_settings_view) = signal(SettingsView::Loading);
@@ -189,10 +185,16 @@ pub fn App() -> impl IntoView {
                             } else {
                                 match mode.get() {
                                     Mode::Review => review_panel().into_any(),
-                                    Mode::Build => {
-                                        build_panel(approved, set_approved).into_any()
-                                    }
-                                    Mode::Docs => docs_panel().into_any(),
+                                    Mode::Build => unavailable_panel(
+                                        "Construir",
+                                        "Cada comando espera a sua aprovação. Toda alteração pode ser revertida.",
+                                    )
+                                    .into_any(),
+                                    Mode::Docs => unavailable_panel(
+                                        "Documentar",
+                                        "Atualizações incrementais em Markdown, só depois da sua confirmação.",
+                                    )
+                                    .into_any(),
                                 }
                             }
                         }}
@@ -320,70 +322,24 @@ fn review_panel() -> impl IntoView {
     }
 }
 
-/// The build mode: a command waiting for approval, then a diff with a revert. EXAMPLE, nothing is run.
-fn build_panel(approved: ReadSignal<bool>, set_approved: WriteSignal<bool>) -> impl IntoView {
+/// A mode the shell does not run yet. It says so, and offers no control for the work, so that nothing in it can be
+/// approved, reverted or confirmed.
+fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView {
     view! {
-        <div class="stack">
-            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
+        <div class="stack" data-testid="unavailable">
             <div>
-                <h1 class="h1">"Construir"</h1>
-                <p class="lead">"Cada comando espera a sua aprovação. Toda alteração pode ser revertida."</p>
+                <h1 class="h1">{heading}</h1>
+                <p class="lead">{lead}</p>
             </div>
             <section class="card">
-                <div class="eyebrow" hidden=move || approved.get()>"AGUARDANDO APROVAÇÃO"</div>
-                <code class="cmd">{EXAMPLE_COMMAND}</code>
-                <div class="actions" hidden=move || approved.get()>
-                    <button type="button" class="btn">"Negar"</button>
-                    <button
-                        type="button"
-                        class="btn btn--primary"
-                        on:click=move |_| set_approved.set(true)
-                    >
-                        "Aprovar"
-                    </button>
-                </div>
-                <p class="lead" hidden=move || !approved.get()>
-                    "Aprovado. Esta é uma tela de exemplo: nenhum comando foi executado."
+                <p class="body" role="status">
+                    "Ainda não disponível nesta versão. Nada é executado nem gravado nesta tela."
                 </p>
             </section>
-            <section class="card card--flush">
-                <div class="card__head">
-                    <code class="path">{EXAMPLE_BUILD_FILE}</code>
-                    <button type="button" class="btn btn--ghost">"Reverter"</button>
-                </div>
-                <div class="diff">{EXAMPLE_BUILD_DIFF.iter().map(diff_line).collect_view()}</div>
-            </section>
         </div>
     }
 }
 
-/// The document mode: a prose diff, kept only after the person confirms it. EXAMPLE, nothing is written.
-fn docs_panel() -> impl IntoView {
-    view! {
-        <div class="stack">
-            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
-            <div>
-                <h1 class="h1">"Documentar"</h1>
-                <p class="lead">"Atualizações incrementais em Markdown, só depois da sua confirmação."</p>
-            </div>
-            <section class="card card--flush">
-                <div class="card__head">
-                    <code class="path">{EXAMPLE_DOC_FILE}</code>
-                </div>
-                <div class="prose">
-                    {EXAMPLE_DOC_DIFF.iter().map(prose_line).collect_view()}
-                </div>
-                <div class="card__foot">
-                    <button type="button" class="btn">"Descartar"</button>
-                    <button type="button" class="btn btn--primary">"Confirmar alteração"</button>
-                </div>
-            </section>
-        </div>
-    }
-}
-
-/// The settings (Ajustes) in the same layout: the saved values as the shell returns them, with the states of
-/// the read and the way to try again.
 fn settings_panel(
     settings_view: ReadSignal<SettingsView>,
     retry: impl Fn() + Copy + Send + Sync + 'static,
@@ -429,34 +385,6 @@ fn settings_panel(
                 "O botão de tema da barra lateral muda só esta sessão. A linha Tema mostra a preferência salva."
             </p>
         </div>
-    }
-}
-
-fn diff_line(line: &DiffLine) -> impl IntoView {
-    let (class, sign, spoken) = match line.kind {
-        DiffKind::Added => ("diff__line diff__line--add", "+", "Adicionada: "),
-        DiffKind::Removed => ("diff__line diff__line--del", "−", "Removida: "),
-    };
-    view! {
-        <div class=class>
-            <span aria-hidden="true">{sign}</span>
-            <span class="sr-only">{spoken}</span>
-            <span>{line.text}</span>
-        </div>
-    }
-}
-
-fn prose_line(line: &DiffLine) -> impl IntoView {
-    let (class, sign, spoken) = match line.kind {
-        DiffKind::Added => ("prose-add", "+", "Adicionada: "),
-        DiffKind::Removed => ("prose-del", "−", "Removida: "),
-    };
-    view! {
-        <p class=class>
-            <span aria-hidden="true">{sign}</span>
-            <span class="sr-only">{spoken}</span>
-            {line.text}
-        </p>
     }
 }
 

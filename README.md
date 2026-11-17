@@ -265,7 +265,7 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 | `trunk build --release` in `crates/noct-ui` | Passed |
 | `cargo build -p noct-app --release --features custom-protocol` | Passed. The binary embeds the wasm file. |
 | `node scripts/check-shell-csp.mjs` | Passed |
-| `node scripts/check-shell-ui.mjs` | 14 of 14 scenarios passed |
+| `node scripts/check-shell-ui.mjs` | 17 of 17 scenarios passed |
 | `node scripts/generate-log-redaction-fixture.mjs --check` | Passed |
 | `node scripts/generate-ipc-samples.mjs --check` | Passed |
 | `cargo deny check` | Passed (advisories, bans, licenses, sources) |

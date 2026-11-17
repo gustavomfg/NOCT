@@ -12,7 +12,8 @@
 // the projects the shell returns, in order, with the note of each one that cannot be used as it is, and shows its
 // own loading, empty, error and retry states; a reply outside the contract is an error, not a default or a
 // shorter list; a page outside the shell says so; the theme follows the saved setting or the system, and the
-// sidebar button changes it for the session; the modes and Ajustes keep their state (aria-pressed, aria-current);
+// sidebar button changes it for the session; the modes and Ajustes keep their state (aria-pressed, aria-current); Construir and Documentar say they are not
+// available yet and offer no approval, revert or confirmation control;
 // the question box keeps its label and reports that it does not answer yet; the layout fits the window's minimum
 // size (read from crates/noct-app/src/window.rs) and 1440x920 without horizontal scroll, with the modes and the
 // project names inside their panes; a card keeps its box under the pointer; the focus is visible; the glass layer
@@ -130,6 +131,7 @@ function shownFor(savedTheme) {
 const SCENARIOS = [
   { name: 'ready-light', mode: 'ready', theme: 'light', full: true, expectTheme: 'light' },
   { name: 'ready-dark', mode: 'ready', theme: 'dark', full: true, expectTheme: 'dark' },
+  { name: 'build-and-document-not-yet-available', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
   { name: 'ready-without-a-saved-theme-follows-the-system', mode: 'ready', theme: undefined, scheme: 'dark', expectTheme: 'dark' },
   { name: 'slow-then-ready', mode: 'slow', theme: 'light', expectTheme: 'light' },
   { name: 'error-then-retry', mode: 'error-then-retry', theme: 'light', expectTheme: 'light' },
@@ -367,6 +369,23 @@ try {
       check((await html.getAttribute('data-theme')) === scenario.expectTheme, `the theme is ${scenario.expectTheme}`)
       check((await html.getAttribute('data-glass')) === 'on', 'the glass layer is on by default')
 
+      // Construir and Documentar are not available yet: each says so, and offers no control for the work.
+      if (scenario.unavailableModes) {
+        for (const name of ['Construir', 'Documentar']) {
+          await page.getByRole('button', { name, exact: true }).click()
+          check(await page.getByRole('heading', { name, level: 1 }).isVisible(), `${name} shows its heading`)
+          check(await page.getByTestId('unavailable').count() === 1, `${name} says it is not available yet`)
+          check(
+            (await page.getByTestId('unavailable').textContent())?.includes('Ainda não disponível nesta versão'),
+            `${name} gives the note`,
+          )
+          for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
+            check(await page.getByRole('button', { name: control, exact: true }).count() === 0, `${name} offers no ${control} control`)
+          }
+          check(await page.locator('.diff, .prose, .cmd').count() === 0, `${name} shows no example diff or command`)
+        }
+      }
+
       // The full scenario reloads the page, which clears the recorded calls; the saves made before the reload are kept here.
       let savesBeforeReload = []
       if (scenario.saveFails) {
@@ -392,11 +411,9 @@ try {
         const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check((await pressed('Construir')) === 'true' && (await pressed('Revisar')) === 'false', 'Construir is the pressed mode')
-        check(await page.getByText('AGUARDANDO APROVAÇÃO').isVisible(), 'the build mode shows the approval card')
-        await page.getByRole('button', { name: 'Aprovar', exact: true }).click()
-        check(await page.getByText('Aprovado. Esta é uma tela de exemplo').isVisible(), 'approving shows the example result')
+        check(await page.getByTestId('unavailable').isVisible(), 'the build mode says it is not available yet')
         await page.getByRole('button', { name: 'Documentar', exact: true }).click()
-        check(await page.getByRole('button', { name: 'Confirmar alteração' }).isVisible(), 'the document mode shows its confirmation')
+        check(await page.getByRole('heading', { name: 'Documentar', level: 1 }).isVisible(), 'the document mode is shown')
         await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
         check((await page.getByRole('button', { name: 'Ajustes', exact: true }).getAttribute('aria-current')) === 'page', 'Ajustes is the current page while open')
         check((await pressed('Documentar')) === 'false', 'no mode is pressed while Ajustes is open')
