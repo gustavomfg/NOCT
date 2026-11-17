@@ -9,6 +9,7 @@ pub const BRAIN_CREATE: &str = "brain_create";
 pub const BRAIN_EXTRACT: &str = "brain_extract";
 pub const BRAIN_UPDATE: &str = "brain_update";
 pub const SUGGESTIONS_CREATE: &str = "suggestions_create";
+pub const SUGGESTIONS_STATUS: &str = "suggestions_status";
 pub const CONVERSATIONS_CREATE: &str = "conversations_create";
 pub const CONVERSATIONS_LIST: &str = "conversations_list";
 pub const WORKSPACE_SET_FAVORITE: &str = "workspace_set_favorite";
@@ -21,6 +22,7 @@ pub const ALL: &[&str] = &[
     BRAIN_EXTRACT,
     BRAIN_UPDATE,
     SUGGESTIONS_CREATE,
+    SUGGESTIONS_STATUS,
     CONVERSATIONS_CREATE,
     CONVERSATIONS_LIST,
     WORKSPACE_SET_FAVORITE,

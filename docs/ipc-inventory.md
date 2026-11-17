@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 10 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 11 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 7 |
-| P4 | 8 |
+| P4 (ported) | 8 |
+| P4 | 7 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,7 +62,7 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `suggestions.status`, `models.setBindings`, `ai.saveAssistant`,
+3. **P4, database writes.** Still to port: `models.setBindings`, `ai.saveAssistant`,
    `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,
    `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
@@ -157,7 +157,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `suggestions:list` | `window.nocturne.suggestions.list` | `list(conversationId: string): Promise<Suggestion[]>` | zod: idSchema | `electron/ipc/registerSuggestionIpc.ts:25` | read | P3 |  |
 | `suggestions:page` | `window.nocturne.suggestions.page` | `page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Suggestion>>` | zod: conversationPageSchema | `electron/ipc/registerSuggestionIpc.ts:28` | read | P3 |  |
 | `suggestions:create` | `window.nocturne.suggestions.create` | `create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string; comparison?: ReviewComparison; warning?: string }>` | zod: suggestionExtractSchema | `electron/ipc/registerSuggestionIpc.ts:32` | database write | P4 (ported) | Rust command `suggestions_create`: the reply is read by `extract_suggestions`, which follows `extractSuggestions` and `suggestionInputSchema`, with the same marker rules, the same strict items and the same two warnings. A structured reply is reconciled with the history of its conversation (`reconcile`, with the renderer-provided content unable to resolve missing suggestions), and the comparison text is appended to the reply. A reply without a usable snapshot stores nothing. The request is the shared `ReplyRequest` of `brain_extract`. Not ported: the log line of the TypeScript shell. |
-| `suggestions:status` | `window.nocturne.suggestions.status` | `status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion>` | zod: suggestionStatusSchema | `electron/ipc/registerSuggestionIpc.ts:65` | database write | P4 | Changes a suggestion status. |
+| `suggestions:status` | `window.nocturne.suggestions.status` | `status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion>` | zod: suggestionStatusSchema | `electron/ipc/registerSuggestionIpc.ts:65` | database write | P4 (ported) | Rust command `suggestions_status`: the conversation and its project are checked as in `suggestions_create`, then the suggestion must belong to the conversation (`unknown-suggestion` otherwise), then the move must be one the lifecycle allows, with the table of `SuggestionRepository.setStatus`. The result is at most 20,000 units and is kept in the decision history. Not ported: the `.nocturne` decision log that the TypeScript shell writes after a move, and its warning. |
 | `data:export` | `window.nocturne.data.export` | `export(): Promise<string \| null>` | none (no input) | `electron/ipc/registerDataIpc.ts:17` | filesystem write | later | Writes a full backup to a file the user picks. It holds user data. |
 | `data:import` | `window.nocturne.data.import` | `import(): Promise<boolean>` | none (no input) | `electron/ipc/registerDataIpc.ts:33` | database write | later | Reads a backup file and replaces data. Sensitive; it needs its own review. |
 | `diagnostics:openLogs` | `window.nocturne.diagnostics.openLogs` | `openLogs(): Promise<string>` | none (no input) | `electron/ipc/registerDiagnosticsIpc.ts:44` | process/shell | later | Opens the log file with the operating system. |

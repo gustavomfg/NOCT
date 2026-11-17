@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d` and `9ebcbc9`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, or reads a reply or its suggestions. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in five tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9` and `e383ec2`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, or moves a suggestion. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in six tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review, and on a status change). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -199,6 +199,40 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   one of them a second review that keeps the same finding as persistent), `crates/noct-app/tests/commands_acl.rs` (one
   test), `crates/noct-db/tests/store.rs` (a refused decision entry rolls back the suggestion written by the same call).
 - Tests after this change: 533 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
+  and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `suggestions_status`
+
+- The request is `{ conversationId, suggestionId, status, result? }`. `status` is one of the seven values of
+  `suggestionStatuses`, spelled as in TypeScript (`in-analysis`). `result` is at most 20,000 UTF-16 units
+  (`SUGGESTION_RESULT_CHARACTERS`), kept as it is, and `null` is refused. An unknown field is refused.
+- The checks run in the order of `suggestionStatusSchema` and the TypeScript handler: the conversation must exist
+  (`unknown-conversation`), its project must be saved, authorized and available (`unknown-workspace`), the suggestion must
+  belong to the conversation (`unknown-suggestion`, with the TypeScript message), and the move must be allowed
+  (`invalid-suggestion-transition`).
+- The transition table is `allowed_suggestion_transition` in `noct-core`, moved from the store so the service checks it
+  before it writes. It was checked pair by pair against the table of `SuggestionRepository.setStatus`
+  (`crates/noct-core/tests/suggestion_transitions.rs`). Setting the status a suggestion already has changes nothing and
+  writes no decision, as in TypeScript.
+- The store writes the status, the result and the decision entry in one transaction, as the TypeScript repository does.
+  The returned suggestion carries the new status and the decision in its history; the result is in that history entry,
+  not in a top-level field, as in the TypeScript `Suggestion`.
+- Codes and messages: the messages of the two new refusals are the TypeScript ones (`Sugestão não pertence a esta conversa.`
+  and `Transição de sugestão inválida.`). The transition message does not name the two statuses, as the memory one does
+  not. The `invalid-suggestion-transition` code is new; the TypeScript shell throws a plain error.
+- Not ported: the `.nocturne` decision log. The TypeScript handler writes the decision into the project's `.nocturne`
+  folder after the store update, and logs a warning when that write fails. The Rust command does not write there yet, the
+  same gap as `conversations_create` for the project context. The interface needs this decided before users rely on the
+  history file. Recorded as an open item.
+- Known difference, not covered by a test: the same lone-surrogate difference as `brain_extract` for the request.
+- Checks: `crates/noct-core/tests/suggestion_transitions.rs` (two tests: all 49 pairs against the table, and the final
+  states), `crates/noct-core/tests/ipc_suggestion_status.rs` (six tests: the spelling, the list, the null and unknown and
+  missing fields, the 20,000-unit edge with astral characters, the uuids), `crates/noct-app/tests/services.rs` (two
+  tests: a full lifecycle with a decision count per move, and the order of the checks), `crates/noct-app/tests/commands_acl.rs`
+  (one test), `crates/noct-db/tests/store.rs` (a refused decision entry leaves the status and the result unchanged).
+- A mutation check: with the service's transition check disabled, the lifecycle test fails at the refusal, so the test
+  depends on the check. The file was restored and checked after the run.
+- Tests after this change: 545 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
   and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P5 detail (first cut)

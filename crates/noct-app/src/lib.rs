@@ -28,6 +28,7 @@ pub fn command_handler<R: Runtime>()
         commands::brain_extract,
         commands::brain_update,
         commands::suggestions_create,
+        commands::suggestions_status,
         commands::conversations_create,
         commands::conversations_list,
         commands::workspace_set_favorite,

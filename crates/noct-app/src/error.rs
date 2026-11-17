@@ -21,6 +21,11 @@ pub enum CommandError {
     /// The request moves a memory to a status its lifecycle does not allow. The TypeScript message also names the two
     /// statuses; this one does not, so the interface shows the same refusal without them.
     InvalidTransition,
+    /// The request names a suggestion that does not belong to the conversation. The message is the TypeScript one.
+    UnknownSuggestion,
+    /// The request moves a suggestion to a status its lifecycle does not allow. Unlike the memory message, this one
+    /// names the area, as the TypeScript message does, but not the two statuses.
+    InvalidSuggestionTransition,
 }
 
 impl CommandError {
@@ -33,6 +38,8 @@ impl CommandError {
             Self::UnknownConversation => "unknown-conversation",
             Self::UnknownMemory => "unknown-memory",
             Self::InvalidTransition => "invalid-transition",
+            Self::UnknownSuggestion => "unknown-suggestion",
+            Self::InvalidSuggestionTransition => "invalid-suggestion-transition",
         }
     }
 
@@ -45,6 +52,8 @@ impl CommandError {
             Self::UnknownConversation => "Conversa não encontrada.",
             Self::UnknownMemory => "Memória não encontrada.",
             Self::InvalidTransition => "Transição de memória inválida.",
+            Self::UnknownSuggestion => "Sugestão não pertence a esta conversa.",
+            Self::InvalidSuggestionTransition => "Transição de sugestão inválida.",
         }
     }
 }

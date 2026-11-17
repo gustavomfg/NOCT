@@ -103,7 +103,7 @@ const CLASS = {
   'suggestions.list': ['read', 'P3', ''],
   'suggestions.page': ['read', 'P3', ''],
   'suggestions.create': ['database write', 'P4 (ported)', 'Rust command `suggestions_create`: the reply is read by `extract_suggestions`, which follows `extractSuggestions` and `suggestionInputSchema`, with the same marker rules, the same strict items and the same two warnings. A structured reply is reconciled with the history of its conversation (`reconcile`, with the renderer-provided content unable to resolve missing suggestions), and the comparison text is appended to the reply. A reply without a usable snapshot stores nothing. The request is the shared `ReplyRequest` of `brain_extract`. Not ported: the log line of the TypeScript shell.'],
-  'suggestions.status': ['database write', 'P4', 'Changes a suggestion status.'],
+  'suggestions.status': ['database write', 'P4 (ported)', 'Rust command `suggestions_status`: the conversation and its project are checked as in `suggestions_create`, then the suggestion must belong to the conversation (`unknown-suggestion` otherwise), then the move must be one the lifecycle allows, with the table of `SuggestionRepository.setStatus`. The result is at most 20,000 units and is kept in the decision history. Not ported: the `.nocturne` decision log that the TypeScript shell writes after a move, and its warning.'],
   'data.export': ['filesystem write', 'later', 'Writes a full backup to a file the user picks. It holds user data.'],
   'data.import': ['database write', 'later', 'Reads a backup file and replaces data. Sensitive; it needs its own review.'],
   'diagnostics.openLogs': ['process/shell', 'later', 'Opens the log file with the operating system.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,7 +327,7 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `suggestions.status`, `models.setBindings`, `ai.saveAssistant`,')
+out.push('3. **P4, database writes.** Still to port: `models.setBindings`, `ai.saveAssistant`,')
 out.push('   `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,')
 out.push('   `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')

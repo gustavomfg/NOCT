@@ -12,6 +12,7 @@
     "allow-brain-extract",
     "allow-brain-update",
     "allow-suggestions-create",
+    "allow-suggestions-status",
     "allow-conversations-create",
     "allow-conversations-list",
     "allow-workspace-set-favorite"

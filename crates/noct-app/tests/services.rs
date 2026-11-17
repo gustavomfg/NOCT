@@ -15,8 +15,9 @@ use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
-use noct_core::ipc::suggestions::SuggestionCreation;
+use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
 use noct_core::ipc::workspaces::{WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePageRequest};
+use noct_core::suggestions::SuggestionStatus;
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
 const NOT_A_FOLDER: &str = "O caminho do workspace não é uma pasta.";
@@ -1123,4 +1124,157 @@ fn suggestions_create_names_a_conversation_that_does_not_exist() {
         },
     );
     assert!(matches!(refused, Err(CommandError::UnknownConversation)));
+}
+
+fn review_of_one(conversation: &str) -> ReplyRequest {
+    ReplyRequest {
+        conversation_id: conversation.to_string(),
+        content: "Revisão.\n```nocturne-suggestions\n[{\"title\":\"Pin the toolchain\",\"description\":\"d\",\"reasoning\":\"r\",\"category\":\"dependency\",\"severity\":\"low\"}]\n```".to_string(),
+    }
+}
+
+#[test]
+fn a_suggestion_moves_through_its_lifecycle_and_each_move_is_one_decision() {
+    let scratch = Scratch::new("suggestion-status");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let created = services::suggestions_create(&store, &[], &review_of_one(&conversation.id))
+        .expect("the review is read");
+    let suggestion = created.suggestions[0].id.clone();
+    let decisions = || -> i64 {
+        store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM suggestion_decisions WHERE suggestion_id=?1",
+                [&suggestion],
+                |row| row.get(0),
+            )
+            .expect("the count is read")
+    };
+    let before = decisions();
+    let move_to = |to: SuggestionStatus, result: Option<&str>| SuggestionStatusRequest {
+        conversation_id: conversation.id.clone(),
+        suggestion_id: suggestion.clone(),
+        status: to,
+        result: result.map(str::to_string),
+    };
+
+    let analysing =
+        services::suggestions_status(&store, &[], &move_to(SuggestionStatus::InAnalysis, None))
+            .expect("moves to analysis");
+    assert_eq!(analysing.status, SuggestionStatus::InAnalysis);
+    let accepted = services::suggestions_status(
+        &store,
+        &[],
+        &move_to(SuggestionStatus::Accepted, Some("Entra na próxima versão")),
+    )
+    .expect("accepted");
+    assert!(
+        accepted
+            .history
+            .iter()
+            .any(|entry| entry.status == SuggestionStatus::Accepted
+                && entry.result.as_deref() == Some("Entra na próxima versão")),
+        "the decision keeps its result in the history"
+    );
+
+    services::suggestions_status(&store, &[], &move_to(SuggestionStatus::Accepted, None))
+        .expect("the same status is accepted and changes nothing");
+    assert_eq!(
+        decisions(),
+        before + 2,
+        "the same status writes no decision"
+    );
+
+    let refused = services::suggestions_status(&store, &[], &move_to(SuggestionStatus::New, None));
+    assert!(matches!(
+        refused,
+        Err(CommandError::InvalidSuggestionTransition)
+    ));
+    services::suggestions_status(&store, &[], &move_to(SuggestionStatus::Resolved, None))
+        .expect("resolved");
+    let closed =
+        services::suggestions_status(&store, &[], &move_to(SuggestionStatus::Accepted, None));
+    assert!(
+        matches!(closed, Err(CommandError::InvalidSuggestionTransition)),
+        "a resolved suggestion is final"
+    );
+    assert_eq!(decisions(), before + 3, "the refused moves wrote nothing");
+}
+
+#[test]
+fn a_status_move_checks_the_conversation_then_the_suggestion_then_the_transition() {
+    let scratch = Scratch::new("suggestion-status-checks");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let first = services::conversation_create(&store, &[], &path).expect("created");
+    let second = services::conversation_create(&store, &[], &path).expect("created");
+    let created = services::suggestions_create(&store, &[], &review_of_one(&first.id))
+        .expect("the review is read");
+    let suggestion = created.suggestions[0].id.clone();
+    let move_in = |conversation: &str, to: SuggestionStatus| SuggestionStatusRequest {
+        conversation_id: conversation.to_string(),
+        suggestion_id: suggestion.clone(),
+        status: to,
+        result: None,
+    };
+
+    let unknown_conversation = services::suggestions_status(
+        &store,
+        &[],
+        &move_in(
+            "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d",
+            SuggestionStatus::Accepted,
+        ),
+    );
+    assert!(matches!(
+        unknown_conversation,
+        Err(CommandError::UnknownConversation)
+    ));
+
+    let elsewhere = services::suggestions_status(
+        &store,
+        &[],
+        &move_in(&second.id, SuggestionStatus::Accepted),
+    );
+    assert!(
+        matches!(elsewhere, Err(CommandError::UnknownSuggestion)),
+        "a suggestion of another conversation is not found there"
+    );
+
+    let blocked = vec![project.clone()];
+    let refused_project = services::suggestions_status(
+        &store,
+        &blocked,
+        &move_in(&first.id, SuggestionStatus::Accepted),
+    );
+    assert!(matches!(
+        refused_project,
+        Err(CommandError::UnknownWorkspace)
+    ));
+
+    let status: String = store
+        .connection()
+        .query_row(
+            "SELECT status FROM suggestions WHERE id=?1",
+            [&suggestion],
+            |row| row.get(0),
+        )
+        .expect("the status is read");
+    assert_eq!(status, "new", "no refused move changed the suggestion");
 }

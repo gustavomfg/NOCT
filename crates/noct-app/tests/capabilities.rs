@@ -55,6 +55,7 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "brain_extract",
             "brain_update",
             "suggestions_create",
+            "suggestions_status",
             "conversations_create",
             "conversations_list",
             "workspace_set_favorite"

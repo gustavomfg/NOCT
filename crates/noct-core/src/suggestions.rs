@@ -277,6 +277,22 @@ fn general_category(c: char) -> GeneralCategory {
     CodePointMapData::<GeneralCategory>::new().get(c)
 }
 
+/// The transitions a suggestion may make, as `SuggestionRepository.setStatus` allows them. A rejected, resolved or
+/// invalid suggestion is final, and a deferred one may return to analysis.
+pub fn allowed_suggestion_transition(from: SuggestionStatus, to: SuggestionStatus) -> bool {
+    use SuggestionStatus::{Accepted, Deferred, InAnalysis, Invalid, New, Rejected, Resolved};
+    match from {
+        New => matches!(
+            to,
+            InAnalysis | Accepted | Rejected | Resolved | Deferred | Invalid
+        ),
+        InAnalysis => matches!(to, Accepted | Rejected | Resolved | Deferred | Invalid),
+        Accepted => matches!(to, Resolved | Rejected | Deferred | Invalid),
+        Deferred => matches!(to, InAnalysis | Accepted | Rejected | Resolved | Invalid),
+        Rejected | Resolved | Invalid => false,
+    }
+}
+
 /// Where the structured review snapshot of a reply stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuggestionSnapshot {

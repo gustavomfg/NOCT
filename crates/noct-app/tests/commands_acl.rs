@@ -599,6 +599,95 @@ fn suggestions_create_is_granted_and_checks_its_request() {
     }
 }
 
+/// The status command is granted to the main window. It moves a suggestion of a conversation; a status outside the list,
+/// a missing field and a conversation that does not exist are refused with their codes.
+#[test]
+fn suggestions_status_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("suggestions-status-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+    let reply = "Revisão.\n```nocturne-suggestions\n[{\"title\":\"Pin the toolchain\",\"description\":\"d\",\"reasoning\":\"r\",\"category\":\"dependency\",\"severity\":\"low\"}]\n```";
+    let creation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "suggestions_create",
+            json!({ "input": { "conversationId": conversation_id.clone(), "content": reply } }),
+        ),
+    ));
+    let suggestion_id = creation["suggestions"][0]["id"]
+        .as_str()
+        .expect("an id")
+        .to_string();
+
+    let moved = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "suggestions_status",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "suggestionId": suggestion_id.clone(),
+                "status": "in-analysis",
+                "result": "Em análise",
+            } }),
+        ),
+    ));
+    assert_eq!(moved["status"], "in-analysis");
+    assert!(
+        moved["history"]
+            .as_array()
+            .expect("the history is a list")
+            .iter()
+            .any(|entry| entry["status"] == "in-analysis" && entry["result"] == "Em análise"),
+        "the decision keeps its result in the history: {moved}"
+    );
+
+    let unknown = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "suggestions_status",
+            json!({ "input": {
+                "conversationId": "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d",
+                "suggestionId": suggestion_id.clone(),
+                "status": "accepted",
+            } }),
+        ),
+    ));
+    assert_eq!(unknown["code"], "unknown-conversation");
+
+    for input in [
+        json!({ "input": { "conversationId": conversation_id.clone(), "suggestionId": suggestion_id.clone(), "status": "done" } }),
+        json!({ "input": { "conversationId": conversation_id.clone(), "suggestionId": suggestion_id.clone() } }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "suggestions_status", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

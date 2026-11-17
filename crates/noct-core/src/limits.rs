@@ -23,6 +23,9 @@ pub mod persistence {
     /// The longest brain memory content, in UTF-16 units after trimming. `safeBrainMemoryContent` in
     /// `shared/ipc/schemas.ts` uses the same number.
     pub const BRAIN_MEMORY_CHARACTERS: u64 = 8_000;
+    /// The longest result of a suggestion decision, in UTF-16 units. `suggestionStatusSchema` in `shared/ipc/schemas.ts`
+    /// uses the same number.
+    pub const SUGGESTION_RESULT_CHARACTERS: u64 = 20_000;
 }
 
 /// Byte limits for files read from an authorized workspace.

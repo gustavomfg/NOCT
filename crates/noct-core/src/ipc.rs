@@ -552,7 +552,7 @@ pub mod brain {
         uuid_text(field, &text).map_err(E::custom)
     }
 
-    fn enum_field<T: de::DeserializeOwned, E: de::Error>(value: Value) -> Result<T, E> {
+    pub(super) fn enum_field<T: de::DeserializeOwned, E: de::Error>(value: Value) -> Result<T, E> {
         serde_json::from_value(value).map_err(E::custom)
     }
 
@@ -659,9 +659,69 @@ pub mod brain {
 
 /// The reply of the suggestion commands.
 pub mod suggestions {
-    use serde::{Deserialize, Serialize};
+    use serde::de;
+    use serde::{Deserialize, Deserializer, Serialize};
+    use serde_json::{Map, Value};
 
-    use crate::suggestions::{ReviewComparison, Suggestion};
+    use super::brain::{enum_field, uuid_field};
+    use crate::limits::persistence::SUGGESTION_RESULT_CHARACTERS;
+    use crate::suggestions::{ReviewComparison, Suggestion, SuggestionStatus};
+    use crate::text::utf16_len;
+
+    /// The request of `suggestions_status`: the new status of a suggestion of a conversation, and an optional result.
+    /// The result is at most `SUGGESTION_RESULT_CHARACTERS` UTF-16 units, as `suggestionStatusSchema` allows, and it is
+    /// kept as it is. An unknown field is refused.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct SuggestionStatusRequest {
+        pub conversation_id: String,
+        pub suggestion_id: String,
+        pub status: SuggestionStatus,
+        pub result: Option<String>,
+    }
+
+    const STATUS_FIELDS: &[&str] = &["conversationId", "suggestionId", "status", "result"];
+
+    impl<'de> Deserialize<'de> for SuggestionStatusRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut suggestion_id = None;
+            let mut status = None;
+            let mut result = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "suggestionId" => {
+                        suggestion_id = Some(uuid_field::<D::Error>("suggestionId", value)?)
+                    }
+                    "status" => status = Some(enum_field::<SuggestionStatus, D::Error>(value)?),
+                    "result" => {
+                        let Value::String(text) = value else {
+                            return Err(de::Error::custom("result must be a string"));
+                        };
+                        if utf16_len(&text) as u64 > SUGGESTION_RESULT_CHARACTERS {
+                            return Err(de::Error::custom("result is too long"));
+                        }
+                        result = Some(text);
+                    }
+                    _ => return Err(de::Error::unknown_field(&key, STATUS_FIELDS)),
+                }
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                suggestion_id: suggestion_id
+                    .ok_or_else(|| de::Error::missing_field("suggestionId"))?,
+                status: status.ok_or_else(|| de::Error::missing_field("status"))?,
+                result,
+            })
+        }
+    }
 
     /// The reply of `suggestions_create`. A reply with a review snapshot carries the suggestions and the comparison with
     /// the previous review. A reply without a usable snapshot carries no suggestions and a warning, and keeps the earlier

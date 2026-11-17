@@ -17,11 +17,14 @@ use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
-use noct_core::ipc::suggestions::SuggestionCreation;
+use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
 use noct_core::ipc::workspaces::{
     WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest,
 };
-use noct_core::suggestions::{SuggestionSnapshot, extract_suggestions, review_comparison_markdown};
+use noct_core::suggestions::{
+    Suggestion, SuggestionSnapshot, allowed_suggestion_transition, extract_suggestions,
+    review_comparison_markdown,
+};
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::Store;
 
@@ -386,6 +389,40 @@ pub fn suggestions_create(
         content,
         warning: None,
     })
+}
+
+/// Moves a suggestion of a conversation to a new status. The conversation and its project are checked first, then the
+/// suggestion must belong to the conversation, then the move must be one the lifecycle allows. Setting the status it
+/// already has changes nothing, and the store writes the decision entry in the same transaction as the status.
+pub fn suggestions_status(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &SuggestionStatusRequest,
+) -> Result<Suggestion, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let current = store
+        .suggestions()
+        .get(&request.suggestion_id, Some(&request.conversation_id))
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownSuggestion)?;
+    if request.status != current.status
+        && !allowed_suggestion_transition(current.status, request.status)
+    {
+        return Err(CommandError::InvalidSuggestionTransition);
+    }
+    store
+        .suggestions()
+        .set_status(
+            &request.suggestion_id,
+            request.status,
+            request.result.as_deref(),
+        )
+        .map_err(|_| CommandError::Persistence)
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

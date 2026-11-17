@@ -472,22 +472,7 @@ fn a_failed_suggestion_decision_write_leaves_no_suggestion_behind() {
              BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
         )
         .expect("the trigger is installed");
-    let input = noct_core::suggestions::SuggestionInput {
-        title: "Missing tests".to_string(),
-        description: "d".to_string(),
-        reasoning: "r".to_string(),
-        category: noct_core::suggestions::SuggestionCategory::Testing,
-        severity: noct_core::suggestions::SuggestionSeverity::Medium,
-        affected_files: Vec::new(),
-        proposed_changes: String::new(),
-        expected_benefits: Vec::new(),
-        complexity: noct_core::suggestions::SuggestionLevel::Medium,
-        risk: noct_core::suggestions::SuggestionLevel::Medium,
-        evidence: None,
-        confidence: None,
-        source: None,
-        responsible: None,
-    };
+    let input = sample_suggestion();
 
     let error = store
         .suggestions()
@@ -506,4 +491,79 @@ fn a_failed_suggestion_decision_write_leaves_no_suggestion_behind() {
         stored, 0,
         "the suggestion written by the same call is rolled back"
     );
+}
+
+fn sample_suggestion() -> noct_core::suggestions::SuggestionInput {
+    noct_core::suggestions::SuggestionInput {
+        title: "Missing tests".to_string(),
+        description: "d".to_string(),
+        reasoning: "r".to_string(),
+        category: noct_core::suggestions::SuggestionCategory::Testing,
+        severity: noct_core::suggestions::SuggestionSeverity::Medium,
+        affected_files: Vec::new(),
+        proposed_changes: String::new(),
+        expected_benefits: Vec::new(),
+        complexity: noct_core::suggestions::SuggestionLevel::Medium,
+        risk: noct_core::suggestions::SuggestionLevel::Medium,
+        evidence: None,
+        confidence: None,
+        source: None,
+        responsible: None,
+    }
+}
+
+#[test]
+fn a_failed_decision_entry_on_a_status_change_leaves_the_status_unchanged() {
+    let directory = scratch("store-suggestion-status-rollback");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    store
+        .suggestions()
+        .reconcile(
+            &conversation.id,
+            "/work/project",
+            &[sample_suggestion()],
+            false,
+        )
+        .expect("the suggestion is stored");
+    let id: String = store
+        .connection()
+        .query_row("SELECT id FROM suggestions", [], |row| row.get(0))
+        .expect("the id is read");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_status_decisions BEFORE INSERT ON suggestion_decisions
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .suggestions()
+        .set_status(
+            &id,
+            noct_core::suggestions::SuggestionStatus::InAnalysis,
+            Some("kept"),
+        )
+        .expect_err("the refused decision entry is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let (status, result): (String, Option<String>) = store
+        .connection()
+        .query_row(
+            "SELECT status, result FROM suggestions WHERE id=?1",
+            [&id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("the row is read");
+    assert_eq!(
+        status, "new",
+        "the status update is rolled back with its decision"
+    );
+    assert_eq!(result, None);
 }

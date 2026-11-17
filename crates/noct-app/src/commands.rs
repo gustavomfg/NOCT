@@ -12,7 +12,7 @@ use noct_core::ipc::brain::{
 };
 use noct_core::ipc::conversations::{ConversationPage, ConversationPageRequest};
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
-use noct_core::ipc::suggestions::SuggestionCreation;
+use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
 use noct_db::store::Store;
 use tauri::State;
@@ -170,6 +170,24 @@ pub async fn suggestions_create(
     blocking(move || {
         let guard = lock(&store)?;
         services::suggestions_create(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
+/// Moves a suggestion to a new status, with an optional result. The argument is
+/// `{ conversationId, suggestionId, status, result? }`. The decision is recorded in the store; the `.nocturne` history
+/// of the TypeScript shell is not written yet.
+#[tauri::command]
+pub async fn suggestions_status(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<noct_core::suggestions::Suggestion, CommandError> {
+    let request: SuggestionStatusRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::suggestions_status(&guard, &default_blocked_roots(), &request)
     })
     .await
 }
