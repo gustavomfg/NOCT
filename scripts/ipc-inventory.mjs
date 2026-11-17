@@ -33,7 +33,7 @@ const CLASS = {
   'workspace.select': ['database write', 'later', 'Opens a native folder dialog and authorises the workspace. Authorisation stays in the main process, and restored workspaces remain unauthorised until reselected.'],
   'workspace.validate': ['filesystem read', 'P3', 'Checks a path and its scope. No authorisation.'],
   'workspace.list': ['read', 'P3 (ported)', 'Rust command `workspaces_list`, paged: a required limit (1 to 500) and an optional cursor, the key of the last project of the previous page. `hasMore` says whether more follow, and `nextCursor` is the key that asks for them. The order breaks ties by path, which the TypeScript list does not. First cut: the interface reads the first page only.'],
-  'workspace.remove': ['database write', 'P4', 'Removes a workspace record.'],
+  'workspace.remove': ['database write', 'P4 (ported)', 'Rust command `workspace_remove`: the argument is the project path, a non-empty string. It deletes the project record; the store removes what is tied to the path (model bindings, index, executions, checkpoints, memories, evidence). Conversations, messages and artifacts are not tied to the path and stay. Like the TypeScript shell, it checks neither that the project is saved nor that it is authorized. Nothing is removed from the folder.'],
   'workspace.favorite': ['database write', 'P4 (ported)', 'Rust command `workspace_set_favorite`: the project must be saved, and the request has the same fields and bounds as `workspaceFavoriteSchema`. No interface control yet.'],
   'workspace.openTool': ['process/shell', 'later', 'Starts an editor or a terminal in the workspace.'],
   'workspace.watch': ['filesystem read', 'later', 'Starts or stops a filesystem watcher on the workspace.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`workspace_remove\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,7 +327,7 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `workspace.remove`, `brain.delete`, `artifacts.delete`, the deletes,')
+out.push('3. **P4, database writes.** Still to port: `brain.delete`, `artifacts.delete`, the deletes,')
 out.push('   each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff')
 out.push('   and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')

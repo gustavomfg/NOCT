@@ -16,6 +16,7 @@
     "allow-models-set-bindings",
     "allow-ai-save-assistant",
     "allow-conversations-delete",
+    "allow-workspace-remove",
     "allow-conversations-create",
     "allow-conversations-list",
     "allow-workspace-set-favorite"

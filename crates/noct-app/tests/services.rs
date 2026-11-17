@@ -1599,3 +1599,108 @@ fn conversation_delete_refuses_a_malformed_id_a_missing_conversation_or_a_blocke
         "a refused delete removes nothing"
     );
 }
+
+#[test]
+fn workspace_remove_drops_what_is_tied_to_the_project_path_and_keeps_its_conversations() {
+    let scratch = Scratch::new("workspace-remove");
+    let first = scratch.path().join("first");
+    let second = scratch.path().join("second");
+    std::fs::create_dir(&first).expect("the folder is created");
+    std::fs::create_dir(&second).expect("the folder is created");
+    let first_path = first.to_string_lossy().into_owned();
+    let second_path = second.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store.workspaces().touch(&first_path).expect("saved");
+    store.workspaces().touch(&second_path).expect("saved");
+    let conversation = services::conversation_create(&store, &[], &first_path).expect("created");
+    services::ai_save_assistant(
+        &store,
+        &[],
+        &SaveAssistantRequest {
+            conversation_id: conversation.id.clone(),
+            content: "Pronto.".to_string(),
+            metadata: None,
+        },
+    )
+    .expect("the reply is saved");
+    for path in [&first_path, &second_path] {
+        services::models_set_bindings(
+            &store,
+            &[],
+            WorkspaceModelBindings {
+                workspace_id: path.clone(),
+                default_binding: Some(model("openai", "gpt-model")),
+                embedding_binding: None,
+                remote_embedding_allowed: None,
+            },
+        )
+        .expect("the bindings are stored");
+    }
+    let count = |sql: &str, value: &str| -> i64 {
+        store
+            .connection()
+            .query_row(sql, [value], |row| row.get(0))
+            .expect("the count is read")
+    };
+
+    services::workspace_remove(&store, &first_path).expect("the project is removed");
+
+    assert_eq!(
+        count("SELECT COUNT(*) FROM workspaces WHERE path=?1", &first_path),
+        0
+    );
+    assert_eq!(
+        count(
+            "SELECT COUNT(*) FROM workspace_model_bindings WHERE workspace_id=?1",
+            &first_path
+        ),
+        0,
+        "what is tied to the path is removed"
+    );
+    assert_eq!(
+        count(
+            "SELECT COUNT(*) FROM conversations WHERE id=?1",
+            &conversation.id
+        ),
+        1,
+        "the conversation is not tied to the path, so it stays, as in TypeScript"
+    );
+    assert_eq!(
+        count(
+            "SELECT COUNT(*) FROM messages WHERE conversation_id=?1",
+            &conversation.id
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            "SELECT COUNT(*) FROM workspaces WHERE path=?1",
+            &second_path
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            "SELECT COUNT(*) FROM workspace_model_bindings WHERE workspace_id=?1",
+            &second_path
+        ),
+        1,
+        "the other project keeps its bindings"
+    );
+}
+
+#[test]
+fn workspace_remove_refuses_an_empty_path_and_accepts_a_path_that_is_not_saved() {
+    let scratch = Scratch::new("workspace-remove-edges");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    assert!(matches!(
+        services::workspace_remove(&store, ""),
+        Err(CommandError::InvalidInput)
+    ));
+    assert!(
+        services::workspace_remove(&store, "/not/saved").is_ok(),
+        "like the TypeScript shell, a path that is not saved is not an error"
+    );
+}

@@ -638,3 +638,38 @@ fn a_refused_conversation_delete_leaves_the_conversation_in_place() {
         "the conversation is still there"
     );
 }
+
+#[test]
+fn a_refused_project_removal_leaves_the_project_in_place() {
+    let directory = scratch("store-workspace-remove-refused");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace is saved");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_workspace_remove BEFORE DELETE ON workspaces
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .workspaces()
+        .remove("/work/project")
+        .expect_err("the refused removal is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    let remaining: i64 = store
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM workspaces WHERE path='/work/project'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the count is read");
+    assert_eq!(remaining, 1, "the project is still saved");
+}

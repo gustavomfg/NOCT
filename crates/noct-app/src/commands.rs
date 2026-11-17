@@ -244,6 +244,25 @@ pub async fn ai_save_assistant(
     .await
 }
 
+/// Removes a project's record with its conversations and their history. The argument is the project path, as a string.
+/// Nothing is removed from the folder.
+#[tauri::command]
+pub async fn workspace_remove(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<(), CommandError> {
+    let workspace = match input {
+        serde_json::Value::String(text) => text,
+        _ => return Err(CommandError::InvalidInput),
+    };
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::workspace_remove(&guard, &workspace)
+    })
+    .await
+}
+
 /// Marks a saved project as a favorite, or unmarks it. The argument is `{ workspace, favorite }`. The store lock is
 /// held across the check that the project is saved and the write, so the two cannot be separated by another write.
 #[tauri::command]

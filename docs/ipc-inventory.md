@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 14 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 15 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `workspace_remove`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 11 |
-| P4 | 3 |
+| P4 (ported) | 12 |
+| P4 | 2 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,7 +62,7 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `workspace.remove`, `brain.delete`, `artifacts.delete`, the deletes,
+3. **P4, database writes.** Still to port: `brain.delete`, `artifacts.delete`, the deletes,
    each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff
    and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
@@ -87,7 +87,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `workspace:select` | `window.nocturne.workspace.select` | `select(expectedWorkspace?: string): Promise<string \| null>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:30` | database write | later | Opens a native folder dialog and authorises the workspace. Authorisation stays in the main process, and restored workspaces remain unauthorised until reselected. |
 | `workspace:validate` | `window.nocturne.workspace.validate` | `validate(value: string): Promise<string \| null>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:68` | filesystem read | P3 | Checks a path and its scope. No authorisation. |
 | `workspaces:list` | `window.nocturne.workspace.list` | `list(): Promise<Workspace[]>` | none (no input) | `electron/ipc/registerWorkspaceIpc.ts:69` | read | P3 (ported) | Rust command `workspaces_list`, paged: a required limit (1 to 500) and an optional cursor, the key of the last project of the previous page. `hasMore` says whether more follow, and `nextCursor` is the key that asks for them. The order breaks ties by path, which the TypeScript list does not. First cut: the interface reads the first page only. |
-| `workspaces:remove` | `window.nocturne.workspace.remove` | `remove(value: string): Promise<void>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:78` | database write | P4 | Removes a workspace record. |
+| `workspaces:remove` | `window.nocturne.workspace.remove` | `remove(value: string): Promise<void>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:78` | database write | P4 (ported) | Rust command `workspace_remove`: the argument is the project path, a non-empty string. It deletes the project record; the store removes what is tied to the path (model bindings, index, executions, checkpoints, memories, evidence). Conversations, messages and artifacts are not tied to the path and stay. Like the TypeScript shell, it checks neither that the project is saved nor that it is authorized. Nothing is removed from the folder. |
 | `workspaces:favorite` | `window.nocturne.workspace.favorite` | `favorite(value: string, favorite: boolean): Promise<void>` | zod: workspaceFavoriteSchema | `electron/ipc/registerWorkspaceIpc.ts:79` | database write | P4 (ported) | Rust command `workspace_set_favorite`: the project must be saved, and the request has the same fields and bounds as `workspaceFavoriteSchema`. No interface control yet. |
 | `workspace:openTool` | `window.nocturne.workspace.openTool` | `openTool(value: string, tool: 'editor' \| 'terminal'): Promise<void>` | zod: workspaceToolSchema | `electron/ipc/registerWorkspaceIpc.ts:88` | process/shell | later | Starts an editor or a terminal in the workspace. |
 | `workspace:watch` | `window.nocturne.workspace.watch` | `watch(value: string \| null): Promise<void>` | inline .parse | `electron/ipc/registerWorkspaceIpc.ts:80` | filesystem read | later | Starts or stops a filesystem watcher on the workspace. |

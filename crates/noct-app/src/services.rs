@@ -526,6 +526,21 @@ pub fn conversation_delete(
         .map_err(|_| CommandError::Persistence)
 }
 
+/// Removes a project's record. The store's foreign keys remove what is tied to the project's path: its model bindings,
+/// index, executions, checkpoints, brain memories and evidence. The conversations, their messages and their artifacts are
+/// not tied to the path, so they stay in the store, as in the TypeScript shell. The path must not be empty, as
+/// `z.string().min(1)` requires. Like the TypeScript shell, this does not check that the project is saved or authorized,
+/// and removing a path that is not saved is not an error. Nothing is removed from the folder itself.
+pub fn workspace_remove(store: &Store, workspace: &str) -> Result<(), CommandError> {
+    if workspace.is_empty() {
+        return Err(CommandError::InvalidInput);
+    }
+    store
+        .workspaces()
+        .remove(workspace)
+        .map_err(|_| CommandError::Persistence)
+}
+
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the
 /// limit: that extra row says whether another page exists, and it is not returned.
 pub fn conversations_page(

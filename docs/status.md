@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec` and `e9064c4`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, or deletes a conversation. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (`ecebef1`), `workspace_remove` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec`, `e9064c4` and `ecebef1`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, deletes a conversation, or removes a project. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). The project removal has its own failed-write test (a refused `workspaces` delete). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -308,6 +308,31 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   removed), `crates/noct-app/tests/commands_acl.rs` (one test: the grant, the argument shape, the missing conversation, and
   the listing after the delete), `crates/noct-db/tests/store.rs` (a refused delete leaves the conversation in place).
 - Tests after this change: 566 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with
+  `-D warnings` and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `workspace_remove`
+
+- The argument is the project path as a bare string. An empty string or any other shape is `invalid-input`, as
+  `z.string().min(1)` requires (no trim: a blank path is not empty, as in TypeScript).
+- The delete is the repository's `DELETE FROM workspaces WHERE path = ?`. Removing a path that is not saved is not an error,
+  as in TypeScript.
+- What the store removes with the project, by the foreign keys that reference `workspaces(path)` with `ON DELETE CASCADE`:
+  the model bindings, the index runs, files, stack evidence and exclusions, the validation runs, the executions and their
+  checkpoints, the semantic index runs, the engineering signals, snapshots and insights, the interrupted operations, the
+  workspace evidence, and the brain memories of the project.
+- What it does not remove: the conversations, their messages and their artifacts. `conversations.workspace` has no foreign
+  key, so the rows stay after the project record is gone. TypeScript has the same schema and the same behavior. This is the
+  case to decide before the interface offers the command: a removed project leaves its conversation history in the store.
+- Not checked, as in TypeScript: that the project is saved or authorized, and that it is not blocked. The command is a
+  destructive write without the authorization check that the other project commands make. Recorded as an open decision for the
+  owner; the Rust port does not add the check, so that it does not change the behavior silently.
+- Not verified: a project that has change sets. The checkpoints of a change set are referenced with `ON DELETE RESTRICT`, so the
+  removal may fail for such a project, in Rust and in TypeScript alike. No test covers it yet.
+- Checks: `crates/noct-app/tests/services.rs` (two tests: the cascade for the path's own rows, with the conversation and its
+  messages kept and the other project's bindings intact; the empty path refused and the unsaved path accepted),
+  `crates/noct-app/tests/commands_acl.rs` (one test: the grant, the argument shapes, and the listing after the removal),
+  `crates/noct-db/tests/store.rs` (a refused removal leaves the project saved).
+- Tests after this change: 570 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with
   `-D warnings` and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P4 blocked: `changeControl.editHunk`
