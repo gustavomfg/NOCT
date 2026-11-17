@@ -16,7 +16,11 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 | P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
 | P4: database writes | first cut: `workspace_set_favorite` (its own commit) and the theme button saving through `settings_set` (see `git log`). | not yet | not run | No control sets a favorite yet. Only the theme is saved from the page. A failed write is not forced in a test. |
 | P5: observability | first cut: the commands with a catalog name are measured and their warnings go through the diagnostic gate. This commit. | not yet | not run | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
-| P6 to P10 | not started | | | |
+| P6: native rollback, macOS and Windows | comment corrected in `crates/noct-native/src/main.rs`. No backend ported. | not yet | not run | Both backends are missing. The Windows bindings and the durability question are open. |
+| P7: UI slices | not started | | | |
+| P8: updater | stopped before adding a dependency (see Stops) | | | |
+| P9: release dry run | stopped before any workflow change (see Stops) | | | |
+| P10: documents | ADR 0001 decision 4 recorded; README counts and command list updated. The phase table is not revised beyond that. | | | |
 
 ### P1 detail
 
@@ -87,6 +91,27 @@ GitHub. **Not verified** lists what no run covers, such as a real window.
 - Checks: `crates/noct-app/tests/observation.rs` (six tests: the success, the failure, the panic, the catalog names,
   the warning for a failed command with no path, and the threshold).
 
+### Stops
+
+- **P8, updater: stopped.** The updater needs `tauri-plugin-updater`, a new third-party dependency not on the approved
+  list. Nothing was added. To decide on it: the name, the version (to be checked on crates.io), the reason, and the
+  `cargo deny` and `cargo audit` results, which need the dependency in the tree and so were not run. The signing keys
+  and the updater public key are the owner's decision (ADR 0001, open decision 1).
+- **P9, release dry run: stopped.** The attestation step needs a third-party GitHub Action, which is not approved. A
+  dry run also changes the release workflows, which is a stop condition. No workflow changed, and no checksum script was
+  added.
+- **P6, native backends: not started beyond the comment.** The macOS and Windows ports are a multi-session job. The
+  Windows bindings are open (`docs/rust-native-rollback-backends.md`). `windows-sys` is approved for `crates/noct-native`,
+  but nothing was added. This is not a stop rule; it is left for the next session.
+- **P7, UI slices: not started.** The slices need design work and a browser check per slice. This run stopped its
+  large changes at the theme save and the project favorite.
+
+### P6 detail
+
+- The worker's comment in `crates/noct-native/src/main.rs` said the `UNSUPPORTED` answer on macOS and Windows was the
+  C++ `#else` behaviour. It is not: the C++ worker has backends there (`__APPLE__` and `_WIN32`). The comment now says
+  the port is missing. A comment change only.
+
 ## Verified in this round
 
 Local, on the tree of the P5 first cut: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
@@ -131,3 +156,9 @@ CI, from GitHub: `06150a1` passed on all three systems (Rust shell validation: U
   does not call this Rust command.
 - The page type for the TypeScript check is written in `scripts/generate-ipc-samples.mjs`, because the shared types
   have the list only. No product TypeScript changed.
+- P4 adds one error code, `unknown-workspace`, to the shell's own codes. The interface shows the message it carries; no
+  other file lists the codes.
+- The favorite write is not measured in P5: its TypeScript path has no name in the catalog, and I did not invent one.
+- P5 makes `warn_on_attention` public in `noct_db::observer`, so the shell applies the database's policy and does not
+  copy it.
+- P6 changes a comment only. I did not port the backends, and I did not add `windows-sys`.
