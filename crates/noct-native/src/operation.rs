@@ -125,13 +125,18 @@ impl Operation {
 
     /// The observed entry must still be the one that `OPEN` read, or absent when `OPEN` found nothing.
     fn verify_observed(&self) -> Outcome<()> {
-        let entry = platform::child(held(&self.parent)?, &self.leaf, false)?;
-        match (&self.observed, entry) {
-            (None, None) => Ok(()),
-            (None, Some(_)) => Err(Failure::new("CONFLICT", "Destination appeared")),
+        let parent = held(&self.parent)?;
+        if self.observed.is_none() {
+            // Anything but a clean absence (an entry, or a lookup that failed) means the destination appeared.
+            return match platform::child(parent, &self.leaf, false) {
+                Ok(None) => Ok(()),
+                _ => Err(Failure::new("CONFLICT", "Destination appeared")),
+            };
+        }
+        match platform::child(parent, &self.leaf, false)? {
             // The C++ worker reports a vanished observed entry as the failed reopen that it is.
-            (Some(_), None) => Err(Failure::new("CONFLICT", "Filesystem operation refused")),
-            (Some(_), Some(current)) => require(
+            None => Err(Failure::new("CONFLICT", "Filesystem operation refused")),
+            Some(current) => require(
                 platform::identity(&current)? == self.observed_id
                     && platform::mode_of(&current)? == self.observed_mode
                     && platform::read_all(&current)? == self.observed_bytes,
@@ -279,9 +284,9 @@ impl Operation {
         self.moved = true;
         platform::flush_directory(parent)?;
 
-        let displaced = platform::child(parent, &self.displaced_name, true)?.ok_or(
-            Failure::new("CONFLICT", "Competing displaced object preserved; conflict"),
-        )?;
+        // A missing retention entry is a failed reopen, as in the C++ worker; the message is the same.
+        let displaced = platform::child(parent, &self.displaced_name, true)?
+            .ok_or(Failure::new("CONFLICT", "Filesystem operation refused"))?;
         let displaced_id = platform::identity(&displaced)?;
         require(
             displaced_id == self.observed_id
@@ -322,10 +327,12 @@ impl Operation {
                 "Produced state diverged",
             )?;
         } else {
-            require(
-                platform::child(parent, &self.leaf, false)?.is_none(),
-                "Deleted entry recreated",
-            )?;
+            // The C++ worker refuses a recreated entry, and any other failed lookup as an unavailable absence.
+            match platform::child(parent, &self.leaf, false) {
+                Ok(None) => {}
+                Ok(Some(_)) => return Err(Failure::new("CONFLICT", "Deleted entry recreated")),
+                Err(_) => return Err(Failure::new("CONFLICT", "Absence unavailable")),
+            }
             self.published = true;
         }
         if self.moved {
