@@ -5,160 +5,162 @@ what is not verified. Only what is in a published commit is listed as done. The 
 [the README](../README.md).
 
 Legend: **CI** is the result of the Rust shell validation and the row gate for that commit, per system, read from
-GitHub. **Not verified** lists what no run covers, such as a real window.
+GitHub. Only finished runs are reported. **Not verified** lists what no run covers, such as a real window.
 
-## Packages
+## Round 1: report of the queue P1–P10
+
+### Packages
 
 | Package | Commits | Pushed | CI | Not verified |
 | --- | --- | --- | --- | --- |
-| P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate on `0dafe7c`: success. Shell on `0dafe7c`: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
-| P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Covered by the CI of `f1f5b5f`: Rust shell validation success on Ubuntu, Windows and macOS; row gate success. | Real window. |
-| P3: read commands | first cut: `workspaces_list` is paged. Commit `feat(shell): page workspaces_list and read its first page` (not yet pushed) | not yet | not run | A real window. The sidebar reads the first page only (P7 reads the rest). |
-| P4: database writes | first cut: `workspace_set_favorite` (its own commit) and the theme button saving through `settings_set` (see `git log`). | not yet | not run | No control sets a favorite yet. Only the theme is saved from the page. A failed write is not forced in a test. |
-| P5: observability | first cut: the commands with a catalog name are measured and their warnings go through the diagnostic gate. This commit. | not yet | not run | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
-| P6: native rollback, macOS and Windows | comment corrected in `crates/noct-native/src/main.rs`. No backend ported. | not yet | not run | Both backends are missing. The Windows bindings and the durability question are open. |
-| P7: UI slices | not started | | | |
-| P8: updater | stopped before adding a dependency (see Stops) | | | |
-| P9: release dry run | stopped before any workflow change (see Stops) | | | |
-| P10: documents | ADR 0001 decision 4 recorded; README counts and command list updated. The phase table is not revised beyond that. | | | |
+| P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
+| P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
+| P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`) | `f1f5b5f` | Same run: success on all three systems; row gate success. | No control sets a favorite yet. A failed write is not forced in a test. |
+| P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
+| P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
+| P7: UI slices | not started in round 1 | | | |
+| P8: updater | stopped in round 1 | | | |
+| P9: release dry run | stopped in round 1 | | | |
+| P10: documents | `85f4cb4`, `5748b33`, `f1f5b5f`, `4a62c3c` | `4a62c3c` | Shell and row gate on `4a62c3c`: success on Ubuntu, Windows and macOS; row gate success. | The phase table is not revised beyond ADR decision 4, the counts and the command list. |
+
+### CI by system (finished runs only)
+
+- `f1f5b5f` (P2 to P6): Rust shell validation success on Ubuntu, Windows and macOS; row gate success.
+- `4a62c3c` (status only): Rust shell validation success on Ubuntu, Windows and macOS (run `44038625669`); row gate
+  success (run `44038625533`).
+- Earlier heads `a94642c` and `0dafe7c`: shell and row gate success on all three systems.
+
+### Local validation (round 1 tree, P5 first cut)
+
+- `cargo fmt --check`; `cargo clippy --workspace --all-targets -D warnings`; `cargo clippy -p noct-ui --target wasm32-unknown-unknown -D warnings`.
+- `cargo test --workspace --no-fail-fast`: 456 passed, 0 failed, 19 ignored.
+- `node scripts/verify-row-gate.mjs`: exit 0, including the reverse check.
+- `npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node --test scripts/*.test.mjs` (7 of 7).
+- `node scripts/check-shell-csp.mjs`; `node scripts/check-shell-ui.mjs` (17 scenarios, after `trunk build --release` of `crates/noct-ui`).
+- Output differential: `node scripts/generate-output-differential.mjs`, then
+  `cargo test -p noct-app --test output_differential -- --ignored`: passes for the nine release lines and the current line.
+
+The TypeScript, Vitest, CSP and browser checks were last run on the theme-save commit. The later commits change none of their files.
 
 ### P1 detail
 
 - Rust writes, TypeScript reads and writes, Rust reads back: `a1c048d` adds `crates/noct-db/tests/rust_written_gate.rs`,
-  `scripts/verify-rust-written-gate.mjs` and `scripts/row-gate-typescript.mjs`. `verify-row-gate.mjs` runs it. Local:
-  the row gate passes (10 tests and the new check), and a mutation with a wrong expected value fails with exit 1.
+  `scripts/verify-rust-written-gate.mjs` and `scripts/row-gate-typescript.mjs`. `verify-row-gate.mjs` runs it.
 - Vitest excludes `scripts/**/*.test.mjs` (`cba4544`). Those files use `node:test` and run with `node --test`, as CI does.
-  Local: `npm test` passes 95 files and 602 tests; the launcher test passes 7 of 7.
 - Documents: `a508a37` and `0dafe7c` describe the reverse gate and the platform floors in the READMEs.
-- `2212de2`: macOS durability keeps `fsync`, as the C++ worker does. The C++ worker never calls `F_FULLFSYNC`.
-  The difference that remains is recorded in `docs/rust-native-rollback-backends.md`.
-- `7d79ca1`: platform floors recorded as the project decision of 2026-11-17 in `docs/compatibility.md` and its
-  Portuguese copy. ADR 0001 is not edited yet.
+- `2212de2`: macOS durability keeps `fsync`, as the C++ worker does. Round 2 changes this to `F_FULLFSYNC` (see below).
+- `7d79ca1`: platform floors recorded as the project decision of 2026-11-17 in `docs/compatibility.md` and its Portuguese copy.
 
 ### P2 detail
 
-- `3f2a9ce`: `docs/ipc-inventory.md`, generated by `scripts/ipc-inventory.mjs`. It covers 108 channels: 99 invokable
-  and 9 events. The generator fails if a channel has no classification, no preload entry or no handler. Every
-  invokable channel has an input check, found in the handler or in a helper it calls. Four channels already have a Rust
-  command.
+- `3f2a9ce`: `docs/ipc-inventory.md`, generated by `scripts/ipc-inventory.mjs`. It covers 108 channels: 99 invokable and
+  9 events. The generator fails if a channel has no classification, no preload entry or no handler. Every invokable
+  channel has an input check, found in the handler or in a helper it calls. Four channels already have a Rust command.
 
 ### P3 detail (first cut)
 
 - `workspaces_list` takes a page request: `limit` is required, from 1 to 500; `offset` is optional, from 0 to 1,000,000.
   Any other field, a null offset and a missing limit are refused as invalid input. The reply is `{ items, hasMore }`.
-  The bounds are shared in `noct_core::ipc::pages`, so the project page and the conversation page use one rule.
-- The shell reads the rows of the page under the store lock, then checks the availability of those rows only, so the
-  file-system work is bounded by the limit.
-- The sidebar asks for the first page at 500, lists it, and shows a note when `hasMore` is true. It does not read the
-  rest yet; that is P7.
-- Offset paging, not a cursor: the project order (favorites first, then the latest opened) has no unique key, so a
-  cursor could not be exact either. A project opened between two reads can move across a page boundary. The list is
-  small; this is accepted and recorded.
-- Checks: contract samples for the page, generated from the TypeScript types (`scripts/generate-ipc-samples.mjs`);
-  the command's ACL (main window only); the service tests; the output differential, where one-row pages and
-  maximum-size pages each join back into the whole list, and that list equals the TypeScript list for the nine
-  release lines and the current line; the browser check of the sidebar, with a new scenario for a page that has more.
+- The shell reads the rows of the page under the store lock, then checks the availability of those rows only.
+- The sidebar asks for the first page at 500, lists it, and shows a note when `hasMore` is true.
+- Round 2 replaces the offset with a key cursor (see round 2).
 
 ### P4 detail (first cut)
 
 - `workspace_set_favorite` takes `{ workspace, favorite }`. Both fields are required. `workspace` has from 1 to 4,000
-  characters, the same bound as `workspace.watch`; `favorite` is a boolean. Any other field, a null, or a wrong type
-  is refused as invalid input before the store is read. The request is checked against the same fields as the
-  TypeScript schema `workspaceFavoriteSchema`.
-- The project must be saved. A path that is not saved is refused with `unknown-workspace` and the message the
-  TypeScript shell gives for it, and nothing is written. The check and the write run under one store lock.
-- The write is one `UPDATE`, so SQLite leaves the row as it was if the statement fails. A forced failure is not
-  tested; the tests cover the refused requests, which must write nothing.
+  characters; `favorite` is a boolean. Any other field, a null, or a wrong type is refused as invalid input before the
+  store is read.
+- The project must be saved. A path that is not saved is refused with `unknown-workspace`, and nothing is written. The
+  check and the write run under one store lock.
+- The write is one `UPDATE`, so SQLite leaves the row as it was if the statement fails. A forced failure is not tested.
 - The command is granted to the main window only. The interface does not call it yet.
-- The sidebar theme button changes the theme at once and saves it with `settings_set` (`{ input: { theme } }`, the
-  theme and nothing else). The settings area shows the reply, so it keeps the saved theme. A save the shell refuses
-  keeps the theme on screen and shows the shell's message beside the button until the next press.
-- The browser check of the sidebar counts the saves: two for a full run, one for a refused save, none otherwise. The
-  full run reloads the page, so the saves made before the reload are kept.
+- The sidebar theme button saves the theme with `settings_set` (`{ input: { theme } }`). A save the shell refuses keeps the
+  theme on screen and shows the shell's message beside the button.
 
 ### P5 detail (first cut)
 
-- `ShellObserver` (in `crates/noct-app/src/logging.rs`) applies the database's warning policy to each measured
-  operation: a failed one, or one that takes at least 50 ms, is written as a warning through the diagnostic gate. The
-  policy function, `warn_on_attention`, is now public in `noct_db::observer`, so the database and the shell warn alike.
-- `measured` times a command and reports it once, when the command ends. A panic counts as a failure, as the
-  database's measurement counts it.
-- The commands are measured under the TypeScript names, from `noct_db::observer::CATALOG`: `settings.get`,
-  `settings.set`, `workspaces.list`, and `conversations.page` for the page of conversations.
-- `workspace_set_favorite` is not measured. Its TypeScript path calls the repository directly and has no name in the
-  catalog, so no name is invented for it.
+- `ShellObserver` (in `crates/noct-app/src/logging.rs`) applies the database's warning policy to each measured operation:
+  a failed one, or one that takes at least 50 ms, is written as a warning through the diagnostic gate. The policy function,
+  `warn_on_attention`, is public in `noct_db::observer`.
+- `measured` times a command and reports it once. A panic counts as a failure.
+- Measured under the TypeScript names from `noct_db::observer::CATALOG`: `settings.get`, `settings.set`, `workspaces.list`,
+  `conversations.page`.
+- `workspace_set_favorite` is not measured: its TypeScript path has no name in the catalog, and none was invented.
 - A warning names the operation and its duration. It has no path, no value and no error text.
-- Checks: `crates/noct-app/tests/observation.rs` (six tests: the success, the failure, the panic, the catalog names,
-  the warning for a failed command with no path, and the threshold).
+- Checks: `crates/noct-app/tests/observation.rs` (six tests).
 
-### Stops
+### P6 detail (round 1)
 
-- **P8, updater: stopped.** The updater needs `tauri-plugin-updater`, a new third-party dependency not on the approved
-  list. Nothing was added. To decide on it: the name, the version (to be checked on crates.io), the reason, and the
-  `cargo deny` and `cargo audit` results, which need the dependency in the tree and so were not run. The signing keys
-  and the updater public key are the owner's decision (ADR 0001, open decision 1).
-- **P9, release dry run: stopped.** The attestation step needs a third-party GitHub Action, which is not approved. A
-  dry run also changes the release workflows, which is a stop condition. No workflow changed, and no checksum script was
-  added.
-- **P6, native backends: not started beyond the comment.** The macOS and Windows ports are a multi-session job. The
-  Windows bindings are open (`docs/rust-native-rollback-backends.md`). `windows-sys` is approved for `crates/noct-native`,
-  but nothing was added. This is not a stop rule; it is left for the next session.
-- **P7, UI slices: not started.** The slices need design work and a browser check per slice. This run stopped its
-  large changes at the theme save and the project favorite.
+- The worker's comment in `crates/noct-native/src/main.rs` said the `UNSUPPORTED` answer on macOS and Windows was the C++
+  `#else` behaviour. It is not: the C++ worker has backends there (`__APPLE__` and `_WIN32`). The comment now says the port
+  is missing. A comment change only.
 
-### P6 detail
+### Stops (round 1) and their outcome in round 2
 
-- The worker's comment in `crates/noct-native/src/main.rs` said the `UNSUPPORTED` answer on macOS and Windows was the
-  C++ `#else` behaviour. It is not: the C++ worker has backends there (`__APPLE__` and `_WIN32`). The comment now says
-  the port is missing. A comment change only.
+- **P8, updater:** needed `tauri-plugin-updater`, not on the approved list. Round 2: approved (see below).
+- **P9, release dry run:** the attestation step needed a third-party Action, not approved; a dry run also changed the release
+  workflows. Round 2: one Action approved, in a new workflow only (see below).
+- **P6, native backends:** not started beyond the comment. Round 2 has the next priority.
+- **P7, UI slices:** not started. Round 2 includes it.
 
-## Verified in this round
+### Decisions taken in round 1
 
-Local, on the tree of the P5 first cut: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`,
-`cargo clippy -p noct-ui --target wasm32-unknown-unknown -D warnings`, `cargo test --workspace --no-fail-fast`
-(456 passed, 0 failed, 19 ignored), `node scripts/verify-row-gate.mjs` (exit 0, including the reverse check),
-`npm run typecheck`, `npm run lint`, `npm test` (95 files, 602 tests), `node --test scripts/*.test.mjs` (7 of 7),
-`node scripts/check-shell-csp.mjs`, `node scripts/check-shell-ui.mjs` (17 scenarios, after `trunk build --release` of
-`crates/noct-ui`), and the output differential: `node scripts/generate-output-differential.mjs`, then
-`cargo test -p noct-app --test output_differential -- --ignored` (passes for the nine release lines and the current line).
-The TypeScript, Vitest, CSP and browser checks were last run on the theme-save commit. The P5 commit changes none of
-their files, so their results stand.
+- I worked in the worktree on `migration/rust` (`noct-rust-spike`). `main` and the other worktrees were not touched.
+  `spike/rust-rollback-worker` is untouched.
+- Vitest excludes the `node:test` launcher files, which CI already runs with `node --test`. Test tooling only.
+- The reverse gate runs from `verify-row-gate.mjs`, so `row-gate.yml` runs it with no workflow change.
+- macOS durability kept `fsync` for parity with the C++ worker. Round 2 overrides this with the owner's decision.
+- The IPC inventory classifies every channel that touches a process, the network, a secret, the updater or the vault as
+  `stop` or `later`. It does not port them.
+- `clipboard.readText` is classified as a read of the OS clipboard and left for later, because it sends clipboard contents
+  to the renderer.
+- P3 used an offset for the project page. Round 2 changes it to a key cursor (see below).
+- `workspaces_list` now takes an input. Its only caller is the sidebar in this repository.
+- The page type for the TypeScript check is written in `scripts/generate-ipc-samples.mjs`, because the shared types have
+  the list only. No product TypeScript changed.
+- P4 adds one error code, `unknown-workspace`, to the shell's own codes.
+- The favorite write is not measured in P5: its TypeScript path has no name in the catalog.
+- P5 makes `warn_on_attention` public in `noct_db::observer`, so the shell applies the database's policy and does not copy it.
+- P6 changed a comment only in round 1.
 
-CI, from GitHub: `06150a1` passed on all three systems (Rust shell validation: Ubuntu, macOS and Windows) and the row gate.
+### New dependencies (round 1)
 
-## Not verified
+None.
+
+### Not verified (round 1)
 
 - A real window on Windows or macOS. CI does not open windows.
-- Ubuntu 22.04, the Linux floor. No CI job runs on it (`ubuntu-latest` and `ubuntu-24.04`).
-- The WebKitGTK version in Ubuntu 22.04.
-- Power-loss durability on macOS and Windows. Neither backend is certified (see the rollback backends document).
-- The Rust rollback backends for macOS and Windows: they do not exist yet.
-- The rest of the project list beyond the first 500 projects (P7).
-- Offset paging over a list whose order has ties: see the P3 detail. It is not checked against concurrent opens.
-- The release build of `crates/noct-ui` prints a wasm-bindgen warning about `strip = true` in the workspace `Cargo.toml`
-  (set since `4cb423e`). It is not changed here.
+- Ubuntu 22.04, the Linux floor. No CI job runs on it (`ubuntu-latest` and `ubuntu-24.04`). The WebKitGTK version is unchecked.
+- Power-loss durability on macOS and Windows.
+- The Rust rollback backends for macOS and Windows (round 1: not ported).
+- The project list beyond the first 500 projects (round 1).
+- Offset paging over a list whose order has ties. Round 2 replaces it.
 
-## Decisions taken by me
+## Round 2: decisions received and queue
 
-- I worked in the worktree that is on `migration/rust` (`noct-rust-spike`). I did not touch the worktree on `main`
-  or any other worktree. `spike/rust-rollback-worker` is untouched.
-- Vitest excludes the `node:test` launcher files, which CI already runs with `node --test`. This changes test tooling
-  only.
-- The reverse gate runs from `verify-row-gate.mjs`, so `row-gate.yml` runs it with no workflow change.
-- macOS durability keeps `fsync`, for parity with the C++ worker, because the C++ worker does not call `F_FULLFSYNC`.
-- The IPC inventory classifies every channel that touches a process, the network, a secret, the updater or the
-  vault as `stop` or `later`, not as read. It does not port them.
-- `clipboard.readText` is classified as a read of the OS clipboard and left for later, because it sends clipboard
-  contents to the renderer.
-- P3 uses an offset, not a cursor, for the project page, because the project order has no unique key. The list is
-  small; the limit is recorded above.
-- `workspaces_list` now takes an input. Its only caller is the sidebar in this repository; the TypeScript application
-  does not call this Rust command.
-- The page type for the TypeScript check is written in `scripts/generate-ipc-samples.mjs`, because the shared types
-  have the list only. No product TypeScript changed.
-- P4 adds one error code, `unknown-workspace`, to the shell's own codes. The interface shows the message it carries; no
-  other file lists the codes.
-- The favorite write is not measured in P5: its TypeScript path has no name in the catalog, and I did not invent one.
-- P5 makes `warn_on_attention` public in `noct_db::observer`, so the shell applies the database's policy and does not
-  copy it.
-- P6 changes a comment only. I did not port the backends, and I did not add `windows-sys`.
+Decisions from the owner, recorded as given:
+
+1. **`tauri-plugin-updater`: approved.** Official plugin (`tauri-apps`), version pinned, `cargo deny` and `cargo audit`
+   passing, and the public key left as a value to fill in. No keys are generated, no secrets are created, nothing is
+   published. The owner keeps custody of the keys.
+2. **Build provenance attestation: only `actions/attest-build-provenance`, pinned by SHA, in a NEW workflow in dry run,
+   with no secrets.** The Electron release workflows are not changed. No other third-party Action is approved.
+3. **macOS durability: `F_FULLFSYNC`, definitive.** **Windows: `windows-sys` in `crates/noct-native`, as approved.**
+4. **P7 is in the queue.** The rest of P4 follows the order of `docs/ipc-inventory.md`. Operations that delete come last,
+   each in its own commit with `[review]` in the subject.
+5. **`workspaces_list`: the offset becomes a key cursor.** `id` is added as the final tie-break of the order. It only
+   affects ties. Parity with the TypeScript order must be kept and proven in the differential. The change is recorded.
+6. **Explain the `strip` warning of commit `4cb423e`** (what it is, where it appears, whether it affects the release
+   binary), without changing anything yet.
+
+Priority of the queue: (a) P6, native rollback for macOS and Windows, fail-closed, tested on the CI matrix, with
+`docs/rust-native-rollback-backends.md` updated; (b) the rest of P4; (c) P7 in functional slices with real data from the
+commands already ported; (d) P8 and P9, preparation only, per decisions 1 and 2.
+
+Rules unchanged: no cryptography, vault, updater key, secrets, or network calls to providers without `[security-review]`;
+no TypeScript product change; nothing on `main`; no PR; no force push; fast-forward pushes only after local validation.
+
+### Round 2 progress
+
+- Started. Nothing from round 2 is pushed yet. Entries below are added as each package lands.
