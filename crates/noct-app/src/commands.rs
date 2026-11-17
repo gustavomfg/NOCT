@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use noct_core::ai::bindings::WorkspaceModelBindings;
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::Conversation;
 use noct_core::ipc::ReplyRequest;
@@ -188,6 +189,22 @@ pub async fn suggestions_status(
     blocking(move || {
         let guard = lock(&store)?;
         services::suggestions_status(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
+/// Stores the model bindings of a project. The argument is the bindings object itself, as `models.setBindings` takes it.
+#[tauri::command]
+pub async fn models_set_bindings(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<WorkspaceModelBindings, CommandError> {
+    let bindings: WorkspaceModelBindings =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::models_set_bindings(&guard, &default_blocked_roots(), bindings)
     })
     .await
 }

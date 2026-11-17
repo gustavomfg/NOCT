@@ -688,6 +688,66 @@ fn suggestions_status_is_granted_and_checks_its_request() {
     }
 }
 
+/// The bindings command is granted to the main window. It stores the bindings of a saved project and refuses an unknown
+/// field, an explicit null and a project that is not saved.
+#[test]
+fn models_set_bindings_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("models-set-bindings-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+
+    let stored = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "models_set_bindings",
+            json!({ "input": {
+                "workspaceId": saved.clone(),
+                "defaultBinding": { "providerId": "openai", "modelId": "gpt-model" },
+                "remoteEmbeddingAllowed": false,
+            } }),
+        ),
+    ));
+    assert_eq!(stored["workspaceId"], saved);
+    assert_eq!(stored["defaultBinding"]["modelId"], "gpt-model");
+    assert!(
+        stored.get("embeddingBinding").is_none(),
+        "an absent binding is not written as null"
+    );
+
+    for input in [
+        json!({ "input": { "workspaceId": saved.clone(), "priority": 1 } }),
+        json!({ "input": { "workspaceId": saved.clone(), "embeddingBinding": null } }),
+        json!({ "input": { "workspaceId": saved.clone(), "defaultBinding": { "providerId": "openai", "modelId": "m", "extra": 1 } } }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "models_set_bindings", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+
+    let unsaved = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "models_set_bindings",
+            json!({ "input": { "workspaceId": scratch.path().join("elsewhere").to_string_lossy() } }),
+        ),
+    ));
+    assert_eq!(unsaved["code"], "unknown-workspace");
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

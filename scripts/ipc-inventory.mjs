@@ -128,7 +128,7 @@ const CLASS = {
   'models.list': ['read', 'P3', ''],
   'models.refresh': ['network', 'stop', 'Fetches the model catalogue from the provider.'],
   'models.bindings': ['read', 'P3', ''],
-  'models.setBindings': ['database write', 'P4', ''],
+  'models.setBindings': ['database write', 'P4 (ported)', 'Rust command `models_set_bindings`: the argument is the bindings object. The bindings are validated as `workspaceModelBindingsSchema` does, then the project must be saved, authorized and available, as in a conversation write. The write replaces the bindings the project had, in the same shape as the TypeScript record. No credential is part of the bindings.'],
   'git.status': ['process/shell', 'later', 'Runs git in the workspace.'],
   'git.commit': ['process/shell', 'later', 'Runs git commit in the workspace after the user confirms.'],
   'documents.prepareMarkdown': ['filesystem read', 'later', 'Builds a preview of an update to a Markdown file in the workspace.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,7 +327,7 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `models.setBindings`, `ai.saveAssistant`,')
+out.push('3. **P4, database writes.** Still to port: `ai.saveAssistant`,')
 out.push('   `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,')
 out.push('   `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')

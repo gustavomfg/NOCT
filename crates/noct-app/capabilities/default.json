@@ -13,6 +13,7 @@
     "allow-brain-update",
     "allow-suggestions-create",
     "allow-suggestions-status",
+    "allow-models-set-bindings",
     "allow-conversations-create",
     "allow-conversations-list",
     "allow-workspace-set-favorite"

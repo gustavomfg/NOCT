@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 11 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 12 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 8 |
-| P4 | 7 |
+| P4 (ported) | 9 |
+| P4 | 6 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,7 +62,7 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `models.setBindings`, `ai.saveAssistant`,
+3. **P4, database writes.** Still to port: `ai.saveAssistant`,
    `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,
    `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
@@ -182,7 +182,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `models:list` | `window.nocturne.models.list` | `list(): Promise<ModelDescriptor[]>` | none (no input) | `electron/ipc/registerModelIpc.ts:40` | read | P3 |  |
 | `models:refresh` | `window.nocturne.models.refresh` | `refresh(providerId: string): Promise<{ status: 'applied' \| 'superseded'; models: ModelDescriptor[] }>` | zod: modelProviderIdSchema | `electron/ipc/registerModelIpc.ts:43` | network | stop | Fetches the model catalogue from the provider. |
 | `models:bindings` | `window.nocturne.models.bindings` | `bindings(workspaceId: string): Promise<WorkspaceModelBindings \| null>` | zod: workspaceIdSchema | `electron/ipc/registerModelIpc.ts:49` | read | P3 |  |
-| `models:setBindings` | `window.nocturne.models.setBindings` | `setBindings(bindings: WorkspaceModelBindings): Promise<WorkspaceModelBindings>` | zod: workspaceModelBindingsSchema | `electron/ipc/registerModelIpc.ts:57` | database write | P4 |  |
+| `models:setBindings` | `window.nocturne.models.setBindings` | `setBindings(bindings: WorkspaceModelBindings): Promise<WorkspaceModelBindings>` | zod: workspaceModelBindingsSchema | `electron/ipc/registerModelIpc.ts:57` | database write | P4 (ported) | Rust command `models_set_bindings`: the argument is the bindings object. The bindings are validated as `workspaceModelBindingsSchema` does, then the project must be saved, authorized and available, as in a conversation write. The write replaces the bindings the project had, in the same shape as the TypeScript record. No credential is part of the bindings. |
 | `git:status` | `window.nocturne.git.status` | `status(conversationId: string): Promise<GitInfo>` | zod: idSchema | `electron/ipc/registerGitIpc.ts:23` | process/shell | later | Runs git in the workspace. |
 | `git:commit` | `window.nocturne.git.commit` | `commit(conversationId: string, message: string, files: string[]): Promise<{ output: string }>` | zod: gitCommitSchema | `electron/ipc/registerGitIpc.ts:24` | process/shell | later | Runs git commit in the workspace after the user confirms. |
 | `documents:prepareMarkdown` | `window.nocturne.documents.prepareMarkdown` | `prepareMarkdown(conversationId: string, content: string, name?: string): Promise<DocumentUpdatePreview \| null>` | zod: prepareMarkdownSchema | `electron/ipc/registerDocumentsIpc.ts:22` | filesystem read | later | Builds a preview of an update to a Markdown file in the workspace. |

@@ -7,6 +7,8 @@ use common::Scratch;
 use noct_app::bootstrap;
 use noct_app::error::CommandError;
 use noct_app::services;
+use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::model::ModelReference;
 use noct_core::brain_memory::{
     BrainMemoryKind, BrainMemoryScope, BrainMemorySource, BrainMemoryStatus,
 };
@@ -1277,4 +1279,113 @@ fn a_status_move_checks_the_conversation_then_the_suggestion_then_the_transition
         )
         .expect("the status is read");
     assert_eq!(status, "new", "no refused move changed the suggestion");
+}
+
+fn model(provider: &str, model: &str) -> ModelReference {
+    ModelReference {
+        provider_id: provider.to_string(),
+        model_id: model.to_string(),
+    }
+}
+
+#[test]
+fn models_set_bindings_stores_the_bindings_of_a_saved_project_and_a_second_write_replaces_them() {
+    let scratch = Scratch::new("models-set-bindings");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+
+    let first = WorkspaceModelBindings {
+        workspace_id: format!("  {path}  "),
+        default_binding: Some(model("openai", "gpt-model")),
+        embedding_binding: None,
+        remote_embedding_allowed: Some(false),
+    };
+    let stored =
+        services::models_set_bindings(&store, &[], first).expect("the bindings are stored");
+    assert_eq!(
+        stored.workspace_id, path,
+        "the identifier is trimmed before it is stored"
+    );
+    assert_eq!(
+        store
+            .workspace_model_bindings()
+            .get(&path)
+            .expect("the bindings are read"),
+        Some(stored.clone())
+    );
+
+    let replacement = WorkspaceModelBindings {
+        workspace_id: path.clone(),
+        default_binding: None,
+        embedding_binding: Some(model("local", "embed")),
+        remote_embedding_allowed: Some(true),
+    };
+    services::models_set_bindings(&store, &[], replacement.clone())
+        .expect("the bindings are replaced");
+    assert_eq!(
+        store
+            .workspace_model_bindings()
+            .get(&path)
+            .expect("the bindings are read"),
+        Some(replacement)
+    );
+    let rows: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM workspace_model_bindings", [], |row| {
+            row.get(0)
+        })
+        .expect("the count is read");
+    assert_eq!(rows, 1, "one record per project");
+}
+
+#[test]
+fn models_set_bindings_refuses_a_project_that_is_not_saved_authorized_available_or_allowed() {
+    let scratch = Scratch::new("models-set-bindings-refused");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let bindings = |workspace: &str| WorkspaceModelBindings {
+        workspace_id: workspace.to_string(),
+        default_binding: Some(model("openai", "gpt-model")),
+        embedding_binding: None,
+        remote_embedding_allowed: None,
+    };
+
+    let unsaved = services::models_set_bindings(&store, &[], bindings(&path));
+    assert!(
+        matches!(unsaved, Err(CommandError::UnknownWorkspace)),
+        "an unsaved project is refused"
+    );
+
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let blocked = vec![project.clone()];
+    let refused = services::models_set_bindings(&store, &blocked, bindings(&path));
+    assert!(
+        matches!(refused, Err(CommandError::UnknownWorkspace)),
+        "a blocked project is refused"
+    );
+
+    let empty = services::models_set_bindings(&store, &[], bindings("   "));
+    assert!(matches!(empty, Err(CommandError::InvalidInput)));
+
+    assert_eq!(
+        store
+            .workspace_model_bindings()
+            .get(&path)
+            .expect("the bindings are read"),
+        None,
+        "no refused write stored anything"
+    );
 }

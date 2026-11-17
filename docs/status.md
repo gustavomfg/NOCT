@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9` and `e383ec2`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, or moves a suggestion. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in six tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review, and on a status change). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2` and `2000228`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, or saves model bindings. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in seven tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, and the model bindings row). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -233,6 +233,31 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 - A mutation check: with the service's transition check disabled, the lifecycle test fails at the refusal, so the test
   depends on the check. The file was restored and checked after the run.
 - Tests after this change: 545 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
+  and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `models_set_bindings`
+
+- The argument is the bindings object itself, as `models.setBindings` takes it. The shape is the one the core contract
+  already had (`WorkspaceModelBindings`, with `deny_unknown_fields`, the explicit-null refusal of `.optional()`, and the
+  zod field order); the contract tests in `crates/noct-core/tests/ai_contracts.rs` cover it, so this change does not add
+  parser tests.
+- Order, as in the TypeScript handler: the bindings are validated (the identifier is trimmed and bounded, and each model
+  reference is checked), then the project is checked. The check is the one of a conversation write: saved, authorized and
+  available, and not in a blocked root. TypeScript's `getAuthorizedWorkspace` requires the same, through
+  `assertSafeWorkspaceScope`.
+- The write is the repository's `set`: one upsert per project, which replaces the bindings and the update time. The stored
+  JSON has the field order of the TypeScript record, so a database written by either shell reads in the other.
+- Refusals: a request that does not validate is `invalid-input`; a project that does not qualify is `unknown-workspace`.
+  Its message is the one the other project commands use: the TypeScript shell gives a different message for each
+  refusal, and the Rust shell gives one for all of them (see `conversations_create`).
+- Not ported: nothing of the TypeScript handler is left out. The reading side, `models.bindings`, is a P3 read and is not
+  part of this change.
+- Checks: `crates/noct-app/tests/services.rs` (two tests: a store with a trimmed identifier and a replacement with one record
+  per project; the refusals of an unsaved, a blocked and an empty project, with nothing stored), `crates/noct-app/tests/commands_acl.rs`
+  (one test: the grant, an unknown field, an explicit null, an unknown key in a model reference, and an unsaved project),
+  `crates/noct-db/tests/store.rs` (a refused row leaves no bindings behind).
+- A mutation check: with the project check removed from the service, the refusal test fails. The file was restored and checked.
+- Tests after this change: 549 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
   and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P5 detail (first cut)

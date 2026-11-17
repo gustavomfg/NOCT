@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use noct_core::ai::bindings::WorkspaceModelBindings;
 use noct_core::brain_memory::{
     BrainMemory, BrainMemoryScope, BrainMemorySource, CreateBrainMemoryInput,
     InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition, extract_candidates,
@@ -422,6 +423,24 @@ pub fn suggestions_status(
             request.status,
             request.result.as_deref(),
         )
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Stores the model bindings of a project and returns them. The bindings are validated first, as the TypeScript handler
+/// does, and then the project is checked as in a conversation write: it must be saved, authorized and available. A write
+/// replaces the bindings the project had.
+pub fn models_set_bindings(
+    store: &Store,
+    blocked: &[PathBuf],
+    bindings: WorkspaceModelBindings,
+) -> Result<WorkspaceModelBindings, CommandError> {
+    let bindings = bindings
+        .validated()
+        .map_err(|_| CommandError::InvalidInput)?;
+    authorized_workspace(store, blocked, &bindings.workspace_id)?;
+    store
+        .workspace_model_bindings()
+        .set(bindings)
         .map_err(|_| CommandError::Persistence)
 }
 

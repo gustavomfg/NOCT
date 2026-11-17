@@ -567,3 +567,41 @@ fn a_failed_decision_entry_on_a_status_change_leaves_the_status_unchanged() {
     );
     assert_eq!(result, None);
 }
+
+#[test]
+fn a_refused_model_bindings_write_leaves_no_bindings_behind() {
+    let directory = scratch("store-model-bindings-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace is saved, for the foreign key");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_model_bindings BEFORE INSERT ON workspace_model_bindings
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .workspace_model_bindings()
+        .set(noct_core::ai::bindings::WorkspaceModelBindings {
+            workspace_id: "/work/project".to_string(),
+            default_binding: None,
+            embedding_binding: None,
+            remote_embedding_allowed: Some(true),
+        })
+        .expect_err("the refused write is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert_eq!(
+        store
+            .workspace_model_bindings()
+            .get("/work/project")
+            .expect("the bindings are read"),
+        None
+    );
+}
