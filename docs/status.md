@@ -20,7 +20,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | `1103543` (`Construir` and `Documentar` not yet available), editable Ajustes (this change) | `1103543` | Shell and row gate on `1103543`: success on Ubuntu, Windows and macOS; row gate success. | Real window. Chromium is the approximation the check uses. |
-| P8: updater | stopped in round 1 | | | |
+| P8: updater | `tauri-plugin-updater` 2.14.1 pinned, configured empty, registered only when complete and safe (this change) | | | |
 | P9: release dry run | stopped in round 1 | | | |
 | P10: documents | `85f4cb4`, `5748b33`, `f1f5b5f`, `4a62c3c` | `4a62c3c` | Shell and row gate on `4a62c3c`: success on Ubuntu, Windows and macOS; row gate success. | The phase table is not revised beyond ADR decision 4, the counts and the command list. |
 
@@ -328,6 +328,29 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   `-D warnings` for `wasm32-unknown-unknown` passed; the workspace has fmt, clippy `-D warnings`, and 578 tests passed, 0
   failed, 19 ignored.
 - Not verified: a real window. Chromium is an approximation of the webview.
+
+### P8 detail: updater (prepared, not configured)
+
+- Dependency: `tauri-plugin-updater` `=2.14.1` in `Cargo.toml` (`[workspace.dependencies]`), used by `noct-app` only. It is the
+  latest stable 2.x; the 3.0.0 line is an alpha and was not used. It requires `tauri ^2.12`, which the workspace has at 2.12.5.
+- Lock file: 47 package entries added (the plugin and its TLS stack: `rustls`, `ring`, `rustls-webpki`, `hyper-rustls`, `zip`,
+  `tar`, `minisign-verify`, and a second `windows-sys` 0.52 used only by the plugin). No existing package changed version.
+- Licences: `cargo deny` refused `ISC` (`ring`, `rustls-webpki`, `untrusted`) and `CDLA-Permissive-2.0` (`webpki-root-certs`).
+  Both are permissive and are now allowed in `deny.toml`, with the reason in a comment. This is a policy change, so the owner
+  should confirm it.
+- Configuration: `plugins.updater` in `crates/noct-app/tauri.conf.json` is `pubkey: ""`, `endpoints: []`,
+  `requireSignedVersion: true`. `requireSignedVersion` is required once the updater is configured; that default is a decision
+  of this change, for the owner to confirm.
+- Registration: `crates/noct-app/src/updater.rs` decides from the section. The absent section and the placeholder register
+  nothing. A complete and safe section registers the plugin. A partial, insecure, unsafe-flagged, unsigned or malformed section
+  is refused, and `run()` stops at start with that refusal. The window is granted no updater permission.
+- Checks: `cargo test -p noct-app --lib updater` 10 passed (the shipped section, the absent section, a complete one, the
+  partial ones, http and mixed endpoints, uppercase https, each unsafe flag, the signed-version check, malformed values);
+  `the_window_is_granted_no_updater_permission` passed. The workspace has 592 passed, 0 failed, 19 ignored. `cargo deny check`: advisories, bans, licences and sources ok.
+  `cargo audit` exit 0 with the seven allowed warnings already in the tree (Linux GTK and zbus crates).
+- Not verified: an update request, a signature check, and an install. The shell makes no request with the shipped section, and
+  there is no key or feed to check against. Nothing was published or signed.
+- Owner's to do: the key pair, the feed and its host, and filling the section in a reviewed change.
 
 ### P7 detail: editable Ajustes
 

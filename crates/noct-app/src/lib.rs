@@ -11,6 +11,7 @@ pub mod error;
 pub mod logging;
 pub mod navigation;
 pub mod services;
+pub mod updater;
 pub mod window;
 pub mod workspace_scope;
 
@@ -50,7 +51,8 @@ pub fn context<R: Runtime>() -> tauri::Context<R> {
 
 /// Runs the shell: opens the persistence in the data directory, then the main window.
 pub fn run() {
-    tauri::Builder::default()
+    let context = context();
+    let builder = tauri::Builder::default()
         .invoke_handler(command_handler())
         .setup(|app| {
             let default = app.path().app_data_dir()?;
@@ -61,7 +63,12 @@ pub fn run() {
             app.manage(bootstrap::open(&directory)?);
             window::create_main_window(app)?;
             Ok(())
-        })
-        .run(context())
+        });
+    // The updater is registered only when its configuration is complete and safe. A configuration that is not safe
+    // stops the start: it is a defect of the build, and the shipped section is checked by the tests of `updater`.
+    let builder =
+        updater::with_plugin(builder, context.config()).expect("the updater configuration is safe");
+    builder
+        .run(context)
         .expect("error while running the NOCT shell");
 }

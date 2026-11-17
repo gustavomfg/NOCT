@@ -306,3 +306,20 @@ These are recorded in code and in the ADR as well. The workspace folder rules fo
 - **Mock fidelity.** The browser checks answer `invoke` with a mock of the shape that Tauri 2.12.5 defines. A change
   in Tauri is caught by the version test, not by the mock itself, so it reaches a real window only when someone runs
   one.
+
+## Updater (prepared, not configured)
+
+- The plugin is `tauri-plugin-updater` 2.14.1, the official Tauri plugin, pinned exactly in the workspace `Cargo.toml`.
+- The configuration is `plugins.updater` in `crates/noct-app/tauri.conf.json`. It ships empty: `pubkey` is `""`, `endpoints`
+  is `[]`, and `requireSignedVersion` is `true`.
+- The shell registers the plugin only when that section is complete and safe (`crates/noct-app/src/updater.rs`): a public
+  key; at least one https endpoint; `requireSignedVersion` on; and none of `dangerousInsecureTransportProtocol`,
+  `dangerousAcceptInvalidCerts`, `dangerousAcceptInvalidHostnames` or `allowDowngrades` set. A partial, insecure or
+  malformed section stops the start, because it is a defect of the build, and the tests read the shipped section.
+- With the shipped section, the shell makes no update request and reads no update feed. The window is granted no updater
+  permission (`crates/noct-app/capabilities/default.json`, locked by `tests/capabilities.rs`).
+- Not done, and kept with the owner: the signing key pair (the owner keeps custody, and nothing in the repository creates or
+  holds one), the update feed and where it is hosted, and any release signing step. No key, token or secret is committed.
+- To enable it, the owner fills `pubkey` and `endpoints` in a reviewed change marked `[security-review]`. The code that
+  checks for and installs an update is not written yet, and it needs its own review.
+

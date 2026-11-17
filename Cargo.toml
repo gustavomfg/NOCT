@@ -14,6 +14,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order", "raw_value"] }
 tauri = "2.12.5"
 tauri-build = "2.7.4"
+# Pinned: the updater is prepared and not configured; its version moves only with a reviewed change.
+tauri-plugin-updater = "=2.14.1"
 rusqlite = { version = "0.42.0", features = ["bundled", "backup"] }
 thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }

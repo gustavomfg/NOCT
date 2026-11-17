@@ -86,3 +86,20 @@ fn only_the_main_window_capability_exists() {
 
     assert_eq!(files, ["default.json"]);
 }
+
+/// The updater's commands are not reachable from the window: no permission of the updater plugin is granted.
+#[test]
+fn the_window_is_granted_no_updater_permission() {
+    let capability: Value = serde_json::from_str(MAIN_CAPABILITY).expect("the capability is JSON");
+    let granted = capability["permissions"]
+        .as_array()
+        .expect("the permissions are a list");
+
+    assert!(
+        granted.iter().all(|permission| !permission
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("updater")),
+        "{granted:?}"
+    );
+}
