@@ -5,7 +5,7 @@
 pub const MAX_BYTES: usize = 32 * 1024 * 1024;
 
 /// Refusal carried back to the client as `ERR <code> <hex(message)>`.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Failure {
     pub code: &'static str,
     pub message: &'static str,
