@@ -163,4 +163,43 @@ no TypeScript product change; nothing on `main`; no PR; no force push; fast-forw
 
 ### Round 2 progress
 
-- Started. Nothing from round 2 is pushed yet. Entries below are added as each package lands.
+#### Cursor for `workspaces_list` (decision 5), commit `724d7db`
+
+- The offset is replaced by a key cursor. The request is `{ limit, cursor? }` with `cursor` as
+  `{ favorite, lastOpenedAt, path }`. The reply is `{ items, hasMore, nextCursor }`, and `nextCursor` is present exactly
+  when `hasMore` is true. The order is `favorite DESC, last_opened_at DESC, path ASC`, unchanged for the first page.
+- **Deviation from decision 5, to confirm.** The decision asked for `id` as the final tie-break. The `workspaces` table has
+  no `id` column: its key is `path TEXT PRIMARY KEY`. The tie-break is therefore `path`, which is unique and is the table's
+  own key. If an `id` column is wanted, it needs a schema migration, which this change does not make.
+- The TypeScript list is untouched. The differential walks the list by cursor, with limits 1, 2 and the maximum, on the nine
+  release lines and the current tree. Ties are built on purpose (two projects with the same `favorite` and
+  `last_opened_at`). Every walk must equal the whole list, and `nextCursor` must be present exactly when `hasMore` is set.
+- Tests after this change: 460 passed, 0 failed, 19 ignored in the workspace (before the native backends).
+
+#### P6: native rollback for macOS and Windows (decision 3, priority a)
+
+- Commits: `352ba2e` (split into `operation.rs` and `platform/`), `36d515f` (C++ refusal messages on failed lookups),
+  `e008be1` (macOS backend), `a0c926e` (Windows backend, `BIND`, `windows-sys`), `7b4826a` (binary-level tests),
+  `5af3278` (backends document: CI result).
+- The Linux backend keeps its behaviour. Local differential against the C++ worker, built with `g++`: 35 of 36 scenarios give
+  the same responses and the same final tree. The one difference is intended: `OPEN parent/` is refused by Rust and answered
+  as an absent file by C++.
+- macOS: APFS only; `F_FULLFSYNC` (decision 3); protected names compared without ASCII case, as in C++ on Apple.
+- Windows: fixed NTFS only; `NtCreateFile` relative to retained handles; reparse points refused; `BIND` for the holder process;
+  publication renames the staged handle. Dependency: `windows-sys` 0.61.2, pinned, in `noct-native` only, with the Win32
+  features it needs (decision 3). The NT structures are declared in the backend, so the `Wdk` feature set stays off.
+- CI on `7b4826a` (run `44124578455`, `rust-shell-validation.yml`): `Shell on ubuntu-latest`, `Shell on windows-latest` and
+  `Shell on macos-latest` succeeded, and so did the workspace test step on each. The native tests ran on each system:
+  Windows, `rollback_protocol` 12 passed and `rollback_binary` 4 passed; macOS, `rollback_protocol` 13 passed (with the APFS
+  case test) and `rollback_binary` 4 passed. `Row gate`, `Keyring round trip` and `Rust dependency audit` succeeded on the
+  same commit.
+- Local validation on the final tree: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test
+  --workspace` (472 passed, 0 failed, 19 ignored), clippy for `x86_64-pc-windows-msvc` and `aarch64-apple-darwin` for
+  `noct-native`. `cargo deny` (advisories, bans, licenses, sources) passed; `cargo audit` exited 0 with the seven allowed
+  transitive warnings that were already in the tree.
+- **Not verified:** the differential against the C++ worker on macOS and Windows (the C++ worker was not built there); a real
+  user's APFS or NTFS volume; the cost of `F_FULLFSYNC` (not measured, so no performance claim is made).
+- **Open decisions for the owner:** (1) whether the C++ product worker also uses `F_FULLFSYNC` (it uses `fsync` today; the
+  product path is not changed by this branch); (2) whether a directory flush is added on Windows after a rename or create
+  (the C++ header does not flush, and the port keeps that).
+- **Stops:** none in P6. **New dependencies:** `windows-sys` 0.61.2 (approved, decision 3); no other crate was added.
