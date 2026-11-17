@@ -68,7 +68,7 @@ const CLASS = {
   'changeControl.changes': ['read', 'P3', ''],
   'changeControl.diff': ['read', 'P3', 'The diff output must be bounded before the port.'],
   'changeControl.hunks': ['read', 'P3', ''],
-  'changeControl.editHunk': ['database write', 'P4', 'Stores an edited patch for one hunk. Confirm it writes no file before the port.'],
+  'changeControl.editHunk': ['database write', 'P4 (blocked)', 'Stores an edited patch for one hunk. It writes no file of the project: it checks the patch against the stored checkpoint and records the result in the database. Blocked: the Rust shell has no checkpoint content reader, no change diff generator and no `applyPatch` yet, and the check cannot be left out. The status of the hunk depends on the check.'],
   'changeControl.decideHunk': ['filesystem write', 'later', 'Accepting a hunk applies its patch to the workspace file.'],
   'changeControl.decide': ['filesystem write', 'later', 'Accepting a change applies it to the workspace.'],
   'changeControl.changed': ['event', 'event', ''],
@@ -77,7 +77,7 @@ const CLASS = {
   'conversations.create': ['database write', 'P4 (ported)', 'Rust command `conversations_create`: the argument is the project path. The project must be saved, authorized and available, and it must pass the scope check with the blocked roots. The `.nocturne` workspace context is not created yet; the command writes the database only.'],
   'conversations.messages': ['read', 'P3', 'Returns every message with no limit. The port uses the paged form.'],
   'conversations.messagePage': ['read', 'P3', 'Paginated.'],
-  'conversations.delete': ['database write', 'P4', 'Deletes a conversation and its messages.'],
+  'conversations.delete': ['database write', 'P4 (ported)', 'Rust command `conversations_delete`: the argument is the conversation id, a UUID. The conversation and its project are checked as in a conversation write. The store removes the conversation, and its messages, artifacts and suggestions go with it by their foreign keys. Nothing is removed from the project folder.'],
   'ai.send': ['network', 'stop', 'Sends the prompt to a provider and, in build mode, can run tools. Provider network calls are a stop condition.'],
   'ai.cancel': ['control', 'later', 'Cancels the turn in progress.'],
   'ai.event': ['event', 'event', 'Agent events.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`conversations_delete\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,9 +327,9 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `changeControl.editHunk` (confirm first that it writes no file),')
-out.push('   `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,')
-out.push('   `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.')
+out.push('3. **P4, database writes.** Still to port: `workspace.remove`, `brain.delete`, `artifacts.delete`, the deletes,')
+out.push('   each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff')
+out.push('   and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')
 out.push('   and the operation observer for the commands already ported.')
 out.push('5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and')

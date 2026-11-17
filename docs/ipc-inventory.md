@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 13 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 14 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `conversations_delete`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 10 |
-| P4 | 5 |
+| P4 (ported) | 11 |
+| P4 | 3 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,9 +62,9 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `changeControl.editHunk` (confirm first that it writes no file),
-   `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,
-   `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.
+3. **P4, database writes.** Still to port: `workspace.remove`, `brain.delete`, `artifacts.delete`, the deletes,
+   each in its own commit. `changeControl.editHunk` is blocked: it needs the checkpoint content reader, the change diff
+   and `applyPatch` in Rust first. Each one tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
    and the operation observer for the commands already ported.
 5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and
@@ -122,7 +122,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `changeControl:changes` | `window.nocturne.changeControl.changes` | `changes(conversationId: string, changeSetId: string): Promise<ChangeRecord[]>` | zod: changeControlSetSchema | `electron/ipc/registerChangeControlIpc.ts:42` | read | P3 |  |
 | `changeControl:diff` | `window.nocturne.changeControl.diff` | `diff(conversationId: string, changeId: string): Promise<FileDiff \| null>` | via change: zod changeControlChangeSchema | `electron/ipc/registerChangeControlIpc.ts:51` | read | P3 | The diff output must be bounded before the port. |
 | `changeControl:hunks` | `window.nocturne.changeControl.hunks` | `hunks(conversationId: string, changeId: string): Promise<ChangeHunkRecord[]>` | via change: zod changeControlChangeSchema | `electron/ipc/registerChangeControlIpc.ts:58` | read | P3 |  |
-| `changeControl:editHunk` | `window.nocturne.changeControl.editHunk` | `editHunk(conversationId: string, hunkId: string, finalPatch: string): Promise<ChangeHunkRecord>` | zod: changeControlHunkEditSchema | `electron/ipc/registerChangeControlIpc.ts:65` | database write | P4 | Stores an edited patch for one hunk. Confirm it writes no file before the port. |
+| `changeControl:editHunk` | `window.nocturne.changeControl.editHunk` | `editHunk(conversationId: string, hunkId: string, finalPatch: string): Promise<ChangeHunkRecord>` | zod: changeControlHunkEditSchema | `electron/ipc/registerChangeControlIpc.ts:65` | database write | P4 (blocked) | Stores an edited patch for one hunk. It writes no file of the project: it checks the patch against the stored checkpoint and records the result in the database. Blocked: the Rust shell has no checkpoint content reader, no change diff generator and no `applyPatch` yet, and the check cannot be left out. The status of the hunk depends on the check. |
 | `changeControl:decideHunk` | `window.nocturne.changeControl.decideHunk` | `decideHunk(conversationId: string, hunkId: string, status: 'accepted' \| 'rejected'): Promise<ChangeHunkRecord>` | zod: changeControlHunkDecisionSchema | `electron/ipc/registerChangeControlIpc.ts:76` | filesystem write | later | Accepting a hunk applies its patch to the workspace file. |
 | `changeControl:decide` | `window.nocturne.changeControl.decide` | `decide(conversationId: string, changeId: string, status: 'accepted' \| 'rejected'): Promise<{ changeSet: ChangeSetRecord; change: ChangeRecord }>` | zod: changeControlHunkDecisionSchema | `electron/ipc/registerChangeControlIpc.ts:76` | filesystem write | later | Accepting a change applies it to the workspace. |
 | `changeControl:changed` | `window.nocturne.changeControl.onChanged (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `electron/ipc/registerAiIpc.ts:269` | event | event |  |
@@ -131,7 +131,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `conversations:create` | `window.nocturne.conversations.create` | `create(workspace: string): Promise<Conversation>` | inline .parse | `electron/ipc/registerConversationIpc.ts:29` | database write | P4 (ported) | Rust command `conversations_create`: the argument is the project path. The project must be saved, authorized and available, and it must pass the scope check with the blocked roots. The `.nocturne` workspace context is not created yet; the command writes the database only. |
 | `conversations:messages` | `window.nocturne.conversations.messages` | `messages(id: string): Promise<Message[]>` | zod: idSchema | `electron/ipc/registerConversationIpc.ts:34` | read | P3 | Returns every message with no limit. The port uses the paged form. |
 | `conversations:messagePage` | `window.nocturne.conversations.messagePage` | `messagePage(id: string, offset?: number, limit?: number): Promise<MessagePage>` | inline .parse | `electron/ipc/registerConversationIpc.ts:37` | read | P3 | Paginated. |
-| `conversations:delete` | `window.nocturne.conversations.delete` | `delete(id: string): Promise<void>` | zod: idSchema | `electron/ipc/registerConversationIpc.ts:45` | database write | P4 | Deletes a conversation and its messages. |
+| `conversations:delete` | `window.nocturne.conversations.delete` | `delete(id: string): Promise<void>` | zod: idSchema | `electron/ipc/registerConversationIpc.ts:45` | database write | P4 (ported) | Rust command `conversations_delete`: the argument is the conversation id, a UUID. The conversation and its project are checked as in a conversation write. The store removes the conversation, and its messages, artifacts and suggestions go with it by their foreign keys. Nothing is removed from the project folder. |
 | `ai:send` | `window.nocturne.ai.send` | `send(conversationId: string, prompt: string, attachments?: string[], mode?: AgentMode): Promise<void>` | zod: aiSendSchema | `electron/ipc/registerAiIpc.ts:56` | network | stop | Sends the prompt to a provider and, in build mode, can run tools. Provider network calls are a stop condition. |
 | `ai:cancel` | `window.nocturne.ai.cancel` | `cancel(conversationId: string): Promise<void>` | zod: aiCancelSchema | `electron/ipc/registerAiIpc.ts:241` | control | later | Cancels the turn in progress. |
 | `ai:event` | `window.nocturne.ai.onEvent (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `sent from the main process` | event | event | Agent events. |

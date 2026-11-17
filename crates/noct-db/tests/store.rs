@@ -605,3 +605,36 @@ fn a_refused_model_bindings_write_leaves_no_bindings_behind() {
         None
     );
 }
+
+#[test]
+fn a_refused_conversation_delete_leaves_the_conversation_in_place() {
+    let directory = scratch("store-conversation-delete-refused");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_conversation_delete BEFORE DELETE ON conversations
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .conversations()
+        .delete(&conversation.id)
+        .expect_err("the refused delete is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert!(
+        store
+            .conversations()
+            .get(&conversation.id)
+            .expect("the conversation is read")
+            .is_some(),
+        "the conversation is still there"
+    );
+}

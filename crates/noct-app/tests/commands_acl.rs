@@ -817,6 +817,77 @@ fn ai_save_assistant_is_granted_and_checks_its_request() {
     assert_eq!(unsaved["code"], "unknown-conversation");
 }
 
+/// The conversation delete command is granted to the main window. It deletes a conversation of a saved project, takes
+/// the id as a bare string, and refuses any other argument and a conversation that does not exist.
+#[test]
+fn conversations_delete_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("conversations-delete-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+
+    let refused = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_delete",
+            json!({ "input": { "id": conversation_id.clone() } }),
+        ),
+    ));
+    assert_eq!(refused["code"], "invalid-input", "an object is not an id");
+
+    let missing = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_delete",
+            json!({ "input": "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d" }),
+        ),
+    ));
+    assert_eq!(missing["code"], "unknown-conversation");
+
+    get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_delete",
+            json!({ "input": conversation_id.clone() }),
+        ),
+    )
+    .expect("the conversation is deleted");
+    let listed = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_list",
+            json!({ "input": { "limit": 10 } }),
+        ),
+    ));
+    assert_eq!(
+        listed,
+        json!({ "items": [], "hasMore": false, "nextCursor": null }),
+        "the deleted conversation is no longer listed"
+    );
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

@@ -28,6 +28,7 @@ use noct_core::suggestions::{
     Suggestion, SuggestionSnapshot, allowed_suggestion_transition, extract_suggestions,
     review_comparison_markdown,
 };
+use noct_core::validation::uuid_text;
 use noct_db::repositories::workspaces::WorkspaceRow;
 use noct_db::store::{AssistantTurn, Store, TurnArtifact};
 
@@ -502,6 +503,27 @@ pub fn ai_save_assistant(
         metadata: stored.metadata,
         created_at: stored.created_at,
     })
+}
+
+/// Deletes a conversation with its messages and artifacts, which the store's foreign keys remove with it. The id must be a
+/// UUID, as `idSchema` requires, and the conversation and its project are checked as in a conversation write. Nothing is
+/// removed from the project's folder.
+pub fn conversation_delete(
+    store: &Store,
+    blocked: &[PathBuf],
+    id: &str,
+) -> Result<(), CommandError> {
+    let id = uuid_text("conversationId", id).map_err(|_| CommandError::InvalidInput)?;
+    let conversation = store
+        .conversations()
+        .get(&id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    store
+        .conversations()
+        .delete(&conversation.id)
+        .map_err(|_| CommandError::Persistence)
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

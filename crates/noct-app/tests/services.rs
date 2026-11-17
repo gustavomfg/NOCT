@@ -1494,3 +1494,108 @@ fn ai_save_assistant_refuses_an_unknown_conversation_or_a_blocked_project_and_st
         "a refused reply stores nothing"
     );
 }
+
+#[test]
+fn conversation_delete_removes_its_messages_and_artifacts_and_keeps_the_other_conversations() {
+    let scratch = Scratch::new("conversation-delete");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let doomed = services::conversation_create(&store, &[], &path).expect("created");
+    let kept = services::conversation_create(&store, &[], &path).expect("created");
+    for conversation in [&doomed, &kept] {
+        services::ai_save_assistant(
+            &store,
+            &[],
+            &SaveAssistantRequest {
+                conversation_id: conversation.id.clone(),
+                content: "Pronto.".to_string(),
+                metadata: Some(json!({ "files": [{ "path": "a.md" }] })),
+            },
+        )
+        .expect("the reply is saved");
+    }
+    let count = |table: &str, conversation: &str| -> i64 {
+        store
+            .connection()
+            .query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE conversation_id=?1"),
+                [conversation],
+                |row| row.get(0),
+            )
+            .expect("the count is read")
+    };
+    assert_eq!(
+        (
+            count("messages", &doomed.id),
+            count("artifacts", &doomed.id)
+        ),
+        (1, 2)
+    );
+
+    services::conversation_delete(&store, &[], &doomed.id).expect("the conversation is deleted");
+
+    assert_eq!(
+        (
+            count("messages", &doomed.id),
+            count("artifacts", &doomed.id)
+        ),
+        (0, 0)
+    );
+    assert_eq!(
+        (count("messages", &kept.id), count("artifacts", &kept.id)),
+        (1, 2),
+        "the other conversation is intact"
+    );
+    assert!(
+        store
+            .conversations()
+            .get(&doomed.id)
+            .expect("read")
+            .is_none()
+    );
+    assert!(store.conversations().get(&kept.id).expect("read").is_some());
+}
+
+#[test]
+fn conversation_delete_refuses_a_malformed_id_a_missing_conversation_or_a_blocked_project() {
+    let scratch = Scratch::new("conversation-delete-refused");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+
+    assert!(matches!(
+        services::conversation_delete(&store, &[], "not-a-uuid"),
+        Err(CommandError::InvalidInput)
+    ));
+    assert!(matches!(
+        services::conversation_delete(&store, &[], "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d"),
+        Err(CommandError::UnknownConversation)
+    ));
+    let blocked = vec![project.clone()];
+    assert!(matches!(
+        services::conversation_delete(&store, &blocked, &conversation.id),
+        Err(CommandError::UnknownWorkspace)
+    ));
+    assert!(
+        store
+            .conversations()
+            .get(&conversation.id)
+            .expect("read")
+            .is_some(),
+        "a refused delete removes nothing"
+    );
+}

@@ -107,6 +107,24 @@ pub async fn conversations_create(
     .await
 }
 
+/// Deletes a conversation with its messages and artifacts. The argument is the conversation id, as a string.
+#[tauri::command]
+pub async fn conversations_delete(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<(), CommandError> {
+    let id = match input {
+        serde_json::Value::String(text) => text,
+        _ => return Err(CommandError::InvalidInput),
+    };
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::conversation_delete(&guard, &default_blocked_roots(), &id)
+    })
+    .await
+}
+
 /// Creates a candidate brain memory. The argument is `{ conversationId, kind, scope, content }`, checked by the request
 /// contract before the store is read. The store lock covers the conversation lookup, the project check and the write.
 #[tauri::command]

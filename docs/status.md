@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228` and `cfa48ec`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, or saves an assistant reply. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in seven tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, and the model bindings row). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec` and `e9064c4`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, or deletes a conversation. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -290,6 +290,39 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   `noct-db` already uses; the lockfile records the new edge only.
 - Tests after this change: 562 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
   and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `conversations_delete`
+
+- The argument is the conversation id as a bare string, as `conversations_create` takes the project path. Any other JSON
+  shape is `invalid-input`, and so is an id that is not a UUID (`idSchema`).
+- Order, as in `getAuthorizedConversation`: the conversation must exist (`unknown-conversation`), then its project must be
+  saved, authorized, available and not blocked (`unknown-workspace`). Only then is the row deleted.
+- The delete is the repository's `DELETE FROM conversations`. The messages, artifacts and suggestions of the conversation go
+  with it by their `ON DELETE CASCADE` foreign keys, which the store turns on at open. Nothing is removed from the project's
+  folder, as in TypeScript.
+- Known difference, not covered by a test: brain memories are not linked to a conversation by a foreign key in the schema,
+  so a memory of a deleted conversation keeps its `conversation_id`. TypeScript has the same schema and does the same; the
+  behavior is the schema's, and the test does not pin it.
+- Checks: `crates/noct-app/tests/services.rs` (two tests: the cascade removes the messages and artifacts of one conversation
+  and leaves the other intact; the refusals of a malformed id, a missing conversation and a blocked project, with nothing
+  removed), `crates/noct-app/tests/commands_acl.rs` (one test: the grant, the argument shape, the missing conversation, and
+  the listing after the delete), `crates/noct-db/tests/store.rs` (a refused delete leaves the conversation in place).
+- Tests after this change: 566 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with
+  `-D warnings` and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 blocked: `changeControl.editHunk`
+
+- The TypeScript handler checks the hunk, its change and its execution against the authorized conversation, then calls
+  `ChangeHunkService.edit`. That method does not write a file of the project. It stores the edited patch in the database, and
+  before that it checks the patch: the stored checkpoint of the file is read, its SHA-256 must match the change's
+  `beforeHash`, the patch is applied in memory with `applyPatch`, and the hunk becomes `edited` or `conflicted`.
+- Three parts are missing in Rust, and the check cannot be left out, because the status of the hunk depends on it:
+  1. a reader of the checkpoint content (the stored bytes of a file before the execution), which `checkpoints.readContent`
+     does in TypeScript; the Rust checkpoint repository has the records but not the bytes;
+  2. the change diff, `ChangeDiffService.get`, which the check reads for the patch's kind and unified text;
+  3. `applyPatch`, the line-based patch application (about forty lines of TypeScript, with the line-ending normalization).
+- Until those exist, the command is not registered. Porting the database update alone would store a patch that is never
+  checked. Recorded as blocked in the inventory (`P4 (blocked)`).
 
 ### P5 detail (first cut)
 
