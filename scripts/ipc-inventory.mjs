@@ -81,7 +81,7 @@ const CLASS = {
   'ai.send': ['network', 'stop', 'Sends the prompt to a provider and, in build mode, can run tools. Provider network calls are a stop condition.'],
   'ai.cancel': ['control', 'later', 'Cancels the turn in progress.'],
   'ai.event': ['event', 'event', 'Agent events.'],
-  'ai.saveAssistant': ['database write', 'P4', 'Saves an assistant message.'],
+  'ai.saveAssistant': ['database write', 'P4 (ported)', 'Rust command `ai_save_assistant`: the reply is saved with its metadata (JSON within the metadata limit; an explicit null is no metadata; an unknown field is ignored, as the schema is not strict), and the artifacts the metadata names are saved with it: one per listed file, with its kind from the extension, and a report for a non-empty diff. The conversation and its project are checked as in a conversation write. Not ported: the title of the Markdown artifact is in UTC, where the TypeScript shell uses the local time.'],
   'ai.approve': ['process/shell', 'later', 'Approves a pending action that can run a command or change files.'],
   'ai.status': ['event', 'event', ''],
   'ai.rollbackStatus': ['read', 'P3', 'Reads the rollback state. The rollback itself is a separate entry.'],
@@ -296,7 +296,7 @@ out.push(`- Channels in the catalogue: ${rows.length}.`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
-out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
+out.push(`- Already a Rust command: ${count((r) => r.port.includes('ported'))} (\`workspaces_list\`, \`conversations_list\`, \`conversations_create\`, \`brain_create\`, \`brain_extract\`, \`brain_update\`, \`suggestions_create\`, \`suggestions_status\`, \`models_set_bindings\`, \`ai_save_assistant\`, \`settings_get\`, \`settings_set\`, \`workspace_set_favorite\`).`)
 out.push('')
 out.push('| Risk | Channels |')
 out.push('| --- | ---: |')
@@ -327,7 +327,7 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Still to port: `ai.saveAssistant`,')
+out.push('3. **P4, database writes.** Still to port: `changeControl.editHunk` (confirm first that it writes no file),')
 out.push('   `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,')
 out.push('   `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')

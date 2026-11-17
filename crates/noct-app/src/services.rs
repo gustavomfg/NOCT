@@ -5,12 +5,14 @@
 use std::path::PathBuf;
 
 use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::turn::turn_artifacts;
 use noct_core::brain_memory::{
     BrainMemory, BrainMemoryScope, BrainMemorySource, CreateBrainMemoryInput,
     InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition, extract_candidates,
 };
-use noct_core::contracts::{Conversation, Workspace, WorkspaceAvailability};
+use noct_core::contracts::{Conversation, Message, Role, Workspace, WorkspaceAvailability};
 use noct_core::ipc::ReplyRequest;
+use noct_core::ipc::ai::SaveAssistantRequest;
 use noct_core::ipc::brain::{
     BrainMemoryCreateRequest, BrainMemoryExtraction, BrainMemoryUpdateRequest,
 };
@@ -27,7 +29,7 @@ use noct_core::suggestions::{
     review_comparison_markdown,
 };
 use noct_db::repositories::workspaces::WorkspaceRow;
-use noct_db::store::Store;
+use noct_db::store::{AssistantTurn, Store, TurnArtifact};
 
 use crate::error::CommandError;
 use crate::logging::DiagnosticGate;
@@ -442,6 +444,64 @@ pub fn models_set_bindings(
         .workspace_model_bindings()
         .set(bindings)
         .map_err(|_| CommandError::Persistence)
+}
+
+/// The title of an assistant reply's Markdown artifact: `Resposta · ` and the UTC time of the write. The TypeScript shell
+/// writes the local time of the system instead, which this shell does not read yet.
+fn reply_title() -> String {
+    let format =
+        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second] UTC");
+    // The components above always format; the empty fallback only keeps the title a string.
+    let when = time::OffsetDateTime::now_utc()
+        .format(&format)
+        .unwrap_or_default();
+    format!("Resposta · {when}")
+}
+
+/// Stores an assistant reply with its metadata, and the artifacts the metadata names: one per listed file, and a report
+/// for a diff. The conversation and its project are checked as in a conversation write. The reply comes back as the
+/// stored message.
+pub fn ai_save_assistant(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &SaveAssistantRequest,
+) -> Result<Message, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let derived = turn_artifacts(request.metadata.as_ref());
+    let artifacts: Vec<TurnArtifact<'_>> = derived
+        .iter()
+        .map(|artifact| TurnArtifact {
+            kind: artifact.kind,
+            title: &artifact.title,
+            file_path: artifact.file_path.as_deref(),
+            content: artifact.content.as_deref(),
+            metadata: None,
+        })
+        .collect();
+    let title = reply_title();
+    let stored = store
+        .save_assistant_turn(&AssistantTurn {
+            conversation_id: &request.conversation_id,
+            workspace: &conversation.workspace,
+            content: &request.content,
+            metadata: request.metadata.as_ref(),
+            markdown_title: &title,
+            artifacts: &artifacts,
+        })
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(Message {
+        id: stored.id,
+        conversation_id: stored.conversation_id,
+        role: Role::Assistant,
+        content: stored.content,
+        metadata: stored.metadata,
+        created_at: stored.created_at,
+    })
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

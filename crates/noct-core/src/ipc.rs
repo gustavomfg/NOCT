@@ -658,6 +658,72 @@ pub mod brain {
 }
 
 /// The reply of the suggestion commands.
+/// The requests of the assistant commands.
+pub mod ai {
+    use serde::de;
+    use serde::{Deserialize, Deserializer};
+    use serde_json::{Map, Value};
+
+    use super::brain::uuid_field;
+    use crate::json::serialize_within_limit;
+    use crate::limits::persistence::{ASSISTANT_CHARACTERS, METADATA_CHARACTERS};
+    use crate::text::utf16_len;
+
+    /// The request of `ai_save_assistant`: a reply to store, with its optional metadata. The content is kept as it is,
+    /// up to `ASSISTANT_CHARACTERS` UTF-16 units. The metadata is JSON within the metadata limit; an explicit `null` is
+    /// the same as no metadata, as in the TypeScript record. Unlike the reply commands of suggestions and memories, the
+    /// schema of `saveAssistant` is not strict, so an unknown field is ignored, as zod strips it.
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SaveAssistantRequest {
+        pub conversation_id: String,
+        pub content: String,
+        pub metadata: Option<Value>,
+    }
+
+    impl<'de> Deserialize<'de> for SaveAssistantRequest {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let fields = Map::<String, Value>::deserialize(deserializer)?;
+            let mut conversation_id = None;
+            let mut content = None;
+            let mut metadata = None;
+            for (key, value) in fields {
+                match key.as_str() {
+                    "conversationId" => {
+                        conversation_id = Some(uuid_field::<D::Error>("conversationId", value)?)
+                    }
+                    "content" => {
+                        let Value::String(text) = value else {
+                            return Err(de::Error::custom("content must be a string"));
+                        };
+                        if utf16_len(&text) as u64 > ASSISTANT_CHARACTERS {
+                            return Err(de::Error::custom("content is too long"));
+                        }
+                        content = Some(text);
+                    }
+                    "metadata" => {
+                        if serialize_within_limit(&value, METADATA_CHARACTERS as usize).is_err() {
+                            return Err(de::Error::custom(
+                                "metadata is not valid JSON within its limit",
+                            ));
+                        }
+                        metadata = (!value.is_null()).then_some(value);
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Self {
+                conversation_id: conversation_id
+                    .ok_or_else(|| de::Error::missing_field("conversationId"))?,
+                content: content.ok_or_else(|| de::Error::missing_field("content"))?,
+                metadata,
+            })
+        }
+    }
+}
+
 pub mod suggestions {
     use serde::de;
     use serde::{Deserialize, Deserializer, Serialize};

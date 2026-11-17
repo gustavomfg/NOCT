@@ -6,8 +6,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use noct_core::ai::bindings::WorkspaceModelBindings;
 use noct_core::brain_memory::BrainMemory;
-use noct_core::contracts::Conversation;
+use noct_core::contracts::{Conversation, Message};
 use noct_core::ipc::ReplyRequest;
+use noct_core::ipc::ai::SaveAssistantRequest;
 use noct_core::ipc::brain::{
     BrainMemoryCreateRequest, BrainMemoryExtraction, BrainMemoryUpdateRequest,
 };
@@ -205,6 +206,22 @@ pub async fn models_set_bindings(
     blocking(move || {
         let guard = lock(&store)?;
         services::models_set_bindings(&guard, &default_blocked_roots(), bindings)
+    })
+    .await
+}
+
+/// Stores an assistant reply with its metadata. The argument is `{ conversationId, content, metadata? }`.
+#[tauri::command]
+pub async fn ai_save_assistant(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<Message, CommandError> {
+    let request: SaveAssistantRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::ai_save_assistant(&guard, &default_blocked_roots(), &request)
     })
     .await
 }

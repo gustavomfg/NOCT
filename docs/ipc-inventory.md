@@ -16,7 +16,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
-- Already a Rust command: 12 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `settings_get`, `settings_set`, `workspace_set_favorite`).
+- Already a Rust command: 13 (`workspaces_list`, `conversations_list`, `conversations_create`, `brain_create`, `brain_extract`, `brain_update`, `suggestions_create`, `suggestions_status`, `models_set_bindings`, `ai_save_assistant`, `settings_get`, `settings_set`, `workspace_set_favorite`).
 
 | Risk | Channels |
 | --- | ---: |
@@ -36,8 +36,8 @@ The script fails if a channel has no classification, no preload entry or no hand
 | --- | ---: |
 | P3 (ported) | 3 |
 | P3 | 35 |
-| P4 (ported) | 9 |
-| P4 | 6 |
+| P4 (ported) | 10 |
+| P4 | 5 |
 | P5 | 4 |
 | P8 | 1 |
 | later | 30 |
@@ -62,7 +62,7 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.
    The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;
    `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.
-3. **P4, database writes.** Still to port: `ai.saveAssistant`,
+3. **P4, database writes.** Still to port: `changeControl.editHunk` (confirm first that it writes no file),
    `changeControl.editHunk`. The deletes come last, each in its own commit: `conversations.delete`, `workspace.remove`,
    `brain.delete`, `artifacts.delete`. Each one tests that a failed write rolls back and that unknown fields are rejected.
 4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,
@@ -135,7 +135,7 @@ checks: a zod schema from `shared/ipc/schemas.ts`, an inline `.parse`, or none. 
 | `ai:send` | `window.nocturne.ai.send` | `send(conversationId: string, prompt: string, attachments?: string[], mode?: AgentMode): Promise<void>` | zod: aiSendSchema | `electron/ipc/registerAiIpc.ts:56` | network | stop | Sends the prompt to a provider and, in build mode, can run tools. Provider network calls are a stop condition. |
 | `ai:cancel` | `window.nocturne.ai.cancel` | `cancel(conversationId: string): Promise<void>` | zod: aiCancelSchema | `electron/ipc/registerAiIpc.ts:241` | control | later | Cancels the turn in progress. |
 | `ai:event` | `window.nocturne.ai.onEvent (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `sent from the main process` | event | event | Agent events. |
-| `ai:save-assistant` | `window.nocturne.ai.saveAssistant` | `saveAssistant(conversationId: string, content: string, metadata?: JsonValue): Promise<Message>` | zod: saveAssistantSchema | `electron/ipc/registerAiIpc.ts:275` | database write | P4 | Saves an assistant message. |
+| `ai:save-assistant` | `window.nocturne.ai.saveAssistant` | `saveAssistant(conversationId: string, content: string, metadata?: JsonValue): Promise<Message>` | zod: saveAssistantSchema | `electron/ipc/registerAiIpc.ts:275` | database write | P4 (ported) | Rust command `ai_save_assistant`: the reply is saved with its metadata (JSON within the metadata limit; an explicit null is no metadata; an unknown field is ignored, as the schema is not strict), and the artifacts the metadata names are saved with it: one per listed file, with its kind from the extension, and a report for a non-empty diff. The conversation and its project are checked as in a conversation write. Not ported: the title of the Markdown artifact is in UTC, where the TypeScript shell uses the local time. |
 | `ai:approve` | `window.nocturne.ai.approve` | `approve(key: string, accepted: boolean): Promise<void>` | zod: approvalSchema | `electron/ipc/registerAiIpc.ts:292` | process/shell | later | Approves a pending action that can run a command or change files. |
 | `ai:status` | `window.nocturne.ai.onStatus (listener)` | `event listener (see contracts.ts)` | not applicable (sent by the main process) | `sent from the main process` | event | event |  |
 | `ai:rollbackStatus` | `window.nocturne.ai.rollbackStatus` | `rollbackStatus(conversationId: string): Promise<BuildRollbackStatus>` | zod: idSchema | `electron/ipc/registerAiIpc.ts:247` | read | P3 | Reads the rollback state. The rollback itself is a separate entry. |

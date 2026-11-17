@@ -16,7 +16,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P1: open items | `a1c048d`, `cba4544`, `a508a37`, `2212de2`, `7d79ca1`, `0dafe7c` | `0dafe7c` | Row gate: success. Shell: success on Ubuntu, Windows and macOS. | Real window on Windows and macOS (CI opens none). |
 | P2: IPC inventory | `3f2a9ce` | `f1f5b5f` | Shell: success on Ubuntu, Windows and macOS. Row gate: success. | Real window. |
 | P3: read commands | `94a2dba` (`workspaces_list` paged) | `f1f5b5f` | Same run as P2: success on all three systems; row gate success. | A real window. The sidebar reads the first page only (round 2 covers the rest). |
-| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2` and `2000228`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, or saves model bindings. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in seven tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, and the model bindings row). |
+| P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228` and `cfa48ec`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, or saves an assistant reply. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in seven tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, and the model bindings row). |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | not started in round 1 | | | |
@@ -258,6 +258,37 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   `crates/noct-db/tests/store.rs` (a refused row leaves no bindings behind).
 - A mutation check: with the project check removed from the service, the refusal test fails. The file was restored and checked.
 - Tests after this change: 549 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
+  and `node scripts/generate-ipc-samples.mjs --check` pass.
+
+### P4 detail: `ai_save_assistant`
+
+- The argument is `{ conversationId, content, metadata? }`. The schema of `saveAssistant` is not strict, so an unknown field
+  is ignored (zod strips it). This differs from the reply commands of suggestions and memories, which are strict, and the
+  test `an_unknown_field_is_ignored_because_the_schema_is_not_strict` pins it.
+- `content` is kept as it is and is bounded by `ASSISTANT_CHARACTERS`. `metadata` is any JSON value within the metadata
+  limit (`serialize_within_limit`: nesting and size, as `isJsonValueWithinLimit`). An explicit `null` is no metadata, which is
+  how the TypeScript record stores it (`NULL`).
+- The artifacts come from the metadata, as the TypeScript handler reads them. `turn_artifacts` in `noct-core::ai::turn`: each
+  object in `files` with a non-empty string `path` is a file artifact, with its kind from the extension (`artifact_kind`,
+  the same groups as `artifactType`, compared without case) and its title from the basename. A non-empty `diff` is a
+  report titled `Alterações do turno`. A metadata that is not an object gives none.
+- `basename` follows Node's `path.basename` for the system it runs on: `/` is the separator, and `\` is one too on Windows.
+  A Windows drive prefix is not removed; the TypeScript `path.basename` on Windows removes it. This is a known, untested gap.
+- The message, the Markdown artifact and the file artifacts are written in one transaction by `save_assistant_turn`, which
+  already existed. A refusal of any part leaves none of them (the existing test `a_refused_artifact_rolls_back_the_whole_turn`).
+- Known deviation: the title of the Markdown artifact is `Resposta · ` and the UTC time, `2026-11-17 14:03:22 UTC`. The
+  TypeScript shell writes `Resposta · ` and the local time from `toLocaleString()`, which depends on the system's locale and
+  zone. The shell has no local-time formatter yet. The interface shows this title, so the choice needs a decision before the
+  interface uses the command.
+- Not ported: nothing else. The TypeScript handler has no log line of its own.
+- Checks: `crates/noct-core/tests/ipc_ai_save.rs` (four tests: the content and the optional metadata, the ignored unknown
+  field, the depth and size limits of the metadata, the content bound and the required fields), `crates/noct-core/tests/turn_artifacts.rs`
+  (six tests: the kinds, the basename, the files, the diff, the shapes that give none, and the order), `crates/noct-app/tests/services.rs`
+  (two tests: the stored reply, its metadata and its four artifacts; the refusals of an unknown conversation and a blocked
+  project, with nothing stored), `crates/noct-app/tests/commands_acl.rs` (one test).
+- Dependency: `time` is now a direct dependency of `noct-app` (`time.workspace = true`), for the title. It is the version
+  `noct-db` already uses; the lockfile records the new edge only.
+- Tests after this change: 562 passed, 0 failed, 19 ignored in the workspace; `cargo fmt --check`, clippy with `-D warnings`
   and `node scripts/generate-ipc-samples.mjs --check` pass.
 
 ### P5 detail (first cut)

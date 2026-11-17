@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ai-save-assistant"
+description = "Enables the ai_save_assistant command without any pre-configured scope."
+commands.allow = ["ai_save_assistant"]
+
+[[permission]]
+identifier = "deny-ai-save-assistant"
+description = "Denies the ai_save_assistant command without any pre-configured scope."
+commands.deny = ["ai_save_assistant"]

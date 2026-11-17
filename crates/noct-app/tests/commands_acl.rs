@@ -748,6 +748,75 @@ fn models_set_bindings_is_granted_and_checks_its_request() {
     assert_eq!(unsaved["code"], "unknown-workspace");
 }
 
+/// The assistant save command is granted to the main window. It stores a reply of a saved project with its artifacts, and
+/// refuses a reply with a null content, and a project that is not saved.
+#[test]
+fn ai_save_assistant_is_granted_and_checks_its_request() {
+    let scratch = Scratch::new("ai-save-assistant-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let saved = project.to_string_lossy().into_owned();
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(&saved)
+        .expect("the project is saved");
+    let conversation = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "conversations_create",
+            json!({ "input": saved.clone() }),
+        ),
+    ));
+    let conversation_id = conversation["id"].as_str().expect("an id").to_string();
+
+    let message = ok_json(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "ai_save_assistant",
+            json!({ "input": {
+                "conversationId": conversation_id.clone(),
+                "content": "Pronto.",
+                "metadata": { "files": [{ "path": "src/app.ts" }] },
+            } }),
+        ),
+    ));
+    assert_eq!(message["role"], "assistant");
+    assert_eq!(message["content"], "Pronto.");
+    assert!(
+        message["metadata"]
+            .as_str()
+            .expect("the metadata is text")
+            .contains("src/app.ts")
+    );
+
+    let refused = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "ai_save_assistant",
+            json!({ "input": { "conversationId": conversation_id.clone(), "content": null } }),
+        ),
+    ));
+    assert_eq!(refused["code"], "invalid-input");
+
+    let unsaved = error_of(get_ipc_response(
+        &main,
+        request(
+            &main,
+            "ai_save_assistant",
+            json!({ "input": { "conversationId": "3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d", "content": "x" } }),
+        ),
+    ));
+    assert_eq!(unsaved["code"], "unknown-conversation");
+}
+
 #[test]
 fn settings_set_changes_the_diagnostic_gate_the_shell_holds() {
     let scratch = Scratch::new("gate");

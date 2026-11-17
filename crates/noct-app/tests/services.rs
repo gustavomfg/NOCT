@@ -12,14 +12,17 @@ use noct_core::ai::model::ModelReference;
 use noct_core::brain_memory::{
     BrainMemoryKind, BrainMemoryScope, BrainMemorySource, BrainMemoryStatus,
 };
+use noct_core::contracts::Role;
 use noct_core::contracts::{Workspace, WorkspaceAvailability};
 use noct_core::ipc::ReplyRequest;
+use noct_core::ipc::ai::SaveAssistantRequest;
 use noct_core::ipc::brain::{BrainMemoryCreateRequest, BrainMemoryUpdateRequest};
 use noct_core::ipc::conversations::ConversationPageRequest;
 use noct_core::ipc::settings::{AppLanguage, AppTheme, ApprovalPolicy, SettingsUpdate};
 use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
 use noct_core::ipc::workspaces::{WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePageRequest};
 use noct_core::suggestions::SuggestionStatus;
+use serde_json::json;
 
 const NOT_FOUND: &str = "Pasta do projeto não encontrada.";
 const NOT_A_FOLDER: &str = "O caminho do workspace não é uma pasta.";
@@ -1387,5 +1390,107 @@ fn models_set_bindings_refuses_a_project_that_is_not_saved_authorized_available_
             .expect("the bindings are read"),
         None,
         "no refused write stored anything"
+    );
+}
+
+#[test]
+fn ai_save_assistant_stores_the_reply_with_its_metadata_and_the_artifacts_it_names() {
+    let scratch = Scratch::new("ai-save-assistant");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let metadata = json!({
+        "files": [{ "path": "src/app.ts" }, { "path": "docs/a.md" }, "skipped"],
+        "diff": "--- a\n+++ b",
+    });
+    let request = SaveAssistantRequest {
+        conversation_id: conversation.id.clone(),
+        content: "Pronto.".to_string(),
+        metadata: Some(metadata.clone()),
+    };
+
+    let message = services::ai_save_assistant(&store, &[], &request).expect("the reply is saved");
+    assert_eq!(message.role, Role::Assistant);
+    assert_eq!(message.content, "Pronto.");
+    let stored_metadata: serde_json::Value =
+        serde_json::from_str(message.metadata.as_deref().expect("the metadata is stored"))
+            .expect("the metadata is JSON");
+    assert_eq!(stored_metadata, metadata);
+
+    let artifacts = store
+        .artifacts()
+        .list(&conversation.id)
+        .expect("the artifacts are listed");
+    let find = |kind: &str, title: &str| {
+        artifacts
+            .iter()
+            .find(|artifact| artifact.kind == kind && artifact.title == title)
+            .unwrap_or_else(|| panic!("an artifact {kind} {title} exists: {artifacts:?}"))
+            .clone()
+    };
+    let reply = artifacts
+        .iter()
+        .find(|artifact| artifact.kind == "markdown" && artifact.title.starts_with("Resposta · "))
+        .expect("the reply has its Markdown artifact");
+    assert!(reply.title.ends_with(" UTC"), "{}", reply.title);
+    assert_eq!(reply.content.as_deref(), Some("Pronto."));
+    let app = find("code", "app.ts");
+    assert_eq!(app.file_path.as_deref(), Some("src/app.ts"));
+    let note = find("markdown", "a.md");
+    assert_eq!(note.file_path.as_deref(), Some("docs/a.md"));
+    let report = find("report", "Alterações do turno");
+    assert_eq!(report.content.as_deref(), Some("--- a\n+++ b"));
+    assert_eq!(artifacts.len(), 4, "one reply, two files and one report");
+}
+
+#[test]
+fn ai_save_assistant_refuses_an_unknown_conversation_or_a_blocked_project_and_stores_nothing() {
+    let scratch = Scratch::new("ai-save-assistant-refused");
+    let project = scratch.path().join("project");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let path = project.to_string_lossy().into_owned();
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    store
+        .workspaces()
+        .touch(&path)
+        .expect("the workspace is saved");
+    let conversation = services::conversation_create(&store, &[], &path).expect("created");
+    let request = |conversation_id: &str| SaveAssistantRequest {
+        conversation_id: conversation_id.to_string(),
+        content: "Pronto.".to_string(),
+        metadata: Some(json!({ "files": [{ "path": "a.md" }] })),
+    };
+
+    let unknown = services::ai_save_assistant(
+        &store,
+        &[],
+        &request("3f0c7a52-8d1e-4b6a-9c2f-5e7d8a9b0c1d"),
+    );
+    assert!(matches!(unknown, Err(CommandError::UnknownConversation)));
+
+    let blocked = vec![project.clone()];
+    let refused = services::ai_save_assistant(&store, &blocked, &request(&conversation.id));
+    assert!(matches!(refused, Err(CommandError::UnknownWorkspace)));
+
+    let messages: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+        .expect("the count is read");
+    let artifacts: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM artifacts", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        (messages, artifacts),
+        (0, 0),
+        "a refused reply stores nothing"
     );
 }

@@ -11,6 +11,7 @@ pub const BRAIN_UPDATE: &str = "brain_update";
 pub const SUGGESTIONS_CREATE: &str = "suggestions_create";
 pub const SUGGESTIONS_STATUS: &str = "suggestions_status";
 pub const MODELS_SET_BINDINGS: &str = "models_set_bindings";
+pub const AI_SAVE_ASSISTANT: &str = "ai_save_assistant";
 pub const CONVERSATIONS_CREATE: &str = "conversations_create";
 pub const CONVERSATIONS_LIST: &str = "conversations_list";
 pub const WORKSPACE_SET_FAVORITE: &str = "workspace_set_favorite";
@@ -25,6 +26,7 @@ pub const ALL: &[&str] = &[
     SUGGESTIONS_CREATE,
     SUGGESTIONS_STATUS,
     MODELS_SET_BINDINGS,
+    AI_SAVE_ASSISTANT,
     CONVERSATIONS_CREATE,
     CONVERSATIONS_LIST,
     WORKSPACE_SET_FAVORITE,
