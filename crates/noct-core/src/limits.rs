@@ -107,6 +107,13 @@ pub mod provider_configuration {
     pub const MAXIMUM_TIMEOUT_MS: u64 = 120_000;
 }
 
+/// Limits of a provider key typed in the settings. The key is sent as an HTTP header, so only visible ASCII is
+/// accepted; the bounds are the ones the shell enforces before it stores anything.
+pub mod provider_key {
+    pub const MINIMUM_KEY_CHARACTERS: u64 = 8;
+    pub const MAXIMUM_KEY_CHARACTERS: u64 = 512;
+}
+
 /// Limits of model descriptors. Port of `MODEL_LIMITS` in `shared/ai/model.ts`.
 pub mod model {
     pub const IDENTIFIER_CHARACTERS: u64 = 512;

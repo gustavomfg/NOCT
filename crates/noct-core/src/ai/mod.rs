@@ -4,6 +4,7 @@
 pub mod bindings;
 pub mod model;
 pub mod provider_configuration;
+pub mod provider_key;
 pub mod turn;
 
 use serde::{Deserialize, Serialize};
