@@ -8,6 +8,7 @@ mod ipc;
 mod provider;
 mod provider_panel;
 mod settings;
+mod settings_panel;
 mod sidebar;
 mod theme;
 mod workspaces;

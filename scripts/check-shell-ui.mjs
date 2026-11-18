@@ -65,8 +65,6 @@ if (!(minimum.width > 0 && minimum.height > 0)) {
 }
 const SIZES = [minimum, { width: 1440, height: 920 }]
 
-const LIGHT = 'NOCT claro'
-const DARK = 'NOCT escuro'
 const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar os dados locais.' }
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
@@ -163,7 +161,7 @@ const SCENARIOS = [
   { name: 'projects-with-more-to-come', mode: 'ready', theme: 'light', projects: 'ready', more: true, expectTheme: 'light' },
   { name: 'theme-not-saved-says-so', mode: 'ready', theme: 'light', saveFails: true, expectTheme: 'light' },
   { name: 'provider-key-not-configured', mode: 'ready', theme: 'light', provider: true, expectTheme: 'light' },
-  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, expectTheme: 'light' },
+  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, granted: ['/work/alpha'], expectTheme: 'light' },
   { name: 'provider-key-save-refused', mode: 'ready', theme: 'light', keyFails: SECURE_STORAGE_ERROR, provider: true, expectTheme: 'light' },
   { name: 'provider-reply-outside-the-contract', mode: 'invalid', theme: 'light', provider: true, expectTheme: 'light' },
   { name: 'chat-off-by-default', mode: 'chat', theme: 'light', chatEnabled: false, expectTheme: 'light' },
@@ -247,7 +245,11 @@ function installMock(config) {
   // The settings the shell holds: a save changes them, and the next read or save shows the change.
   const saved = { ...config.settings }
   // The key state and the consent of each project. The key itself is never kept, and never returned.
-  const providerState = { configured: config.scenario.keyConfigured === true, granted: {}, models: {} }
+  const providerState = {
+    configured: config.scenario.keyConfigured === true,
+    granted: Object.fromEntries((config.scenario.granted ?? []).map((path) => [path, true])),
+    models: {},
+  }
   // `workspaces_list` answers with a page: the items, and whether more follow them.
   // The cursor of a page with more is the key of its last project, as the shell writes it.
   const cursorOf = (items) => {
@@ -383,12 +385,9 @@ function installMock(config) {
 // sent, and the key is in no part of the page afterwards. The consent is asked for one project at a time, and says
 // what may be sent before it is confirmed.
 async function providerFlow(page, scenario, check) {
-  const input = page.getByLabel('Chave do OpenRouter', { exact: true })
-  const save = page.getByRole('button', { name: 'Salvar chave', exact: true })
   const calls = () => page.evaluate(() => window.__noctCalls ?? [])
   await page.getByTestId('provider').waitFor({ timeout: 8000 })
-  check((await input.getAttribute('type')) === 'password', 'the key field is a password field')
-  check((await input.getAttribute('autocomplete')) === 'off', 'the key field turns off browser autocompletion')
+  const keyState = page.getByTestId('key-state')
 
   if (scenario.mode === 'invalid') {
     const alert = page.getByTestId('key-error')
@@ -398,12 +397,16 @@ async function providerFlow(page, scenario, check) {
   }
 
   const configured = scenario.keyConfigured === true
-  await page
-    .getByTestId('key-status')
-    .getByText(configured ? 'Chave configurada.' : 'Nenhuma chave configurada.', { exact: true })
-    .waitFor({ timeout: 8000 })
+  await keyState.getByText(configured ? 'Configurada' : 'Sem chave', { exact: true }).waitFor({ timeout: 8000 })
+
+  // The key is changed only after "Trocar" opens the field, and the field is a password field.
+  await page.getByTestId('key-change').click()
+  const input = page.getByLabel('Nova chave do OpenRouter', { exact: true })
+  check((await input.getAttribute('type')) === 'password', 'the key field is a password field')
+  check((await input.getAttribute('autocomplete')) === 'off', 'the key field turns off browser autocompletion')
 
   await input.fill(TEST_KEY)
+  const save = page.getByTestId('key-save')
   check(await save.isEnabled(), 'the save button is enabled once a key is typed')
   await save.click()
 
@@ -413,14 +416,16 @@ async function providerFlow(page, scenario, check) {
     check((await alert.textContent())?.includes(SECURE_STORAGE_ERROR.message), 'a refused save shows the shell message')
     check((await input.inputValue()) === '', 'the key field is emptied even when the save is refused')
     check(!(await page.content()).includes(TEST_KEY), 'the key is in no part of the page after a refused save')
-    check((await page.getByTestId('key-status').textContent()) === 'Nenhuma chave configurada.', 'a refused save leaves the status as it was')
+    check((await keyState.textContent())?.trim() === 'Sem chave', 'a refused save leaves the status as it was')
     return
   }
 
   await page.waitForFunction(() => (window.__noctCalls ?? []).some((call) => call.command === 'provider_key_save'))
   await page.waitForFunction(() => !document.querySelector('[data-testid="key-save-error"]'))
-  await page.getByTestId('key-status').getByText('Chave configurada.', { exact: true }).waitFor({ timeout: 8000 })
-  check((await input.inputValue()) === '', 'the key field is emptied when the key is sent')
+  // The field closes when the reply of the save is in; the badge may say so already, when a key was configured before.
+  await page.getByLabel('Nova chave do OpenRouter', { exact: true }).waitFor({ state: 'detached', timeout: 8000 })
+  await keyState.getByText('Configurada', { exact: true }).waitFor({ timeout: 8000 })
+  check((await page.getByLabel('Nova chave do OpenRouter', { exact: true }).count()) === 0, 'the key field closes once the key is sent')
   check(!(await page.content()).includes(TEST_KEY), 'the key is in no attribute, text or script of the page after the save')
   const saves = (await calls()).filter((call) => call.command === 'provider_key_save')
   check(
@@ -432,49 +437,42 @@ async function providerFlow(page, scenario, check) {
     'the key is sent once, with its provider and nothing else',
   )
 
-  await page.getByRole('button', { name: 'Remover chave', exact: true }).click()
-  await page.getByTestId('key-status').getByText('Nenhuma chave configurada.', { exact: true }).waitFor({ timeout: 8000 })
+  await page.getByTestId('key-remove').click()
+  await keyState.getByText('Sem chave', { exact: true }).waitFor({ timeout: 8000 })
 
-  await page.getByLabel('Projeto', { exact: true }).selectOption('/work/alpha')
-  await page.getByTestId('consent-status').getByText('Sem consentimento.', { exact: true }).waitFor({ timeout: 8000 })
-  await page.getByRole('button', { name: 'Pedir consentimento', exact: true }).click()
-  const confirm = page.getByTestId('consent-confirm')
-  const text = (await confirm.textContent()) ?? ''
-  check(text.includes('128 KiB') && text.includes('32 KiB'), 'the consent names the budget and the per-file cap')
-  check(text.includes('nada é enviado'), 'the consent says that nothing is sent while the chat is off')
-  await page.getByRole('button', { name: 'Cancelar', exact: true }).click()
-  check(!(await confirm.isVisible()), 'cancelling leaves no consent')
-  await page.getByRole('button', { name: 'Pedir consentimento', exact: true }).click()
-  await page.getByRole('button', { name: 'Confirmar consentimento', exact: true }).click()
-  await page.getByTestId('consent-status').getByText('Consentimento concedido.', { exact: true }).waitFor({ timeout: 8000 })
-  await page.getByRole('button', { name: 'Revogar consentimento', exact: true }).click()
-  await page.getByTestId('consent-status').getByText('Sem consentimento.', { exact: true }).waitFor({ timeout: 8000 })
-
-  const consents = (await calls()).filter((call) => PROVIDER_WRITES.includes(call.command) && call.command.includes('consent'))
+  // The projects with permission. A granted project is listed, and its revocation is one call that names it. Ajustes never
+  // grants a permission: the chat asks for it.
+  const permissions = page.getByTestId('permissions')
+  const none = permissions.getByTestId('permissions-status').getByText('Nenhum projeto com permissão ainda.', { exact: true })
+  if (scenario.granted) {
+    await permissions.getByText('alpha', { exact: true }).waitFor({ timeout: 8000 })
+    await permissions.getByRole('button', { name: 'Revogar', exact: true }).click()
+  }
+  await none.waitFor({ timeout: 8000 })
+  const revokes = (await calls()).filter((call) => call.command === 'provider_consent_revoke')
   check(
-    consents.map((call) => call.command).join() === 'provider_consent_grant,provider_consent_revoke',
-    'the consent is granted once and revoked once, after its confirmation',
+    scenario.granted
+      ? revokes.length === 1 && revokes[0].payload.input.workspace === '/work/alpha'
+      : revokes.length === 0,
+    'a revocation names its project, and only a chosen revocation is sent',
   )
-  check(
-    consents.every((call) => call.payload.input.workspace === '/work/alpha'),
-    'each consent call names the chosen project',
-  )
+  check(!(await calls()).some((call) => call.command === 'provider_consent_grant'), 'Ajustes never grants a permission')
 
-  // The default model of the chosen project: a refused identifier is shown and not saved; a valid one is shown as saved;
-  // null clears it. Every write names the project.
-  const modelField = page.getByLabel('Id do modelo no OpenRouter', { exact: true })
-  await page.getByTestId('model-status').getByText('Nenhum modelo padrão salvo.', { exact: true }).waitFor({ timeout: 8000 })
+  // The default model of the current project: a refused identifier is shown and not kept; a valid one stays in the field;
+  // clearing sends null. Every write names the project.
+  const modelField = page.getByLabel('Id do modelo padrão', { exact: true })
   check((await modelField.getAttribute('autocomplete')) === 'off', 'the model field turns off browser autocompletion')
   await modelField.fill('gpt-4o')
-  await page.getByRole('button', { name: 'Salvar modelo', exact: true }).click()
+  await page.getByTestId('model-save').click()
   await page.getByTestId('model-error').getByText(MODEL_REFUSED.message, { exact: true }).waitFor({ timeout: 8000 })
-  check((await page.getByTestId('model-status').textContent()) === 'Nenhum modelo padrão salvo.', 'a refused identifier is not shown as saved')
   await modelField.fill('openai/gpt-4o:free')
-  await page.getByRole('button', { name: 'Salvar modelo', exact: true }).click()
-  await page.getByTestId('model-status').getByText('Modelo salvo: openai/gpt-4o:free', { exact: true }).waitFor({ timeout: 8000 })
-  check((await page.getByTestId('model-error').count()) === 0, 'a saved identifier clears the earlier refusal')
-  await page.getByRole('button', { name: 'Limpar modelo', exact: true }).click()
-  await page.getByTestId('model-status').getByText('Nenhum modelo padrão salvo.', { exact: true }).waitFor({ timeout: 8000 })
+  await page.getByTestId('model-save').click()
+  await page.waitForFunction(() => !document.querySelector('[data-testid="model-error"]'))
+  await page.waitForFunction(() => (window.__noctCalls ?? []).filter((call) => call.command === 'models_set_default_model').length === 2)
+  check((await modelField.inputValue()) === 'openai/gpt-4o:free', 'the saved identifier stays in the field')
+  await page.getByTestId('model-clear').click()
+  await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
+  check((await modelField.inputValue()) === '', 'clearing empties the field')
 
   const modelWrites = (await calls()).filter((call) => call.command === 'models_set_default_model')
   check(
@@ -674,12 +672,12 @@ try {
           await alert.getByRole('button', { name: 'Tentar novamente' }).click()
         }
         await values.waitFor({ timeout: 8000 })
-        // Tema and Pandoc are read as text. Idioma, Segurança do agente and Diagnóstico are selects, and carry their values.
-        const themeRow = scenario.theme === 'dark' ? DARK : scenario.theme === 'light' ? LIGHT : 'Não informado'
-        for (const [label, value] of [['Tema', themeRow], ['Pandoc', '3.1.2']]) {
-          const pair = page.locator('dt', { hasText: label }).locator('xpath=following-sibling::dd[1]')
-          check((await pair.textContent())?.trim() === value, `${label} shows ${value}`)
-        }
+        // The theme select shows the theme of the page. Pandoc is read from its row. Idioma, Segurança do agente and
+        // Diagnóstico are selects, and carry their values.
+        const pageTheme = await html.getAttribute('data-theme')
+        check((await page.getByLabel('Tema', { exact: true }).inputValue()) === pageTheme, 'the theme select shows the theme of the page')
+        const pandoc = page.locator('.item', { has: page.getByText('Pandoc', { exact: true }) }).locator('.body')
+        check((await pandoc.textContent())?.trim() === '3.1.2', 'Pandoc shows 3.1.2')
         for (const [label, value] of [['Idioma', 'en'], ['Segurança do agente', 'untrusted'], ['Diagnóstico', 'on']]) {
           check((await page.getByLabel(label).inputValue()) === value, `${label} selects ${value}`)
         }
@@ -753,6 +751,16 @@ try {
       // The theme: the saved setting, or the system when none was chosen. The attribute is what the CSS reads.
       check((await html.getAttribute('data-theme')) === scenario.expectTheme, `the theme is ${scenario.expectTheme}`)
       check((await html.getAttribute('data-glass')) === 'on', 'the glass layer is on by default')
+      // The glass switch turns the layer off and on, and keeps the choice for this viewer.
+      // Chat scenarios leave Ajustes for Revisar; opening it again is a no-op when it is already open.
+      await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
+      const glassSwitch = page.getByRole('switch', { name: 'Efeito de vidro', exact: true })
+      await glassSwitch.click()
+      check((await html.getAttribute('data-glass')) === 'off', 'the glass switch turns the layer off')
+      check((await glassSwitch.getAttribute('aria-checked')) === 'false', 'the glass switch reports off')
+      check((await page.evaluate(() => window.localStorage.getItem('noct.glass'))) === 'off', 'the glass choice is kept for this viewer')
+      await glassSwitch.click()
+      check((await html.getAttribute('data-glass')) === 'on', 'the glass switch turns the layer back on')
 
       // Construir and Documentar are not available yet: each says so, and offers no control for the work.
       if (scenario.unavailableModes) {
@@ -940,16 +948,9 @@ try {
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
         check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
-        // The call log starts again at each page load. The key status is read once when the window opens, for the sidebar
-        // card, and once more each time Ajustes is opened from closed after the last load. A press of Ajustes while they are
-        // already open is not an opening: the save-failure scenario presses it twice in a row, which is one opening. The full
-        // scenario reloads the page and then leaves Ajustes closed. A change of the key is shown from the reply of its own
-        // save, so it adds no read.
-        const openingsAfterLoad = scenario.full ? 0 : 1
-        check(
-          count('provider_key_status') === 1 + openingsAfterLoad,
-          `provider_key_status is read once on load and once for each opening of Ajustes after it (reads: ${count('provider_key_status')}, expected: ${1 + openingsAfterLoad})`,
-        )
+        // The key is read once, when the window opens: Ajustes shows the key the sidebar holds, and a change is shown from the
+        // reply of its own save.
+        check(count('provider_key_status') === 1, `provider_key_status is read once, on load (reads: ${count('provider_key_status')})`)
       }
 
       const inline = await page.evaluate(() => document.querySelectorAll('[style], style').length)

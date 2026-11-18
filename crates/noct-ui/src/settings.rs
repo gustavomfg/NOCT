@@ -115,15 +115,6 @@ pub fn settle(outcome: Outcome) -> SettingsView {
     }
 }
 
-/// The words of the theme the settings hold. The theme changes with the sidebar button, so it is read here, not edited.
-pub fn theme_label(theme: Option<AppTheme>) -> &'static str {
-    match theme {
-        Some(AppTheme::Dark) => "NOCT escuro",
-        Some(AppTheme::Light) => "NOCT claro",
-        None => NOT_INFORMED,
-    }
-}
-
 /// The version of Pandoc the shell found, or the words for none.
 pub fn pandoc_label(settings: &AppSettings) -> String {
     settings
@@ -305,7 +296,6 @@ mod tests {
             pandoc_version: Some("3.1.2".to_string()),
         };
 
-        assert_eq!(theme_label(settings.theme), "NOCT claro");
         assert_eq!(pandoc_label(&settings), "3.1.2");
     }
 
@@ -314,7 +304,6 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(r#"{"approvalPolicy":"on-request"}"#)
             .expect("the contract accepts it");
 
-        assert_eq!(theme_label(settings.theme), NOT_INFORMED);
         assert_eq!(pandoc_label(&settings), NOT_INFORMED);
         assert_eq!(
             settings
