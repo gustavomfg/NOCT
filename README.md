@@ -4,7 +4,7 @@
 
 > This is the branch `migration/rust`. It holds the work that moves NOCT's desktop shell and local persistence
 > from Electron and TypeScript to Rust. It is not a release. The stable product is the Electron application on
-> `main` (version 1.0.5), and its README is on `main`.
+> `main` (release v1.0.5), and its README is on `main`.
 
 This file describes the branch as it was checked on 2026-11-17, against the code of commit `de7dba4`. The commits
 after it change only documentation. Each statement names what was checked. Anything that was not checked is listed

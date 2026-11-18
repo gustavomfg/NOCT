@@ -4,7 +4,7 @@
 
 > Este é o branch `migration/rust`. Ele reúne o trabalho que move o shell desktop do NOCT e a persistência local do
 > Electron e do TypeScript para Rust. Não é uma versão. O produto estável é o aplicativo Electron na `main` (versão
-> 1.0.5), e o README dele está na `main`.
+> v1.0.5), e o README dele está na `main`.
 
 Este arquivo descreve o branch como ele foi conferido em 2026-11-17, contra o código do commit `de7dba4`. Os commits
 depois dele mudam só a documentação. Cada afirmação diz o que foi conferido. O que não foi conferido está listado como
