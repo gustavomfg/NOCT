@@ -1051,6 +1051,90 @@ claimed. The push-side saving is that Windows and macOS no longer run on each pu
 - The composer stub was replaced by the chat section (`crates/noct-ui/src/chat_panel.rs`). The design owner should check it.
 - The commit message of `0a34a65` ("five" for six commands) is left as it is.
 
+## Removal of the TypeScript and Electron side from `migration/rust`
+
+The owner decided that `migration/rust` keeps only the Rust product. `main` is not changed. The previous product is kept
+at the annotated tag `electron-final`, on commit `c8c378b` (tag object `e5b49be`), published to `origin`. The inventory and
+the decision for each group are in [ts-removal-plan.md](ts-removal-plan.md).
+
+### Commits
+
+| Commit | Step | What it does | On `origin/migration/rust` |
+| --- | --- | --- | --- |
+| `d76762a` | 1 | Inventory, with APAGAR, MANTER and PORTAR for each group | yes |
+| `02125b3` | 2 | Freeze: the four TypeScript reference files and the observer names are copied as fixtures | yes |
+| `04533c6` | 3a | Renderer `src/`, `electron/`, root `index.html`, `public/`, Vite and electron-builder config (229 files) | yes |
+| `7b3da42` | 3b | `shared/`, `tests/` (104 TypeScript files and 10 screenshots), the vitest, playwright, tsconfig and eslint config. The three release-workflow checks are ported to `node:test` | yes |
+| `dace06d` | 3c | Six Electron workflows, 27 scripts and the release-line manifest, three ignored TypeScript gates | no |
+| `867f47c` | 3d | `package.json` and lock reduced to `playwright` 1.61.1 | no |
+| `0318ecb` | 3e | READMEs, CONTRIBUTING files and the pull request template describe the Rust-only branch | no |
+
+The owner asked for two or three commits. The work was split into seven because each step was validated on its own.
+
+### What was kept, and why
+
+- **Rust test data:** the four TypeScript reference files (`constants`, `providerConfiguration`, `model`, `channels`) are copied
+  byte for byte to `crates/noct-core/tests/fixtures/ts-reference/`. The observer names are in
+  `crates/noct-db/tests/fixtures/typescript-observer-names.json`. The three Rust tests that read them now read the copies.
+- **Rust-side files:** `crates/*`, `native/` (the C++ worker source, not compiled by CI), `docs/`, `assets/`, the UI sources
+  and `crates/noct-ui/assets` (the vendored Geist fonts).
+- **Node scripts of the Rust flow:** `run-rust-shell.mjs` (its `--from-fixture` option is removed, because it compiled a
+  release tag's TypeScript), `set-glass.mjs`, `check-shell-ui.mjs`, `check-shell-csp.mjs`, `shell-latest-json.mjs`, and
+  their tests. They run on Node, as the owner allowed.
+- **Electron tag patterns:** `scripts/fixtures/electron-tag-patterns.json`, frozen from `electron-final`. The release test
+  checks that no shell tag matches them, as it did when it read the deleted workflows.
+
+### Deleted, and restorable from the tag
+
+Everything listed above as removed is in `git show electron-final:<path>`. Nothing that Rust reads was deleted by mistake.
+The checks at each step found no such case: `cargo test --workspace` passed each time with the same 759 tests.
+
+### Validation at `0318ecb`
+
+| Check | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | passed |
+| `cargo clippy --workspace --all-targets -- -D warnings` | passed |
+| `cargo test --workspace --no-fail-fast` | 759 passed, 0 failed, 6 ignored (13 ignored tests were the TypeScript gates and are gone) |
+| `trunk build --release` in `crates/noct-ui` | passed |
+| `node scripts/check-shell-ui.mjs` | passed, 27 scenarios |
+| `npm test` (`node --test scripts/*.test.mjs`) | 37 passed, 0 failed |
+| `npm ci --ignore-scripts` | installs `playwright` and `playwright-core` only |
+
+`npm run typecheck` and `npm run lint` no longer exist, because there is no TypeScript and no ESLint on this branch. The
+sync rule that asked for them before each change to `.mjs`, `.ts` or `.js` files cannot run on this branch as written.
+`npm run typecheck` and `npm run lint` ran with exit 0 before the first deletion. Their output is in the scratch folder of
+the session, not in the repository.
+
+### What is lost, stated plainly
+
+- The parity checks against the previous TypeScript product: the row gate (10 tests), the Rust-written gate (2 tests) and
+  the output differential over the nine release lines (1 test). They run at `electron-final` only.
+- The migration fixtures of the nine release lines, which were built from the tags' sources.
+- The Windows persistence check of four TypeScript files (`docs/windows-persistence-flake.md`). Its cause is not
+  established, and it can no longer run on this branch.
+- The Electron packaging, the packaged smoke, the updater rehearsal and the Electron stable release. They stay on `main`.
+- The React renderer's visual baselines (ten screenshots) and the design-system CSS check (`check-design-system.mjs`).
+- The C++ rollback worker is no longer compiled or tested in CI.
+- The `--from-fixture` option of the launcher.
+
+### Owner decisions and dependencies
+
+1. **PR #23 must not be merged into `main` as it stands.** Merging `migration/rust` into `main` would remove the Electron
+   product from `main`. No action on the PR was taken.
+2. **CodeQL** has `javascript-typescript` in its language set. That is a repository setting, outside the files.
+3. **`AGENTS.md`** still describes the Electron invariants. Not changed here.
+4. **The sync rule** names `npm run typecheck` and `npm run lint`, which no longer exist on this branch.
+5. **Whether the parity checks are recreated** as Rust-only tests against frozen data, on another branch or tag.
+6. **Windows and macOS CI** are not awaited for each push, as the owner asked. The `rust-shell-validation.yml` run on a push
+   to `migration/rust` is Linux only; Windows and macOS run on tags, on pull requests to `main`, nightly and on dispatch.
+
+### Stops
+
+None of the stop conditions was hit. The changes touched no secret, no updater key, no signing, no CI secret, no `main`
+and no PR.
+
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

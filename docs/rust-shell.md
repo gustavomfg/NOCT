@@ -1,5 +1,10 @@
 # Running the Rust shell locally
 
+> Removal note (`migration/rust`): the `--from-fixture` option and the release-line commands named below
+> (`scripts/verify-row-gate.mjs`, `scripts/generate-output-differential.mjs`) were removed with the TypeScript side. The
+> launcher now takes `--data-dir` and `--check` only. What was removed, and where the old commands still run, is in
+> [status.md](status.md), "Removal of the TypeScript and Electron side".
+
 The Rust shell (`crates/noct-app`) runs the interface (`crates/noct-ui`, Leptos compiled to WebAssembly
 with Trunk) inside a Tauri window. This page is the reference for running it, and for what has and has
 not been checked. The decision behind the layout is in [ADR 0001](adr/0001-rust-migration.md), and the

@@ -1,5 +1,9 @@
 # Running the row gate in CI before the merge to main
 
+> Historical record. The workflow `row-gate.yml` and its scripts were removed from `migration/rust` in the removal
+> commits; the gate runs only at the tag `electron-final`. See [status.md](status.md), "Removal of the TypeScript and
+> Electron side". The text below describes the gate as it was.
+
 Status: implemented as `.github/workflows/row-gate.yml`. It runs on Ubuntu and is not a required check: making it required
 is a setting of the repository, and the owner makes it.
 
