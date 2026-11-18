@@ -1171,6 +1171,64 @@ fn a_window_outside_the_capability_is_refused_even_for_a_granted_command() {
     assert_refused_by_the_acl(response);
 }
 
+/// The provider key commands are granted to the main window. These requests stop before the operating system credential
+/// store is opened: a status and a removal with no saved key, and saves that the contract refuses. A valid save is
+/// not sent here, because it would write to the store of the machine that runs the tests.
+#[test]
+fn the_provider_key_commands_are_granted_and_refuse_bad_requests_before_the_store() {
+    let scratch = Scratch::new("provider-key-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+
+    assert_eq!(
+        ok_json(get_ipc_response(
+            &main,
+            request(&main, "provider_key_status", json!({})),
+        )),
+        json!({ "provider": "openrouter", "configured": false }),
+        "no key is saved, and the reply carries no key"
+    );
+    assert_eq!(
+        ok_json(get_ipc_response(
+            &main,
+            request(&main, "provider_key_remove", json!({})),
+        )),
+        json!({ "provider": "openrouter", "configured": false }),
+        "removing with no saved key is a no-op"
+    );
+
+    for input in [
+        json!({ "input": { "provider": "openrouter", "key": "short" } }),
+        json!({ "input": { "provider": "groq", "key": "sk-or-v1-0123456789" } }),
+        json!({ "input": { "provider": "openrouter", "key": "sk-or-v1-0123456789", "extra": 1 } }),
+        json!({ "input": { "provider": "openrouter", "key": "sk-or-v1-with space" } }),
+        json!({ "input": null }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "provider_key_save", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+        assert!(
+            !error.to_string().contains("sk-or-v1"),
+            "the refusal carries no key: {error}"
+        );
+    }
+}
+
+/// The provider key commands are not granted to a window outside the capability.
+#[test]
+fn the_provider_key_commands_are_refused_to_another_window() {
+    let scratch = Scratch::new("provider-key-other");
+    let app = app_with_commands(&scratch);
+    let other = window(&app, "secondary");
+
+    for command in ["provider_key_status", "provider_key_remove"] {
+        let response = get_ipc_response(&other, request(&other, command, json!({})));
+        assert_refused_by_the_acl(response);
+    }
+}
+
 /// The refusal must come from the access control list, not from a failure of the command itself. Tauri
 /// words it as "not allowed" for a command the window may not call, and as "not found" for a command the
 /// application does not know.

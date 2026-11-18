@@ -7,6 +7,7 @@
 pub mod bootstrap;
 pub mod command_names;
 pub mod commands;
+pub mod credentials;
 pub mod error;
 pub mod logging;
 pub mod navigation;
@@ -39,6 +40,9 @@ pub fn command_handler<R: Runtime>()
         commands::conversations_create,
         commands::conversations_list,
         commands::workspace_set_favorite,
+        commands::provider_key_status,
+        commands::provider_key_save,
+        commands::provider_key_remove,
     ]
 }
 

@@ -2,9 +2,11 @@
 //! store only while it reads or writes, and moves the blocking work to a worker thread. Which window may
 //! call them is decided by `capabilities/`, not here.
 
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::{Conversation, Message};
 use noct_core::ipc::ReplyRequest;
@@ -17,9 +19,11 @@ use noct_core::ipc::settings::{AppSettings, SettingsUpdate};
 use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
 use noct_db::store::Store;
+use noct_secrets::ProviderCredentialVault;
 use tauri::State;
 
 use crate::bootstrap::Persistence;
+use crate::credentials;
 use crate::error::CommandError;
 use crate::logging::measured;
 use crate::services;
@@ -331,6 +335,59 @@ pub async fn conversations_list(
         })
     })
     .await
+}
+
+/// Whether the OpenRouter key is configured. The reply carries no key.
+#[tauri::command]
+pub async fn provider_key_status(
+    state: State<'_, Persistence>,
+) -> Result<ProviderKeyStatus, CommandError> {
+    let store = state.store.clone();
+    let directory = state.data_directory.clone();
+    blocking(move || {
+        credentials::status(
+            &store,
+            || open_vault(&directory),
+            ProviderKeyProvider::OpenRouter,
+        )
+    })
+    .await
+}
+
+/// Saves the OpenRouter key. The argument is `{ provider, key }`. The key is validated, then written to the operating
+/// system store, and the reply carries no key. A missing store is refused with `secure-storage-unavailable`.
+#[tauri::command]
+pub async fn provider_key_save(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<ProviderKeyStatus, CommandError> {
+    let request: ProviderKeyInput =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    let directory = state.data_directory.clone();
+    blocking(move || credentials::save(&store, || open_vault(&directory), request)).await
+}
+
+/// Removes the OpenRouter key from the operating system store and clears its reference.
+#[tauri::command]
+pub async fn provider_key_remove(
+    state: State<'_, Persistence>,
+) -> Result<ProviderKeyStatus, CommandError> {
+    let store = state.store.clone();
+    let directory = state.data_directory.clone();
+    blocking(move || {
+        credentials::remove(
+            &store,
+            || open_vault(&directory),
+            ProviderKeyProvider::OpenRouter,
+        )
+    })
+    .await
+}
+
+fn open_vault(data_directory: &Path) -> Result<ProviderCredentialVault, CommandError> {
+    ProviderCredentialVault::open(data_directory.join(credentials::VAULT_DIRECTORY))
+        .map_err(credentials::map_vault)
 }
 
 fn lock(store: &Mutex<Store>) -> Result<MutexGuard<'_, Store>, CommandError> {

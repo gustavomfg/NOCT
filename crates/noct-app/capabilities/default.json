@@ -21,6 +21,9 @@
     "allow-artifacts-delete",
     "allow-conversations-create",
     "allow-conversations-list",
-    "allow-workspace-set-favorite"
+    "allow-workspace-set-favorite",
+    "allow-provider-key-status",
+    "allow-provider-key-save",
+    "allow-provider-key-remove"
   ]
 }

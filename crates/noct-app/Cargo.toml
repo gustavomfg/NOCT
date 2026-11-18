@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 noct-core = { path = "../noct-core" }
 noct-db = { path = "../noct-db" }
+noct-secrets = { path = "../noct-secrets" }
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true

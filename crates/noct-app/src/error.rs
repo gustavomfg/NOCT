@@ -21,6 +21,10 @@ pub enum CommandError {
     /// The request moves a memory to a status its lifecycle does not allow. The TypeScript message also names the two
     /// statuses; this one does not, so the interface shows the same refusal without them.
     InvalidTransition,
+    /// The operating system offers no secure credential store, so a key cannot be saved. Nothing is written.
+    SecureStorageUnavailable,
+    /// The credential vault refused or failed a read or a write. The cause stays in the main process.
+    CredentialStore,
     /// The request names a suggestion that does not belong to the conversation. The message is the TypeScript one.
     UnknownSuggestion,
     /// The request moves a suggestion to a status its lifecycle does not allow. Unlike the memory message, this one
@@ -41,6 +45,8 @@ impl CommandError {
             Self::UnknownConversation => "unknown-conversation",
             Self::UnknownMemory => "unknown-memory",
             Self::InvalidTransition => "invalid-transition",
+            Self::SecureStorageUnavailable => "secure-storage-unavailable",
+            Self::CredentialStore => "credential-store",
             Self::UnknownSuggestion => "unknown-suggestion",
             Self::InvalidSuggestionTransition => "invalid-suggestion-transition",
             Self::UnknownArtifact => "unknown-artifact",
@@ -56,6 +62,12 @@ impl CommandError {
             Self::UnknownConversation => "Conversa não encontrada.",
             Self::UnknownMemory => "Memória não encontrada.",
             Self::InvalidTransition => "Transição de memória inválida.",
+            Self::SecureStorageUnavailable => {
+                "O sistema operacional não oferece armazenamento seguro de credenciais. Nada foi salvo."
+            }
+            Self::CredentialStore => {
+                "Não foi possível acessar o armazenamento seguro de credenciais. Cadastre a chave novamente."
+            }
             Self::UnknownSuggestion => "Sugestão não pertence a esta conversa.",
             Self::InvalidSuggestionTransition => "Transição de sugestão inválida.",
             Self::UnknownArtifact => "Artefato não encontrado ou já removido.",

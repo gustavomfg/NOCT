@@ -64,7 +64,10 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "artifacts_delete",
             "conversations_create",
             "conversations_list",
-            "workspace_set_favorite"
+            "workspace_set_favorite",
+            "provider_key_status",
+            "provider_key_save",
+            "provider_key_remove"
         ]
     );
 }

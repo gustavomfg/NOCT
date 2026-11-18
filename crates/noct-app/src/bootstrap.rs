@@ -29,6 +29,8 @@ pub struct Persistence {
     pub store: Arc<Mutex<Store>>,
     pub diagnostics: Arc<DiagnosticGate>,
     pub observer: Arc<dyn OperationObserver>,
+    /// The folder of the database, the file log and the provider key vault. Never sent to the interface.
+    pub data_directory: PathBuf,
 }
 
 #[derive(Debug, Error)]
@@ -103,6 +105,7 @@ pub fn open_with_profile(
         store: Arc::new(Mutex::new(store)),
         diagnostics,
         observer,
+        data_directory: directory.to_path_buf(),
     })
 }
 

@@ -2909,6 +2909,7 @@ version = "1.0.5"
 dependencies = [
  "noct-core",
  "noct-db",
+ "noct-secrets",
  "serde",
  "serde_json",
  "tauri",
