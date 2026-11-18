@@ -33,7 +33,7 @@ aplicativo registra planos, aprovações e resultados de validação (`AGENTS.md
 
 O que este branch ainda não faz:
 
-- não chama nenhum provedor de IA, e nenhum crate contém um cliente de provedor;
+- chama um provedor de IA só pelo chat, e o chat está desligado nesta versão (seção 3);
 - não mostra conversas na interface;
 - não produz instalador nem pacote assinado;
 - nenhuma janela foi conferida no Windows nem no macOS (seção 6).
@@ -50,9 +50,9 @@ A tabela de fases da [ADR 0001](docs/adr/0001-rust-migration.md) é a referênci
   estão em [o documento dos backends](docs/rust-native-rollback-backends.md).
 - **Fase 4, serviços do workspace:** em parte. Os repositórios existem; os serviços, como `ProjectIndexService`, não foram
   portados.
-- **Fase 5, IA:** em parte. O cofre de credenciais está pronto. Os adaptadores de provedores e o laço de ferramentas não
-  foram portados.
-- **Fase 6, IPC e shell:** em parte. Cinco comandos, liberados só para a janela `main`.
+- **Fase 5, IA:** em parte. O cofre de credenciais, o transporte do OpenRouter e o chat estão prontos, e o chat está
+  desligado. Outros adaptadores de provedores e o laço de ferramentas não foram portados.
+- **Fase 6, IPC e shell:** em parte. 28 comandos, liberados só para a janela `main`.
 - **Fase 7, interface:** em parte. A área de configurações, a lista de projetos na barra lateral, a camada de vidro e os
   temas. Conferida no Chromium com um shell simulado. Não conferida em janela real.
 - **Fase 8, atualizações e empacotamento:** não iniciada no lado Rust. Bloqueada (seção 4).
@@ -89,20 +89,27 @@ O critério da ADR para a fase 8 é "pacotes assinados validados em três plataf
   [`docs/compatibility.md`](docs/compatibility.md#minimum-platform-versions) traz a decisão e as afirmações do Tauri que a
   sustentam. O Tauri não informa a versão do WebKitGTK, e as páginas dele para macOS dão dois valores diferentes.
 
-### Provedor da beta 1 (OpenRouter)
+### Provedor OpenRouter (beta)
 
-Conferido no commit `0df77cb`, com os commits de documentação depois dele:
+O que o código faz neste branch:
 
-- A chave do OpenRouter é salva, verificada e removida por três comandos. Ela fica no cofre de credenciais do sistema
-  operacional, e a página nunca a recebe de volta.
-- A política de rede do endpoint do provedor está escrita e testada como módulo puro. A build ainda não tem cliente HTTP,
-  então nenhuma requisição pode ser feita.
-- As regras de contexto e o consentimento por projeto estão escritos. A beta 1 não envia nada a um provedor: o chat não
-  está conectado, e ainda não existe um interruptor para ele.
-- A página de configurações tem a seção de chave e consentimento. O seletor de modelos não foi construído.
+- A chave é digitada uma vez na área de configurações. O shell confere o formato e a guarda no cofre de credenciais do
+  sistema operacional. Nenhuma chamada de rede a confere. A resposta não leva a chave, e a interface nunca a lê de volta.
+- Cada projeto tem um consentimento e um modelo padrão. O modelo é digitado como identificador, e o shell confere a forma
+  dele. O shell não lista os modelos do provedor: nunca chama `GET /models`.
+- O chat responde a uma pergunta sobre o projeto. Ele envia os arquivos de texto do topo que as regras de contexto permitem,
+  junto com a pergunta, para `https://openrouter.ai/api/v1/chat/completions`, e mostra a resposta conforme ela chega. O
+  transporte aceita só HTTPS, não segue redirecionamento, confere cada endereço resolvido antes de conectar, e limita o
+  tamanho e o tempo. Salvar guarda a resposta em uma conversa.
+- **O chat está desligado nesta versão.** `PROVIDER_CHAT_ENABLED` é `false` em `crates/noct-app/src/provider_chat.rs`. Com
+  ele desligado, uma pergunta é recusada antes de qualquer arquivo ser lido e antes de qualquer conexão. O responsável pelo
+  projeto o liga depois de testar.
+- **O que é testado.** A cadeia da pergunta até a resposta salva roda na suíte de testes contra um servidor falso local
+  (`crates/noct-app/tests/provider_chat_flow.rs` e `provider_transport.rs`). Nenhum teste chama o OpenRouter, e nenhuma
+  execução usou uma chave real. As checagens da interface rodam no Chromium com um shell simulado, com o interruptor desligado.
 
-Não feito na beta 1: o cliente HTTP, o adaptador de streaming, o seletor de modelos e a conexão do chat. Os motivos e o que
-não foi conferido estão em [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round".
+Não feito: a lista de modelos do provedor, outros provedores e a gravação de alterações propostas pelo assistente.
+O estado de cada item está em [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" e nas seções depois dela.
 
 ## 4. Verificação
 
@@ -198,10 +205,9 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 - **Política do webview.** `withGlobalTauri` é `false`. A Content-Security-Policy é
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   O Chromium a confere (`scripts/check-shell-csp.mjs`). Nenhum webview a aplica ainda em execução real.
-- **Comandos.** Cinco comandos, `settings_get`, `settings_set`, `workspaces_list`, `conversations_list` e
-  `workspace_set_favorite`, são declarados em `crates/noct-app/build.rs`. `crates/noct-app/capabilities/default.json` os
-  libera só para a janela `main`. Os testes com o runtime de mock do Tauri recusam um comando não liberado e um pedido de
-  uma segunda janela.
+- **Comandos.** 28 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
+  da aplicação. `crates/noct-app/capabilities/default.json` os libera só para a janela `main`. Os testes com o runtime de mock
+  do Tauri recusam um comando não liberado e um pedido de uma segunda janela.
 - **Navegação.** A janela principal aceita navegação só para a interface empacotada, e para o servidor de desenvolvimento
   nas builds de depuração (`crates/noct-app/src/navigation.rs`, com seus testes). Isso não foi verificado em webview em
   execução.

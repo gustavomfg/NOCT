@@ -33,7 +33,7 @@ plans, approvals and validation results (`AGENTS.md`, "Product identity").
 
 What this branch does not do yet:
 
-- it does not call any AI provider, and no crate contains a provider client;
+- it calls an AI provider only from the chat, and the chat is switched off in this version (section 3);
 - it does not show conversations in the interface;
 - it produces no installer or signed package;
 - no window has been checked on Windows or on macOS (section 6).
@@ -50,8 +50,9 @@ The phase table of [ADR 0001](docs/adr/0001-rust-migration.md) is the authority.
   are listed in [the backends document](docs/rust-native-rollback-backends.md).
 - **Phase 4, workspace services:** partly done. The repositories exist; the services, such as `ProjectIndexService`, are
   not ported.
-- **Phase 5, AI:** partly done. The credential vault is done. The provider adapters and the tool loop are not ported.
-- **Phase 6, IPC and shell:** partly done. Five commands, granted only to the `main` window.
+- **Phase 5, AI:** partly done. The credential vault, the OpenRouter transport and the chat are done, and the chat is switched
+  off. Other provider adapters and the tool loop are not ported.
+- **Phase 6, IPC and shell:** partly done. 28 commands, granted only to the `main` window.
 - **Phase 7, UI:** partly done. The settings area, the project list in the sidebar, the glass layer and the themes.
   Checked in Chromium with a mocked shell. Not checked in a real window.
 - **Phase 8, updates and packaging:** not started on the Rust side. Blocked (section 4).
@@ -86,20 +87,27 @@ The ADR's criterion for phase 8 is "signed packages validated on three platforms
   [`docs/compatibility.md`](docs/compatibility.md#minimum-platform-versions) has the decision and the Tauri statements
   behind them. Tauri gives no WebKitGTK version, and its macOS pages give two different values.
 
-### Beta 1 provider (OpenRouter)
+### OpenRouter provider (beta)
 
-Checked at commit `0df77cb`, with the documentation commits after it:
+What the code does on this branch:
 
-- The OpenRouter key is saved, checked and removed through three commands. It is kept in the operating system's credential
-  vault, and the page never receives it back.
-- The network policy for the provider endpoint is written and tested as a pure module. The build has no HTTP client yet, so
-  no request can be made.
-- The context rules and a per-project consent are written. Beta 1 sends nothing to a provider: the chat is not connected,
-  and no switch for it exists yet.
-- The settings page has the key and consent section. The model selector is not built.
+- The key is typed once in the settings area. The shell checks its format and saves it in the operating system's credential
+  store. No network call checks it. The reply carries no key, and the interface never reads it back.
+- Each project has a consent and a default model. The model is typed as an identifier, and the shell checks its form. The
+  shell does not list the provider's models: it never calls `GET /models`.
+- The chat answers a question about the project. It sends the top-level text files that the context rules allow, with the
+  question, to `https://openrouter.ai/api/v1/chat/completions`, and shows the answer as it streams in. The transport allows
+  HTTPS only, follows no redirect, checks every resolved address before it connects, and caps the size and the time. Save
+  keeps the answer in a conversation.
+- **The chat is switched off in this version.** `PROVIDER_CHAT_ENABLED` is `false` in `crates/noct-app/src/provider_chat.rs`.
+  While it is off, a question is refused before any file is read and before any connection is made. The owner turns it on
+  after testing it.
+- **What is tested.** The chain from the question to the saved answer runs in the test suite against a local fake server
+  (`crates/noct-app/tests/provider_chat_flow.rs` and `provider_transport.rs`). No test calls OpenRouter, and no run used a
+  real key. The interface checks run in Chromium with a mocked shell, with the switch off.
 
-Not done in beta 1: the HTTP client, the streaming adapter, the model selector and the chat connection. The reasons, and
-what is not verified, are in [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round".
+Not done: a list of the provider's models, other providers, and the writing of changes proposed by the assistant.
+The status of each item is in [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" and the sections after it.
 
 ## 4. Verification
 
@@ -195,10 +203,9 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 - **Webview policy.** `withGlobalTauri` is `false`. The Content-Security-Policy is
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   Chromium checks it (`scripts/check-shell-csp.mjs`). No webview has enforced it yet.
-- **Commands.** Five commands, `settings_get`, `settings_set`, `workspaces_list`, `conversations_list` and
-  `workspace_set_favorite`, are declared in `crates/noct-app/build.rs`. `crates/noct-app/capabilities/default.json` grants
-  them to the `main` window only. Tests with Tauri's mock runtime refuse a command that is not granted and a request from
-  a second window.
+- **Commands.** 28 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
+  application manifest. `crates/noct-app/capabilities/default.json` grants them to the `main` window only. Tests with Tauri's
+  mock runtime refuse a command that is not granted and a request from a second window.
 - **Navigation.** The main window accepts navigation only to the packaged interface, and to the development server in
   debug builds (`crates/noct-app/src/navigation.rs`, with its tests). This is not verified in a running webview.
 - **Browser permissions.** The webview grants nothing beyond `core:default` (ADR 0001, security table). Not verified in a

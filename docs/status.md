@@ -745,6 +745,10 @@ before the first tag (see [docs/shell-updater.md](shell-updater.md), Release wor
 
 ## Beta 1 OpenRouter: report of this round
 
+> **Superseded.** This report describes the state before the chat was connected. The HTTP client, the SSE adapter, the
+> chat and the model field now exist in the code, with the switch off (`PROVIDER_CHAT_ENABLED = false`). The current state is
+> in "Item 2" of the practical-mode report below. The text that follows is kept as the record of that round.
+
 Beta 1 is the OpenRouter provider: the key in the credential vault, the network policy, the context rules, the per-project
 consent and the settings section. Beta 1 sends nothing to a provider. The chat that would send a conversation is not
 connected, and no switch exists for it yet. The SSE adapter and the pinned HTTP client are blocked (Stop 1), so this round
@@ -1134,6 +1138,40 @@ the session, not in the repository.
 None of the stop conditions was hit. The changes touched no secret, no updater key, no signing, no CI secret, no `main`
 and no PR.
 
+
+## Practical mode: report per item (owner's order)
+
+The owner asked for a short report at the end of each item, here. The order and the rules of that message apply: no wait for
+the Windows and macOS CI results, Linux checks and local `cargo test` are the validation, no flake hunt, and no review
+document unless the code writes the person's files or touches the provider key. Small reversible choices are made here and
+listed; irreversible ones are left to the owner.
+
+### Item 1: removal of the TypeScript and Electron side
+
+Done. Section "Removal of the TypeScript and Electron side" lists the commits, what was kept, what was deleted (restorable
+from `electron-final`, commit `c8c378b`), and the checks. Pushed to `migration/rust` up to `d44bca7`.
+
+### Item 2: the chat end to end with OpenRouter
+
+What the code already does, checked by reading it and by the tests of this branch:
+
+- The key is typed in the settings area, checked in format and saved in the operating system store. The interface never reads
+  it back.
+- The model is typed as an identifier. There is no list of models and no `GET /models`.
+- The chat sends a question and the top-level text files that the context rules allow to `https://openrouter.ai/api/v1/chat/completions`,
+  streams the answer, and saves it into a conversation on request.
+- The switch `PROVIDER_CHAT_ENABLED` is `false`. While it is off, a question is refused before any file is read and before any
+  connection is made. The owner turns it on after testing.
+
+What was checked in this round: the chain from the question to the saved answer is covered by `provider_chat_flow.rs` and
+`provider_transport.rs` against a local fake server; the interface check runs in Chromium with a mocked shell and the switch
+off. Not checked: a real window, a real key, and a real OpenRouter reply. No test calls OpenRouter.
+
+What is not done: a model list, other providers, and the writing of changes proposed by the assistant (item 3). The README
+claim that no provider was called was wrong, and it was corrected in this round.
+
+Decision taken here: the switch stays `false`. Turning it on needs the owner's test. The existing compile-time guard in
+`provider_chat_flow.rs` keeps it that way until the owner changes both places.
 
 ## Pending: merge of `migration/rust` into `main`
 
