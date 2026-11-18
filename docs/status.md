@@ -1173,6 +1173,40 @@ claim that no provider was called was wrong, and it was corrected in this round.
 Decision taken here: the switch stays `false`. Turning it on needs the owner's test. The existing compile-time guard in
 `provider_chat_flow.rs` keeps it that way until the owner changes both places.
 
+### Item 3: changes proposed by the assistant, approved one by one, written inside the project, with undo
+
+Design, written before the code.
+
+A proposal is one text file of the project: a relative path, the complete new content (UTF-8, at most 32 KiB, the same cap as
+the chat context), and the bytes that the file had when the proposal was made, or no bytes for a new file. Proposals and their
+results are kept in a journal in the data folder, never in the project. The journal is one file, written atomically with mode
+0600. The person approves or rejects each proposal on its own; there is no apply-all.
+
+Approval checks, in order, and writes nothing if any check fails:
+
+1. the workspace is authorized in the store and available, as for the chat;
+2. the path is relative, has no `..` component, no root or drive prefix, and no NUL byte;
+3. no component of the path is a symbolic link, each checked with `symlink_metadata`, and the parent resolved in the project
+   root stays inside it;
+4. the name is not sensitive: `.env` and `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `.npmrc`, `.netrc`, names that
+   contain `credential` or `secret`, and anything under `.git`;
+5. the file on disk holds exactly the base bytes of the proposal, compared byte by byte (no hash), so a write happens only when
+   nothing changed since the proposal.
+
+Only then the new content is written with `write_atomic_file` (temporary file in the same folder, sync, rename). The base is in
+the journal, so the previous bytes are never lost.
+
+Undo checks that the file still holds the content that the approval wrote. If it changed since, undo refuses and says so. A new
+file is undone by removing it, under the same check. Nothing outside the workspace is read or written by this path, and the
+data folder receives only the journal.
+
+Known limit, stated now: another program that changes the file between check 5 and the rename is not excluded. The window is
+one comparison and one rename.
+
+Not in this round: the assistant producing proposals (the chat returns text only, so the proposal is created by a command with
+the same fields), the interface that approves each proposal, and hunk-level review (`editHunk`, which the owner had placed in
+beta 2; see `docs/rust-edit-hunk-design.md`).
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
