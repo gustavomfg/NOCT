@@ -2910,6 +2910,8 @@ dependencies = [
  "noct-core",
  "noct-db",
  "noct-secrets",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",

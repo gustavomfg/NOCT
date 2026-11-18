@@ -16,6 +16,8 @@ time.workspace = true
 tauri.workspace = true
 tauri-plugin-updater.workspace = true
 thiserror.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
 
 [features]
 # Serves the interface from the embedded frontend instead of the dev URL. Tauri's own CLI enables it for

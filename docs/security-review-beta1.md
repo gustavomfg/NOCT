@@ -309,6 +309,28 @@ The most restrictive answer was taken for each, as section 13 of `docs/provider-
 - **Q5.** The built-in list holds OpenRouter alone.
 - **Q6.** Beta 1 has no "other" endpoints. The form that would accept one does not exist.
 
+## Dependency decision: provider HTTP client
+
+Approved by the owner: `reqwest` with the same version the lockfile already resolves (`=0.13.5`), `default-features = false`,
+features `rustls-no-provider`, `json` and `stream`, and `ring` as the TLS provider. `aws-lc` is not used.
+
+Checks, run on the tree of this commit:
+
+- `cargo tree -i aws-lc-rs` and `cargo tree -i aws-lc-sys`: no match. No `aws-lc` crate is in the graph.
+- `cargo tree -i ring`: one provider, `ring 0.17.14`, under `rustls 0.23.46`. `cargo tree -d` shows no duplicate of `rustls`,
+  `reqwest`, `hyper-rustls`, `tokio-rustls` or `rustls-webpki`.
+- `cargo deny check`: advisories, bans, licences and sources all ok.
+- `cargo audit`: exit 0. The seven allowed warnings are the advisories already listed in `docs/rust-dependency-advisories.md`.
+- The lockfile gained two edges, `noct-app` to `reqwest` and `noct-app` to `rustls`, and no package.
+
+Two consequences the code must handle:
+
+- **`rustls-no-provider` needs an installed provider.** Without one, reqwest panics when it builds a client. The provider
+  client installs `ring` as the process default once, and ignores the error that means it is already installed.
+- **System proxy.** `tauri-plugin-updater` turns on reqwest's `system-proxy` feature, and Cargo unifies features across the
+  workspace, so the feature is on for the provider client too. A system proxy would carry the request to an address the
+  policy never checked. The provider client therefore calls `no_proxy()`.
+
 ## Status of this document
 
 This section is updated at the end of the batch with the commit that closes each finding and with the transport decisions
