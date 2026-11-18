@@ -13,6 +13,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 ## Totals
 
 - Channels in the catalogue: 108.
+- Rust-only commands with no TypeScript channel: 6, listed under "Rust-only commands".
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
@@ -69,6 +70,21 @@ tests, service tests, a TypeScript and Rust differential, and a browser mock. No
    and the operation observer for the commands already ported.
 5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and
    the `stop` rows are stop conditions of the plan (vault and secrets, provider network, updater, signing).
+
+## Rust-only commands
+
+Beta 1 of the OpenRouter provider. They have no TypeScript channel, so the table under "Channels" does not list them.
+Each is registered in `crates/noct-app/src/lib.rs` and granted only to the `main` window in `crates/noct-app/capabilities/default.json`.
+The key commands refuse a bad request before the credential store is opened, as the ACL tests in `crates/noct-app/tests/commands_acl.rs` check.
+
+| Command | Argument | Reply | Risk | Note |
+| --- | --- | --- | --- | --- |
+| `provider_key_status` | none | `{ provider, configured }` | read | Says whether a key is stored. The reference that marks it is hidden from the settings read. |
+| `provider_key_save` | `{ input: { provider, key } }` | Status, as above. | secret | The key is trimmed, visible ASCII, 8 to 512 characters. It goes to the credential vault. Without secure storage the save is refused with `secure-storage-unavailable` and nothing is saved. |
+| `provider_key_remove` | none | Status, as above. | secret | Removes the stored key and its reference. |
+| `provider_consent_status` | `{ input: { workspace } }` | `{ workspace, provider, granted }` | read | The project must be saved. The consent is per project and per provider, under the version `openrouter-v1`. |
+| `provider_consent_grant` | same as the status | The consent, as above. | database write | Records the consent of the saved project. Nothing is sent to the provider: the chat is not connected in beta 1. |
+| `provider_consent_revoke` | same as the status | The consent, as above. | database write | Removes the consent of the saved project. |
 
 ## Not channels
 

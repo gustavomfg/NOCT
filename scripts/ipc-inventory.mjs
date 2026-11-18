@@ -277,6 +277,54 @@ const unvalidated = invokable.filter((row) => row.validation === 'UNVERIFIED')
 const cell = (text) => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 const count = (predicate) => rows.filter(predicate).length
 
+// The beta 1 provider commands. They are Rust-only: there is no TypeScript channel to classify, so they are listed
+// here rather than in the rows above. The key commands never return the key, and the consent commands take a saved
+// project only.
+const RUST_ONLY = [
+  {
+    command: 'provider_key_status',
+    argument: 'none',
+    reply: '`{ provider, configured }`',
+    risk: 'read',
+    note: 'Says whether a key is stored. The reference that marks it is hidden from the settings read.',
+  },
+  {
+    command: 'provider_key_save',
+    argument: '`{ input: { provider, key } }`',
+    reply: 'Status, as above.',
+    risk: 'secret',
+    note: 'The key is trimmed, visible ASCII, 8 to 512 characters. It goes to the credential vault. Without secure storage the save is refused with `secure-storage-unavailable` and nothing is saved.',
+  },
+  {
+    command: 'provider_key_remove',
+    argument: 'none',
+    reply: 'Status, as above.',
+    risk: 'secret',
+    note: 'Removes the stored key and its reference.',
+  },
+  {
+    command: 'provider_consent_status',
+    argument: '`{ input: { workspace } }`',
+    reply: '`{ workspace, provider, granted }`',
+    risk: 'read',
+    note: 'The project must be saved. The consent is per project and per provider, under the version `openrouter-v1`.',
+  },
+  {
+    command: 'provider_consent_grant',
+    argument: 'same as the status',
+    reply: 'The consent, as above.',
+    risk: 'database write',
+    note: 'Records the consent of the saved project. Nothing is sent to the provider: the chat is not connected in beta 1.',
+  },
+  {
+    command: 'provider_consent_revoke',
+    argument: 'same as the status',
+    reply: 'The consent, as above.',
+    risk: 'database write',
+    note: 'Removes the consent of the saved project.',
+  },
+]
+
 const out = []
 out.push('# IPC inventory')
 out.push('')
@@ -293,6 +341,7 @@ out.push('')
 out.push('## Totals')
 out.push('')
 out.push(`- Channels in the catalogue: ${rows.length}.`)
+out.push(`- Rust-only commands with no TypeScript channel: ${RUST_ONLY.length}, listed under "Rust-only commands".`)
 out.push(`- Invokable from the renderer: ${invokable.length}. Main-to-renderer events: ${rows.length - invokable.length}.`)
 out.push(`- Invokable channels with a preload entry and a handler: ${invokable.length - uncovered.length} of ${invokable.length}.`)
 out.push(`- Invokable channels whose input check is not found in the handler: ${unvalidated.length}${unvalidated.length ? ` (${unvalidated.map((r) => r.name).join(', ')})` : ''}.`)
@@ -334,6 +383,16 @@ out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `d
 out.push('   and the operation observer for the commands already ported.')
 out.push('5. **Not in the current queue.** Every row marked `later`, `P8`, or `stop`. Those need their own decision, and')
 out.push('   the `stop` rows are stop conditions of the plan (vault and secrets, provider network, updater, signing).')
+out.push('')
+out.push('## Rust-only commands')
+out.push('')
+out.push('Beta 1 of the OpenRouter provider. They have no TypeScript channel, so the table under "Channels" does not list them.')
+out.push('Each is registered in `crates/noct-app/src/lib.rs` and granted only to the `main` window in `crates/noct-app/capabilities/default.json`.')
+out.push('The key commands refuse a bad request before the credential store is opened, as the ACL tests in `crates/noct-app/tests/commands_acl.rs` check.')
+out.push('')
+out.push('| Command | Argument | Reply | Risk | Note |')
+out.push('| --- | --- | --- | --- | --- |')
+for (const row of RUST_ONLY) out.push(`| \`${row.command}\` | ${cell(row.argument)} | ${cell(row.reply)} | ${row.risk} | ${cell(row.note)} |`)
 out.push('')
 out.push('## Not channels')
 out.push('')
