@@ -164,3 +164,16 @@ New, written with the implementation:
 ## 12. What this document does not change
 
 No code, no schema, no workflow and no existing document changes with this proposal. The embedding consent flow in [providers.md](providers.md) is outside its scope.
+
+## 13. Beta 1 answers in the Rust port
+
+The owner's review of this proposal is pending. Until it is recorded, the Rust port of beta 1 takes the most restrictive answer to each question, and the code enforces it. Each answer can be widened later by a new decision; none is widened silently.
+
+- **Q1.** Not applicable in beta 1: no loopback endpoint is in the list. The policy refuses any host or port that is not approved, so a loopback port that is not approved is refused.
+- **Q2.** Restrictive: a local source reaches loopback only. The `private-network` scope is not implemented. This closes G1 in the Rust port (`check_addresses`, `allowed_class`, tests in `crates/noct-core/tests/provider_network.rs`). The TypeScript product still has G1 open, because it is outside this change.
+- **Q3.** Restrictive: the approval is per host and port. A host approved on 443 does not reach 8443.
+- **Q4.** Restrictive: beta 1 adds no approval table and no migration. The approvals are the built-in list in `crates/noct-core/src/ai/network.rs`. The per-project consent of beta 1 will be kept in the settings store under the `maintenance.` prefix, which both readers hide; this is not written yet.
+- **Q5.** Restrictive: the built-in list holds OpenRouter alone. Mistral and xAI are not added until their base URLs are confirmed.
+- **Q6.** Restrictive: beta 1 has no "Other" endpoints. The form that would accept one does not exist yet.
+
+Redirects are refused for every source (`check_status`). The connection timeout, the request timeout and the reply size limit are in `crates/noct-core/src/limits.rs`, module `provider_network`. The pinned connection of section 8, step 4, is not implemented in beta 1: the reqwest dependency that would carry it is waiting for the owner's decision on its native build (see `docs/status.md`).

@@ -107,6 +107,17 @@ pub mod provider_configuration {
     pub const MAXIMUM_TIMEOUT_MS: u64 = 120_000;
 }
 
+/// Limits of the provider network calls. They apply to every request, and a reply that passes them is still checked by
+/// the policy in `ai::network` before its body is read.
+pub mod provider_network {
+    /// The longest a connection may take to open, in milliseconds.
+    pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
+    /// The longest a whole request may take, in milliseconds, counting the reply.
+    pub const REQUEST_TIMEOUT_MS: u64 = 120_000;
+    /// The most bytes of a reply that the shell reads, so that a reply cannot grow without limit.
+    pub const MAXIMUM_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
+}
+
 /// Limits of a provider key typed in the settings. The key is sent as an HTTP header, so only visible ASCII is
 /// accepted; the bounds are the ones the shell enforces before it stores anything.
 pub mod provider_key {
