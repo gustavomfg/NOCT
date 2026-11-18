@@ -323,6 +323,19 @@ These are recorded in code and in the ADR as well. The workspace folder rules fo
 - To enable it, the owner fills `pubkey` and `endpoints` in a reviewed change marked `[security-review]`. The code that
   checks for and installs an update is not written yet, and it needs its own review.
 
+### Where `requireSignedVersion` is defined
+
+- The field is `Config::require_signed_version` in `tauri-plugin-updater` 2.14.1, file `src/config.rs`. Its doc comment says that
+  the update signature must carry the version it was signed for, and that the update is rejected when that version differs from
+  the one the endpoint announces. The endpoint response is fetched over TLS but is not itself signed, and the signature covers
+  only the downloaded artifact. The default is `false`.
+- The signed version is read from the signature's trusted comment. Releases signed before the Tauri CLI recorded it carry no
+  version, so enabling the setting rejects them. Re-sign and re-publish every release that users can still update from before
+  enabling it. No release exists yet.
+- The public updater guide, https://v2.tauri.app/plugin/updater/ (footer "Last updated: Nov 28, 2025"), was read on 2026-11-17.
+  It does not mention the setting. For the pinned version, the plugin source is the only definition found.
+- NOCT sets the value to `true`. That is a decision for the owner to confirm.
+
 ## Build provenance (dry run)
 
 - `.github/workflows/build-provenance-dry-run.yml` attests one small subject file, written by the job from the commit and the
