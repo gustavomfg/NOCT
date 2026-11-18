@@ -1,150 +1,18 @@
 //! The provider transport against a fake server on loopback. The approvals are injected, so the real client and the real
 //! policy run against a local listener; no test reaches a provider, and no test uses the operating system resolver.
 
-use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+mod common;
+
+use std::io::Write;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use noct_app::provider_transport::{Limits, Target, stream_chat, verify_target};
+use common::fake_provider::*;
+use noct_app::provider_transport::{stream_chat, verify_target};
 use noct_core::ai::ProviderSource;
-use noct_core::ai::network::{AddressResolver, Approval, BUILTIN_APPROVALS, EndpointError};
+use noct_core::ai::network::{Approval, BUILTIN_APPROVALS, EndpointError};
 use noct_core::ai::openrouter::ChatFailure;
-use noct_secrets::SecretString;
-
-const KEY: &str = "sk-or-v1-transport-test-0123456789";
-const SSE: &str = "text/event-stream";
-
-/// A resolver that answers with a fixed result, for the policy checks that do not need a real name.
-struct Resolve<F>(F);
-
-impl<F: Fn() -> std::io::Result<Vec<IpAddr>> + Send + Sync> AddressResolver for Resolve<F> {
-    fn resolve(&self, _host: &str, _port: u16) -> std::io::Result<Vec<IpAddr>> {
-        (self.0)()
-    }
-}
-
-/// Reads one request: its head, and the body its `Content-Length` announces.
-fn read_request(stream: &mut TcpStream) -> String {
-    let mut head = Vec::new();
-    let mut byte = [0u8; 1];
-    while !head.ends_with(b"\r\n\r\n") {
-        if stream.read(&mut byte).unwrap_or(0) == 0 {
-            break;
-        }
-        head.push(byte[0]);
-    }
-    let text = String::from_utf8_lossy(&head).to_string();
-    let length = text
-        .lines()
-        .find_map(|line| {
-            let lower = line.to_ascii_lowercase();
-            lower
-                .strip_prefix("content-length:")
-                .map(|value| value.trim().parse::<usize>().unwrap_or(0))
-        })
-        .unwrap_or(0);
-    let mut body = vec![0u8; length];
-    let _ = stream.read_exact(&mut body);
-    format!("{text}{}", String::from_utf8_lossy(&body))
-}
-
-/// A fake provider. Each connection is read, then `reply` writes whatever it wants, including a stall. The requests are
-/// kept, so a test can count the connections that were made.
-struct FakeServer {
-    port: u16,
-    requests: Arc<Mutex<Vec<String>>>,
-}
-
-impl FakeServer {
-    fn connections(&self) -> usize {
-        self.requests.lock().unwrap().len()
-    }
-}
-
-fn serve(reply: impl Fn(&str, &mut TcpStream) + Send + Sync + 'static) -> FakeServer {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let requests = Arc::new(Mutex::new(Vec::new()));
-    let log = Arc::clone(&requests);
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
-            let request = read_request(&mut stream);
-            log.lock().unwrap().push(request.clone());
-            reply(&request, &mut stream);
-            let _ = stream.flush();
-        }
-    });
-    FakeServer { port, requests }
-}
-
-/// A reply head with no length: the body ends when the connection closes.
-fn head(status: &str, extra: &str) -> String {
-    format!("HTTP/1.1 {status}\r\nContent-Type: {SSE}\r\nConnection: close\r\n{extra}\r\n")
-}
-
-fn events(deltas: &[&str]) -> String {
-    let mut body = String::new();
-    for delta in deltas {
-        body.push_str(&format!(
-            "data: {{\"choices\":[{{\"delta\":{{\"content\":\"{delta}\"}}}}]}}\n\n"
-        ));
-    }
-    body
-}
-
-fn local_approval(port: u16) -> Vec<Approval> {
-    vec![Approval {
-        host: "127.0.0.1",
-        port,
-        source: ProviderSource::Local,
-    }]
-}
-
-fn local_url(port: u16) -> String {
-    format!("http://127.0.0.1:{port}/api/v1/chat/completions")
-}
-
-fn limits() -> Limits {
-    Limits {
-        connect: Duration::from_secs(2),
-        stall: Duration::from_millis(1_500),
-        total: Duration::from_secs(10),
-        reply_bytes: 2 * 1024 * 1024,
-        answer_characters: 64 * 1024,
-    }
-}
-
-/// The local target of a fake server. The IP literal is its own answer, so the resolver is not used.
-fn local_target(port: u16) -> Target {
-    verify_target(
-        &local_approval(port),
-        &Resolve(|| panic!("an IP literal is not resolved")),
-        &local_url(port),
-        ProviderSource::Local,
-    )
-    .expect("the loopback target passes the policy")
-}
-
-fn key() -> SecretString {
-    SecretString::from(KEY.to_string())
-}
-
-/// Streams a chat to the target and returns the answer and the outcome.
-fn chat(target: &Target, limits: &Limits) -> (String, Result<(), ChatFailure>) {
-    let mut answer = String::new();
-    let mut sink = |delta: &str| answer.push_str(delta);
-    let outcome = tauri::async_runtime::block_on(stream_chat(
-        target,
-        &key(),
-        "{\"model\":\"a/b\",\"messages\":[],\"stream\":true}".to_string(),
-        limits,
-        &mut sink,
-    ));
-    (answer, outcome)
-}
 
 #[test]
 fn a_streamed_answer_is_read_in_order_until_done() {
