@@ -14,8 +14,10 @@ const SETTINGS_SET: &str = include_str!("fixtures/ipc/settings-set.json");
 const SETTINGS_GET: &str = include_str!("fixtures/ipc/settings-get.json");
 const WORKSPACES_LIST: &str = include_str!("fixtures/ipc/workspaces-list.json");
 const CONVERSATIONS_LIST: &str = include_str!("fixtures/ipc/conversations-list.json");
-const TYPESCRIPT_CHANNELS: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/ipc/channels.ts");
+const TYPESCRIPT_CHANNELS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/ts-reference/channels.ts.txt"
+);
 
 fn fixture(text: &str) -> Value {
     serde_json::from_str(text).expect("the sample file is JSON")
@@ -99,11 +101,12 @@ fn conversations_list_outputs_are_the_conversations_the_typescript_type_accepts(
     }
 }
 
-/// Each command replaces a channel of `shared/ipc/channels.ts`. The channel names are compared with the
+/// Each command replaces a channel of `ts-reference/channels.ts.txt`. The channel names are compared with the
 /// TypeScript file, so a renamed channel fails here.
 #[test]
 fn the_command_names_replace_the_typescript_channels() {
-    let channels = std::fs::read_to_string(TYPESCRIPT_CHANNELS).expect("shared/ipc/channels.ts");
+    let channels =
+        std::fs::read_to_string(TYPESCRIPT_CHANNELS).expect("ts-reference/channels.ts.txt");
     for (command, channel) in [
         (commands::SETTINGS_GET, "settings:get"),
         (commands::SETTINGS_SET, "settings:set"),
@@ -112,7 +115,7 @@ fn the_command_names_replace_the_typescript_channels() {
     ] {
         assert!(
             channels.contains(&format!("'{channel}'")),
-            "{channel} is not a channel of shared/ipc/channels.ts"
+            "{channel} is not a channel of ts-reference/channels.ts.txt"
         );
         assert!(
             !command.contains(':'),

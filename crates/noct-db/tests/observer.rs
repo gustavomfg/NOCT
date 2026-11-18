@@ -3,9 +3,7 @@
 //! no observer can change the result of an operation or break the database.
 
 use std::collections::BTreeSet;
-use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -15,6 +13,7 @@ use noct_db::observer::{
     CATALOG, OPERATION_EVENT, OperationMetric, OperationObserver, SLOW_OPERATION_MS,
 };
 use noct_db::runtime::{Database, OpenOptions};
+use serde_json::Value;
 
 mod common;
 use common::scratch;
@@ -85,62 +84,32 @@ fn open(
     .expect("open the database")
 }
 
-fn typescript(relative: &str) -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    fs::read_to_string(root.join(relative)).expect(relative)
-}
-
-/// Every TypeScript source under `directory`, concatenated.
-fn sources_under(directory: &Path, out: &mut String) {
-    for entry in fs::read_dir(directory).expect("directory") {
-        let path = entry.expect("entry").path();
-        if path.is_dir() {
-            sources_under(&path, out);
-        } else if path.extension().is_some_and(|extension| extension == "ts")
-            && !path.to_string_lossy().ends_with(".d.ts")
-        {
-            out.push_str(&fs::read_to_string(&path).expect("source"));
-            out.push('\n');
-        }
-    }
-}
-
-/// The names that follow `call'` in a source, such as `measure('settings.get'`. A match counts
-/// only when the call is not the end of a longer identifier, so `prerun('` is not `run('`.
-fn names_after(source: &str, call: &str) -> BTreeSet<String> {
-    source
-        .match_indices(call)
-        .filter(|(index, _)| {
-            source[..*index]
-                .chars()
-                .next_back()
-                .is_none_or(|previous| !(previous.is_alphanumeric() || previous == '_'))
-        })
-        .filter_map(|(index, _)| {
-            let rest = &source[index + call.len()..];
-            let name = &rest[..rest.find('\'')?];
-            let plain =
-                !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '.');
-            plain.then(|| name.to_string())
-        })
+/// The operation names frozen from the TypeScript reference (`electron-final`), read from the JSON fixture.
+fn frozen_names(list: &Value) -> BTreeSet<String> {
+    list.as_array()
+        .expect("the fixture lists names")
+        .iter()
+        .map(|name| name.as_str().expect("a name is a string").to_string())
         .collect()
 }
 
 #[test]
 fn the_catalog_names_what_the_typescript_runtime_reports() {
-    let reads = names_after(&typescript("electron/database/Database.ts"), "measure('");
-    let mut repositories = String::new();
-    sources_under(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../electron/database"),
-        &mut repositories,
-    );
-    let transactions = names_after(&repositories, "run('");
-    assert!(!reads.is_empty(), "no measured reads found in Database.ts");
-    assert!(!transactions.is_empty(), "no repository transactions found");
+    // The names were read from electron/database at `electron-final` (c8c378b) and frozen in the fixture, so the
+    // comparison no longer needs the TypeScript sources on this branch.
+    let frozen: Value =
+        serde_json::from_str(include_str!("fixtures/typescript-observer-names.json"))
+            .expect("the observer fixture is JSON");
+    let reads = frozen_names(&frozen["reads"]);
+    let transactions = frozen_names(&frozen["transactions"]);
+    assert!(!reads.is_empty(), "the fixture has no measured reads");
     assert!(
-        typescript("electron/database/DatabaseRuntime.ts")
-            .contains("operationName = 'transaction'"),
-        "the default transaction name changed in DatabaseRuntime.ts"
+        !transactions.is_empty(),
+        "the fixture has no repository transactions"
+    );
+    assert_eq!(
+        frozen["defaultTransactionOperation"], "transaction",
+        "the default transaction name in the fixture"
     );
 
     let mut expected: BTreeSet<String> = reads.union(&transactions).cloned().collect();
@@ -150,7 +119,7 @@ fn the_catalog_names_what_the_typescript_runtime_reports() {
     let expected: BTreeSet<&str> = expected.iter().map(String::as_str).collect();
     assert_eq!(
         catalog, expected,
-        "the catalog differs from the operations of electron/database"
+        "the catalog differs from the operations frozen from electron/database"
     );
 }
 

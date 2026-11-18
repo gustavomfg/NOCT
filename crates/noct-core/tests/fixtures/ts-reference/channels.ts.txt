@@ -1,0 +1,31 @@
+export const IPC_CHANNELS = {
+  recovery: { list: 'recovery:list' },
+  evidence: { list: 'evidence:list' },
+  workspace: { select: 'workspace:select', validate: 'workspace:validate', list: 'workspaces:list', remove: 'workspaces:remove', favorite: 'workspaces:favorite', openTool: 'workspace:openTool', watch: 'workspace:watch', changed: 'workspace:changed' },
+  projectIndex: { status: 'projectIndex:status', start: 'projectIndex:start', cancel: 'projectIndex:cancel', retry: 'projectIndex:retry', summary: 'projectIndex:summary', files: 'projectIndex:files', symbols: 'projectIndex:symbols', imports: 'projectIndex:imports', exports: 'projectIndex:exports', stack: 'projectIndex:stack', exclusions: 'projectIndex:exclusions', changed: 'projectIndex:statusChanged' },
+  semanticIndex: { status: 'semanticIndex:status', start: 'semanticIndex:start', cancel: 'semanticIndex:cancel', summary: 'semanticIndex:summary', search: 'semanticIndex:search', changed: 'semanticIndex:statusChanged' },
+  engineeringIntelligence: { report: 'engineeringIntelligence:report', changed: 'engineeringIntelligence:changed' },
+  validation: { run: 'validation:run', cancel: 'validation:cancel', list: 'validation:list', page: 'validation:page', latest: 'validation:latest', changed: 'validation:statusChanged' },
+  changeControl: { get: 'changeControl:get', changes: 'changeControl:changes', diff: 'changeControl:diff', hunks: 'changeControl:hunks', editHunk: 'changeControl:editHunk', decideHunk: 'changeControl:decideHunk', decide: 'changeControl:decide', changed: 'changeControl:changed' },
+  conversations: { list: 'conversations:list', page: 'conversations:page', create: 'conversations:create', messages: 'conversations:messages', messagePage: 'conversations:messagePage', delete: 'conversations:delete' },
+  ai: { send: 'ai:send', cancel: 'ai:cancel', event: 'ai:event', saveAssistant: 'ai:save-assistant', approve: 'ai:approve', status: 'ai:status', rollbackStatus: 'ai:rollbackStatus', rollback: 'ai:rollback' },
+  files: { attach: 'files:attach', open: 'files:open', preview: 'files:preview' },
+  memory: { get: 'memory:get', set: 'memory:set' },
+  brain: { page: 'brain:page', history: 'brain:history', create: 'brain:create', update: 'brain:update', delete: 'brain:delete', extract: 'brain:extract' },
+  artifacts: { list: 'artifacts:list', page: 'artifacts:page', delete: 'artifacts:delete' },
+  suggestions: { list: 'suggestions:list', page: 'suggestions:page', create: 'suggestions:create', status: 'suggestions:status' },
+  data: { export: 'data:export', import: 'data:import' },
+  diagnostics: { openLogs: 'diagnostics:openLogs', copy: 'diagnostics:copy', export: 'diagnostics:export', rendererError: 'diagnostics:rendererError', rendererStats: 'diagnostics:rendererStats' },
+  settings: { get: 'settings:get', set: 'settings:set' },
+  updates: { getState: 'updates:getState', check: 'updates:check', download: 'updates:download', retry: 'updates:retry', install: 'updates:install', changed: 'updates:stateChanged' },
+  providers: { list: 'providers:list', create: 'providers:create', update: 'providers:update', remove: 'providers:remove', testConnection: 'providers:testConnection', diagnose: 'providers:diagnose' },
+  models: { list: 'models:list', refresh: 'models:refresh', bindings: 'models:bindings', setBindings: 'models:setBindings' },
+  git: { status: 'git:status', commit: 'git:commit' },
+  documents: { prepareMarkdown: 'documents:prepareMarkdown', applyMarkdown: 'documents:applyMarkdown', export: 'documents:export' },
+  clipboard: { readText: 'clipboard:readText', writeText: 'clipboard:writeText' },
+} as const
+
+export type IpcChannel = {
+  [Group in keyof typeof IPC_CHANNELS]:
+    (typeof IPC_CHANNELS)[Group][keyof (typeof IPC_CHANNELS)[Group]]
+}[keyof typeof IPC_CHANNELS]
