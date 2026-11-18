@@ -762,9 +762,25 @@ try {
       await glassSwitch.click()
       check((await html.getAttribute('data-glass')) === 'on', 'the glass switch turns the layer back on')
 
-      // Construir and Documentar are not available yet: each says so, and offers no control for the work.
+      // Construir shows its three steps, with no note that it is unavailable and no control for the work. Documentar says
+      // it is not available yet, and offers no control for the work either.
       if (scenario.unavailableModes) {
-        for (const name of ['Construir', 'Documentar']) {
+        await page.getByRole('button', { name: 'Construir', exact: true }).click()
+        check(await page.getByRole('heading', { name: 'Construir', level: 1 }).isVisible(), 'Construir shows its heading')
+        const stepsBox = page.getByTestId('build-steps')
+        check((await stepsBox.locator('.step').count()) === 3, 'Construir shows the three steps')
+        const stepWords = (await stepsBox.textContent()) ?? ''
+        check(
+          ['Você descreve', 'O NOCT mostra o diff', 'Você aprova ou recusa'].every((words) => stepWords.includes(words)),
+          'the steps say what the person does and what the window shows',
+        )
+        check(await page.getByTestId('unavailable').count() === 0, 'Construir does not say it is not available')
+        check(await page.getByText('Chega na próxima versão.', { exact: true }).isVisible(), 'Construir says when it arrives')
+        for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
+          check(await page.getByRole('button', { name: control, exact: true }).count() === 0, 'Construir offers no ' + control + ' control')
+        }
+        check(await page.locator('.diff, .prose, .cmd').count() === 0, 'Construir shows no example diff or command')
+        for (const name of ['Documentar']) {
           await page.getByRole('button', { name, exact: true }).click()
           check(await page.getByRole('heading', { name, level: 1 }).isVisible(), `${name} shows its heading`)
           check(await page.getByTestId('unavailable').count() === 1, `${name} says it is not available yet`)
@@ -811,7 +827,7 @@ try {
         const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check((await pressed('Construir')) === 'true' && (await pressed('Revisar')) === 'false', 'Construir is the pressed mode')
-        check(await page.getByTestId('unavailable').isVisible(), 'the build mode says it is not available yet')
+        check(await page.getByTestId('build-steps').isVisible(), 'the build mode shows its three steps')
         await page.getByRole('button', { name: 'Documentar', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Documentar', level: 1 }).isVisible(), 'the document mode is shown')
         await page.getByRole('button', { name: 'Ajustes', exact: true }).click()

@@ -219,11 +219,7 @@ pub fn App() -> impl IntoView {
                             } else {
                                 match mode.get() {
                                     Mode::Review => chat_panel::thread(chat).into_any(),
-                                    Mode::Build => unavailable_panel(
-                                        "Construir",
-                                        "Cada comando espera a sua aprovação. Toda alteração pode ser revertida.",
-                                    )
-                                    .into_any(),
+                                    Mode::Build => build_panel().into_any(),
                                     Mode::Docs => unavailable_panel(
                                         "Documentar",
                                         "Atualizações incrementais em Markdown, só depois da sua confirmação.",
@@ -257,6 +253,34 @@ fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView
                     "Ainda não disponível nesta versão. Nada é executado nem gravado nesta tela."
                 </p>
             </section>
+        </div>
+    }
+}
+
+/// The steps of Build, as the product will run them. Nothing here runs or writes anything, and no control approves, refuses
+/// or reverts a change, so the steps are only a description.
+fn build_panel() -> impl IntoView {
+    view! {
+        <div class="stack" data-testid="build">
+            <div>
+                <h1 class="h1">"Construir"</h1>
+                <p class="lead">"Cada comando espera a sua aprovação. Toda alteração pode ser revertida."</p>
+            </div>
+            <section class="card" data-testid="build-steps">
+                <div class="step">
+                    <span class="step__n">"1"</span>
+                    <p><b>"Você descreve"</b>" a mudança que quer fazer."</p>
+                </div>
+                <div class="step">
+                    <span class="step__n">"2"</span>
+                    <p><b>"O NOCT mostra o diff"</b>" de cada arquivo antes de gravar."</p>
+                </div>
+                <div class="step">
+                    <span class="step__n">"3"</span>
+                    <p><b>"Você aprova ou recusa"</b>" cada arquivo. Nada é gravado sem a sua aprovação."</p>
+                </div>
+            </section>
+            <p class="lead">"Chega na próxima versão."</p>
         </div>
     }
 }
