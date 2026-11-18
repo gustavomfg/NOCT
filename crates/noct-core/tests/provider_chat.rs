@@ -1,3 +1,4 @@
+use noct_core::ai::bindings::openrouter_default;
 use noct_core::ai::openrouter::{
     ChatFailure, ChatMessage, Role, StreamEvent, chat_body, read_event, status_failure,
     validated_model_id,
@@ -298,4 +299,20 @@ fn a_model_id_at_the_maximum_length_is_accepted_and_one_more_is_refused() {
     assert!(validated_model_id(&at_limit).is_ok());
     let over = format!("a/{name}x");
     assert!(validated_model_id(&over).is_err());
+}
+
+#[test]
+fn the_openrouter_default_fixes_the_provider_and_keeps_the_identifier() {
+    let model = openrouter_default("openai/gpt-4o:free").unwrap();
+    assert_eq!(model.provider_id, "openrouter");
+    assert_eq!(model.model_id, "openai/gpt-4o:free");
+}
+
+#[test]
+fn an_openrouter_default_with_a_bad_identifier_is_refused() {
+    for id in ["", "gpt-4o", "a/b c", "a/b\n"] {
+        assert!(openrouter_default(id).is_err(), "{id:?}");
+    }
+    let too_long = format!("a/{}", "x".repeat(MAXIMUM_MODEL_CHARACTERS));
+    assert!(openrouter_default(&too_long).is_err());
 }
