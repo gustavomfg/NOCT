@@ -8,7 +8,7 @@
 //! it.
 
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_db::store::Store;
@@ -21,6 +21,20 @@ pub const VAULT_DIRECTORY: &str = "provider-credentials";
 
 /// The settings key that names the reference of the OpenRouter key. Empty means no key.
 pub const OPENROUTER_REFERENCE: &str = "maintenance.secret.openrouter.reference";
+
+/// Serializes the key saves and removals of this process. A save reads the reference, asks the vault for a secret and
+/// writes the reference. Two of them in parallel could let one save's cleanup delete the secret the other has just
+/// created, or write a reference to a secret that is already gone. The lock is always taken before the store lock, and
+/// no code takes it while holding the store lock, so the order cannot invert. It guards no data, so a poisoned lock is
+/// taken over: each operation reads the reference and the vault again, and a panic cannot leave the key unusable until
+/// the next start.
+static KEY_OPERATIONS: Mutex<()> = Mutex::new(());
+
+fn key_operations() -> MutexGuard<'static, ()> {
+    KEY_OPERATIONS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
 
 /// The vault operations the key commands use. `ProviderCredentialVault` implements it. Tests implement it in memory,
 /// so that no test writes to the operating system store.
@@ -111,6 +125,7 @@ where
     let ProviderKeyInput { provider, key } =
         input.validated().map_err(|_| CommandError::InvalidInput)?;
     let secret = SecretString::from(key);
+    let _operation = key_operations();
     let vault = open()?;
     match reference(store)? {
         Some(current) if vault.has(&current).map_err(map_vault)? => {
@@ -141,6 +156,7 @@ where
     V: KeyVault,
     F: FnOnce() -> Result<V, CommandError>,
 {
+    let _operation = key_operations();
     if let Some(current) = reference(store)? {
         open()?.delete(&current).map_err(map_vault)?;
         write_reference(store, "")?;

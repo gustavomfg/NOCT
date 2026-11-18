@@ -6,6 +6,9 @@ mod common;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use common::Scratch;
 use noct_app::bootstrap::{self, Persistence};
@@ -94,6 +97,36 @@ impl KeyVault for FakeVault {
             return Err(VaultError::WriteFailed);
         }
         Ok(self.secrets.borrow_mut().remove(reference).is_some())
+    }
+}
+
+/// A vault whose secret write announces that it started and then holds for a while. It records when the write ends, so a
+/// test can tell whether another save opened its vault in the meantime.
+struct SlowVault<'a> {
+    inner: FakeVault,
+    entered: mpsc::Sender<()>,
+    left: &'a AtomicBool,
+}
+
+impl KeyVault for SlowVault<'_> {
+    fn create(&self, secret: &SecretString) -> Result<CredentialReference, VaultError> {
+        let _ = self.entered.send(());
+        std::thread::sleep(Duration::from_millis(300));
+        let result = self.inner.create(secret);
+        self.left.store(true, Ordering::SeqCst);
+        result
+    }
+
+    fn replace(&self, reference: &str, secret: &SecretString) -> Result<(), VaultError> {
+        self.inner.replace(reference, secret)
+    }
+
+    fn has(&self, reference: &str) -> Result<bool, VaultError> {
+        self.inner.has(reference)
+    }
+
+    fn delete(&self, reference: &str) -> Result<bool, VaultError> {
+        self.inner.delete(reference)
     }
 }
 
@@ -317,6 +350,55 @@ fn removing_deletes_the_secret_and_clears_the_reference() {
         .expect("the status is read")
         .configured,
         "after the removal the vault is not needed to answer"
+    );
+}
+
+/// Two saves at the same time run one after the other: the second does not open its vault while the first is still in
+/// its secret write. Without the lock of the service this test fails, because the second save would open at once.
+#[test]
+fn two_key_saves_at_the_same_time_run_one_after_the_other() {
+    let (_scratch, persistence) = fixture("credentials-serial");
+    let first_left = AtomicBool::new(false);
+    let second_opened_early = AtomicBool::new(false);
+    let (entered, started) = mpsc::channel();
+
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| {
+            let vault = SlowVault {
+                inner: FakeVault::default(),
+                entered,
+                left: &first_left,
+            };
+            credentials::save(&persistence.store, || Ok(&vault), input(KEY))
+        });
+        started
+            .recv()
+            .expect("the first save reached its secret write");
+        let second = scope.spawn(|| {
+            credentials::save(
+                &persistence.store,
+                || {
+                    if !first_left.load(Ordering::SeqCst) {
+                        second_opened_early.store(true, Ordering::SeqCst);
+                    }
+                    Ok(FakeVault::default())
+                },
+                input(KEY),
+            )
+        });
+        first
+            .join()
+            .expect("the first save finishes")
+            .expect("the first key is saved");
+        second
+            .join()
+            .expect("the second save finishes")
+            .expect("the second key is saved");
+    });
+
+    assert!(
+        !second_opened_early.load(Ordering::SeqCst),
+        "the second save opened its vault while the first one still held it"
     );
 }
 
