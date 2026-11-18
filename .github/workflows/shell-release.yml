@@ -338,16 +338,18 @@ jobs:
           version="$(node -p "require('./crates/noct-app/tauri.conf.json').version")"
           if gh release view "$FEED_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release download "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$RUNNER_TEMP/feed" --clobber
-            node -e '
-              const parts = (text) => text.split(".").map(Number)
-              const next = parts(process.argv[1])
-              const current = require(process.argv[2]).version
-              const order = [0, 1, 2].map((index) => next[index] - parts(current)[index]).find((difference) => difference !== 0) ?? 0
-              if (order < 0) {
-                console.error(`The feed holds ${current}, newer than ${process.argv[1]}; refusing to move it back.`)
-                process.exit(1)
-              }
-            ' "$version" "$RUNNER_TEMP/feed/latest.json"
+            # The version guard is a quoted heredoc, so shellcheck reads it as JavaScript, not as shell text.
+            NEW_VERSION="$version" FEED_FILE="$RUNNER_TEMP/feed/latest.json" node <<'JS'
+            const fs = require('node:fs')
+            const parts = (text) => text.split('.').map(Number)
+            const next = parts(process.env.NEW_VERSION)
+            const current = JSON.parse(fs.readFileSync(process.env.FEED_FILE, 'utf8')).version
+            const order = [0, 1, 2].map((index) => next[index] - parts(current)[index]).find((difference) => difference !== 0) ?? 0
+            if (order < 0) {
+              console.error(`The feed holds ${current}, newer than ${process.env.NEW_VERSION}; refusing to move it back.`)
+              process.exit(1)
+            }
+          JS
             gh release upload "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" \

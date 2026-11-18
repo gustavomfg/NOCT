@@ -150,9 +150,10 @@ Tauri signature are all unconfirmed until the first real run. A run publishes a 
 workflow in a copy of the repository (a fork with its own `release` environment), not in the public one. The gate's
 query for the shell CI run of the tagged commit has not run against GitHub. Nor has the feed: that a pre-release
 download URL serves the feed's asset, and that `releases/latest` skips the shell's pre-releases, are the GitHub behaviour
-the design relies on, and no run has observed them. `actionlint` 1.7.12, the version
-`package-validation.yml` uses, was run locally on the workflows. That job runs only on pull requests, on pushes to
-`main` and on `v*` tags, so CI does not lint a push to `migration/rust`.
+the design relies on, and no run has observed them. `actionlint` 1.7.12, the version `package-validation.yml` uses, is run
+locally with shellcheck on `PATH`, as CI runs it. Without shellcheck, actionlint skips the shell in `run:` steps, and a CI
+run of this branch failed on a shellcheck finding (SC2016) that a local run without shellcheck had not shown. That job runs
+on pull requests, on pushes to `main` and on `v*` tags. A push to `migration/rust` with no open pull request is not linted.
 
 ## Key rotation
 
