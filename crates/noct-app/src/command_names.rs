@@ -11,6 +11,8 @@ pub const BRAIN_UPDATE: &str = "brain_update";
 pub const SUGGESTIONS_CREATE: &str = "suggestions_create";
 pub const SUGGESTIONS_STATUS: &str = "suggestions_status";
 pub const MODELS_SET_BINDINGS: &str = "models_set_bindings";
+pub const MODELS_BINDINGS_GET: &str = "models_bindings_get";
+pub const MODELS_SET_DEFAULT_MODEL: &str = "models_set_default_model";
 pub const AI_SAVE_ASSISTANT: &str = "ai_save_assistant";
 pub const CONVERSATIONS_DELETE: &str = "conversations_delete";
 pub const WORKSPACE_REMOVE: &str = "workspace_remove";
@@ -36,6 +38,8 @@ pub const ALL: &[&str] = &[
     SUGGESTIONS_CREATE,
     SUGGESTIONS_STATUS,
     MODELS_SET_BINDINGS,
+    MODELS_BINDINGS_GET,
+    MODELS_SET_DEFAULT_MODEL,
     AI_SAVE_ASSISTANT,
     CONVERSATIONS_DELETE,
     WORKSPACE_REMOVE,

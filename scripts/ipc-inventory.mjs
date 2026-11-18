@@ -282,6 +282,20 @@ const count = (predicate) => rows.filter(predicate).length
 // project only.
 const RUST_ONLY = [
   {
+    command: 'models_bindings_get',
+    argument: '`{ input: { workspace } }`',
+    reply: '`WorkspaceModelBindings`, or `null` when the project has none.',
+    risk: 'read',
+    note: 'Reads the model bindings of a saved project that is available and authorized. The beta 1 model selector reads the default with it.',
+  },
+  {
+    command: 'models_set_default_model',
+    argument: '`{ input: { workspace, modelId } }`. `modelId` must be present: a string, or `null` to clear the default.',
+    reply: '`WorkspaceModelBindings` after the write.',
+    risk: 'database write',
+    note: 'Sets only the OpenRouter default. The identifier is checked for its length, its characters and its `vendor/name` shape before the project is read. `:free` is not a rule. The other bindings of the row are kept, in one transaction.',
+  },
+  {
     command: 'provider_key_status',
     argument: 'none',
     reply: '`{ provider, configured }`',

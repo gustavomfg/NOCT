@@ -1285,6 +1285,118 @@ fn the_consent_commands_follow_a_saved_project_and_stay_out_of_the_settings_read
     }
 }
 
+/// The model commands follow the saved and authorized project. Setting the default model keeps the embedding binding and
+/// the remote flag already stored, a missing or invalid identifier is refused with nothing written, and `null` clears
+/// only the default.
+#[test]
+fn the_model_commands_keep_the_other_bindings_and_refuse_a_bad_identifier() {
+    let scratch = Scratch::new("models-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    // The service checks that the folder is available, so the project is a real folder in the scratch directory.
+    let project_folder = scratch.path().join("models-project");
+    std::fs::create_dir(&project_folder).expect("the folder is created");
+    let project_owned = project_folder.to_string_lossy().into_owned();
+    let project = project_owned.as_str();
+    let unsaved = "/synthetic/never-saved-models";
+    let call = |command: &str, body: Value| get_ipc_response(&main, request(&main, command, body));
+
+    assert_eq!(
+        error_of(call(
+            "models_bindings_get",
+            json!({ "input": { "workspace": unsaved } })
+        ))["code"],
+        "unknown-workspace",
+        "a project that is not saved has no bindings to read"
+    );
+    assert_eq!(
+        error_of(call(
+            "models_set_default_model",
+            json!({ "input": { "workspace": unsaved, "modelId": "openai/gpt-4o" } })
+        ))["code"],
+        "unknown-workspace",
+        "a project that is not saved cannot be given a default"
+    );
+
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(project)
+        .expect("the project is saved");
+    assert_eq!(
+        ok_json(call(
+            "models_bindings_get",
+            json!({ "input": { "workspace": project } })
+        )),
+        Value::Null,
+        "a saved project with no bindings reads as null"
+    );
+
+    let embedding = json!({ "providerId": "local-embeddings", "modelId": "nomic-embed" });
+    ok_json(call(
+        "models_set_bindings",
+        json!({ "input": {
+            "workspaceId": project,
+            "embeddingBinding": embedding,
+            "remoteEmbeddingAllowed": false
+        } }),
+    ));
+
+    let saved = ok_json(call(
+        "models_set_default_model",
+        json!({ "input": { "workspace": project, "modelId": "openai/gpt-4o:free" } }),
+    ));
+    assert_eq!(
+        saved["defaultBinding"],
+        json!({ "providerId": "openrouter", "modelId": "openai/gpt-4o:free" })
+    );
+    assert_eq!(
+        saved["embeddingBinding"], embedding,
+        "the embedding binding is kept"
+    );
+    assert_eq!(
+        saved["remoteEmbeddingAllowed"], false,
+        "the remote flag is kept"
+    );
+
+    for input in [
+        json!({ "input": { "workspace": project, "modelId": "gpt-4o" } }),
+        json!({ "input": { "workspace": project, "modelId": "a/b c" } }),
+        json!({ "input": { "workspace": project } }),
+        json!({ "input": { "workspace": project, "modelId": 7 } }),
+    ] {
+        assert_eq!(
+            error_of(call("models_set_default_model", input.clone()))["code"],
+            "invalid-input",
+            "{input} is refused"
+        );
+    }
+    assert_eq!(
+        ok_json(call(
+            "models_bindings_get",
+            json!({ "input": { "workspace": project } })
+        ))["defaultBinding"]["modelId"],
+        "openai/gpt-4o:free",
+        "a refused call writes nothing"
+    );
+
+    let cleared = ok_json(call(
+        "models_set_default_model",
+        json!({ "input": { "workspace": project, "modelId": null } }),
+    ));
+    assert_eq!(
+        cleared["defaultBinding"],
+        Value::Null,
+        "null clears the default"
+    );
+    assert_eq!(
+        cleared["embeddingBinding"], embedding,
+        "clearing keeps the embedding binding"
+    );
+}
+
 /// A project that is saved but not authorized, as a restored one is, cannot consent or read its consent. The refusal is
 /// the same `unknown-workspace` as for a project that is not saved, and it lasts until the project is authorized again.
 #[test]

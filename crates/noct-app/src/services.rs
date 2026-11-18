@@ -449,6 +449,39 @@ pub fn models_set_bindings(
         .map_err(|_| CommandError::Persistence)
 }
 
+/// The model bindings of an authorized project, or none when the project has none.
+pub fn models_bindings(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: noct_core::ai::bindings::ProjectBindingsRequest,
+) -> Result<Option<WorkspaceModelBindings>, CommandError> {
+    authorized_workspace(store, blocked, &request.workspace)?;
+    store
+        .workspace_model_bindings()
+        .get(&request.workspace)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Sets the default OpenRouter model of an authorized project, or clears it with `null`. The identifier is checked
+/// before the project is read. Every other binding of the project is kept by the repository in the same transaction.
+pub fn models_set_default(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: noct_core::ai::bindings::DefaultModelRequest,
+) -> Result<WorkspaceModelBindings, CommandError> {
+    let model = request
+        .model_id()
+        .map_err(|_| CommandError::InvalidInput)?
+        .map(noct_core::ai::bindings::openrouter_default)
+        .transpose()
+        .map_err(|_| CommandError::InvalidInput)?;
+    authorized_workspace(store, blocked, &request.workspace)?;
+    store
+        .workspace_model_bindings()
+        .set_default_model(&request.workspace, model)
+        .map_err(|_| CommandError::Persistence)
+}
+
 /// The title of an assistant reply's Markdown artifact: `Resposta · ` and the UTC time of the write. The TypeScript shell
 /// writes the local time of the system instead, which this shell does not read yet.
 fn reply_title() -> String {

@@ -5,7 +5,9 @@
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
-use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::bindings::{
+    DefaultModelRequest, ProjectBindingsRequest, WorkspaceModelBindings,
+};
 use noct_core::ai::consent::{ProjectConsentRequest, ProjectConsentStatus};
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
@@ -263,6 +265,39 @@ pub async fn models_set_bindings(
     blocking(move || {
         let guard = lock(&store)?;
         services::models_set_bindings(&guard, &default_blocked_roots(), bindings)
+    })
+    .await
+}
+
+/// Reads the model bindings of a project. The argument is `{ workspace }`; the reply is the bindings, or `null`.
+#[tauri::command]
+pub async fn models_bindings_get(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<Option<WorkspaceModelBindings>, CommandError> {
+    let request: ProjectBindingsRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::models_bindings(&guard, &default_blocked_roots(), request)
+    })
+    .await
+}
+
+/// Sets the default OpenRouter model of a project. The argument is `{ workspace, modelId }`; `modelId` must be present,
+/// and `null` clears the default. The other bindings of the project are kept.
+#[tauri::command]
+pub async fn models_set_default_model(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<WorkspaceModelBindings, CommandError> {
+    let request: DefaultModelRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::models_set_default(&guard, &default_blocked_roots(), request)
     })
     .await
 }

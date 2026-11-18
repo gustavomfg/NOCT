@@ -34,6 +34,8 @@ pub fn command_handler<R: Runtime>()
         commands::suggestions_create,
         commands::suggestions_status,
         commands::models_set_bindings,
+        commands::models_bindings_get,
+        commands::models_set_default_model,
         commands::ai_save_assistant,
         commands::conversations_delete,
         commands::workspace_remove,

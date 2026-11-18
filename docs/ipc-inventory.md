@@ -13,7 +13,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 ## Totals
 
 - Channels in the catalogue: 108.
-- Rust-only commands with no TypeScript channel: 6, listed under "Rust-only commands".
+- Rust-only commands with no TypeScript channel: 8, listed under "Rust-only commands".
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
@@ -79,6 +79,8 @@ The key commands refuse a bad request before the credential store is opened, as 
 
 | Command | Argument | Reply | Risk | Note |
 | --- | --- | --- | --- | --- |
+| `models_bindings_get` | `{ input: { workspace } }` | `WorkspaceModelBindings`, or `null` when the project has none. | read | Reads the model bindings of a saved project that is available and authorized. The beta 1 model selector reads the default with it. |
+| `models_set_default_model` | `{ input: { workspace, modelId } }`. `modelId` must be present: a string, or `null` to clear the default. | `WorkspaceModelBindings` after the write. | database write | Sets only the OpenRouter default. The identifier is checked for its length, its characters and its `vendor/name` shape before the project is read. `:free` is not a rule. The other bindings of the row are kept, in one transaction. |
 | `provider_key_status` | none | `{ provider, configured }` | read | Says whether a key is stored. The reference that marks it is hidden from the settings read. |
 | `provider_key_save` | `{ input: { provider, key } }` | Status, as above. | secret | The key is trimmed, visible ASCII, 8 to 512 characters. It goes to the credential vault. Without secure storage the save is refused with `secure-storage-unavailable` and nothing is saved. |
 | `provider_key_remove` | none | Status, as above. | secret | Removes the stored key and its reference. |

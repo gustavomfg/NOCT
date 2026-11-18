@@ -57,6 +57,8 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "suggestions_create",
             "suggestions_status",
             "models_set_bindings",
+            "models_bindings_get",
+            "models_set_default_model",
             "ai_save_assistant",
             "conversations_delete",
             "workspace_remove",
