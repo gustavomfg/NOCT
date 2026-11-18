@@ -743,6 +743,172 @@ shell; the release workflow, its `release` environment and its secrets have not 
 `releases/latest/download/latest.json` shares the "latest" release with the Electron application, which is a blocker
 before the first tag (see [docs/shell-updater.md](shell-updater.md), Release workflow).
 
+## Beta 1 OpenRouter: report of this round
+
+Beta 1 is the OpenRouter provider: the key in the credential vault, the network policy, the context rules, the per-project
+consent and the settings section. Beta 1 sends nothing to a provider. The chat that would send a conversation is not
+connected, and no switch exists for it yet. The SSE adapter and the pinned HTTP client are blocked (Stop 1), so this round
+does not complete the provider path. `changeControl.editHunk` was recorded as beta 2 earlier, in `2fd8bb2`, and is not part of
+beta 1.
+
+### Commits of this round
+
+| Commit | Work |
+| --- | --- |
+| `8919c48` | 3A: provider key contract with a write-only input (redacted `Debug`, 8 to 512 visible ASCII characters) |
+| `ef26329` | 3A: exact-key read of a hidden setting, used for the key reference |
+| `2cd2350` | 3A: `provider_key_status`, `provider_key_save`, `provider_key_remove`, on the credential vault |
+| `5105ceb` | 3B: network policy as a pure module, with the design answers in section 13 of `docs/provider-allowlist-design.md` |
+| `c68771e` | 3D: context rules ported from the TypeScript policy, with the size budget and the sensitive-file exclusion |
+| `f5adb0f` | 3D: per-project consent contract, version `openrouter-v1` |
+| `c1056fc` | 3D: `provider_consent_status`, `provider_consent_grant`, `provider_consent_revoke` |
+| `0df77cb` | 3E: settings section for the key and the consent, with browser checks and per-command mocks |
+| `9e64a73` | CI fix: both READMEs name the release `v1.0.5`, which `verify:release-metadata` requires |
+| `0a34a65` | 3F: the IPC inventory lists the Rust-only provider commands |
+| the commit that adds this section | 3F: this report, and the design answers updated to match the code |
+
+### Status by package
+
+- **3A, provider key in the vault:** done. Status, save and removal. The key is never returned to the page, and the page holds
+  it only until the save call is sent. The vault design is unchanged (ADR 0002).
+- **3B, network policy:** done as a pure policy: URL checks, approvals per host and port, address verification through an
+  injected resolver, refusal of redirects, and a status check. Not done: the pinned HTTP client, the connection itself, and
+  cancellation. The timeouts and the size limit are constants in `crates/noct-core/src/limits.rs`, and no code applies them yet.
+- **3C, OpenAI-compatible SSE adapter and streaming:** not started. Blocked by Stop 1.
+- **3D, context and consent:** done. The context rules are ported from `SemanticPrivacyPolicy.ts` and `WorkspacePathPolicy.ts`.
+  Consent is per project and per provider, and it is asked before any send. No send exists yet for it to gate.
+- **3E, interface:** the key section and the consent section are done, with four browser scenarios. Not done: the model
+  selector (Stop 3), the streaming review panel (blocked by 3C), and saving a real reply with `ai_save_assistant` (there is no
+  real reply until 3C; the command itself exists since P4).
+- **Real chat behind a switch that is off by default:** not started. There is no adapter to switch on, so there is nothing to
+  switch on yet. The switch is created with the adapter, off by default, and this section is updated when it exists.
+- **3F, documentation:** the IPC inventory, this report, and the design answers are updated. The READMEs state the beta 1 scope.
+
+### Decisions taken by me
+
+These are the choices not covered by the mission, each taken in the most conservative way.
+
+- **D1.** The key reference is stored at `maintenance.secret.openrouter.reference`. Both settings readers hide the `maintenance.`
+  prefix (`electron/database/SettingsRepository.ts` and `Settings::get`), so the reference never reaches the settings the page
+  reads. The name `providers.openrouter.reference` was rejected because the TypeScript reader would list it.
+- **D2.** `noct-app` depends on `noct-secrets` by path. No external crate was added.
+- **D3.** `noct-secrets` re-exports `SecretString` and `ExposeSecret`, so `noct-app` needs no `secrecy` dependency of its own.
+- **D4.** A status read with no saved reference does not open the vault, so it never asks the operating system for the master key.
+- **D5.** Save writes the secret before the reference. Remove deletes the secret before it clears the reference. If clearing the
+  reference fails, the reference stays, so a retry finishes the removal.
+- **D6.** The key is 8 to 512 characters of visible ASCII after trimming. An error names the field, never the value.
+- **D7.** The ACL tests do not send a valid save, so they never touch the keyring of the machine that runs them. The service
+  tests use an in-memory vault.
+- **D8.** `provider_key_status`, `provider_key_save` and `provider_key_remove` are granted to the `main` window only, and the
+  capability lock was updated.
+- **D9.** Known gap, left open: no prune of orphan secrets after a crash between creating a secret and writing its reference.
+  `vault.prune` exists but is not called yet.
+- **Network answers Q1 to Q6** are in section 13 of `docs/provider-allowlist-design.md`. The short form: a local source reaches
+  loopback only, which closes G1 in the Rust port; approvals are per host and port; no approval table and no migration; the
+  built-in list holds OpenRouter alone; there are no other endpoints; redirects are refused.
+- **Consent.** Stored per project and per provider under `maintenance.consent.openrouter.<path>`, with the version `openrouter-v1`.
+  Granting and revoking require a saved project.
+- **Context.** Rules ported from the TypeScript policy, with one deliberate divergence: a file named exactly with a sensitive
+  extension, such as `.pem`, is sensitive in the Rust port. The TypeScript rule reads the extension with `path.posix.extname`, which is empty for `.pem`, so it does not match that name. Limits: 128 KiB in
+  total and 32 KiB per file (`provider_context` in `limits.rs`). Once a file does not fit the budget, the rest are excluded as
+  over budget.
+- **Model ids.** The repository holds no list of `:free` model ids, so none is hardcoded. The selector is not built (Stop 3), and
+  the `:free` restriction is not enforced anywhere yet.
+
+### New dependencies
+
+- No external crate was added. `Cargo.lock` gained two internal edges, `noct-app` to `noct-secrets` and `noct-ui` to `serde`.
+  The diff from `2fd8bb2` adds no `[[package]]` block.
+- `cargo deny` and `cargo audit` were not run for this round, because no external package changed.
+- Not added: `reqwest` (Stop 1).
+
+### Stops
+
+1. **Pinned HTTP client (3B) and SSE adapter (3C).** `reqwest` with the approved features brings `aws-lc-rs` 1.18.2 and
+   `aws-lc-sys` 0.46.0. Those build native code with cmake, and they are not in the lock. Not added. The options for the owner:
+   accept the native build and its CI cost, or use `rustls-no-provider` with `ring`, which is already in the lock but is outside
+   the approved feature set. The second option was not taken.
+2. **Trigger reduction for Windows and macOS (Package 1).** It needs a change to the release gate in
+   `.github/workflows/shell-release.yml`, which is outside the single-file scope. Not changed.
+3. **Model selector.** `models_set_bindings` replaces the whole bindings row. No shell command reads the bindings back, so a save
+   of the default model would erase an embedding binding that the page cannot see. It needs a read command first, or an explicit
+   decision to accept the replacement. Not built.
+4. **Streaming review and saving a real reply.** Both depend on 3C.
+5. **Intermittent Windows persistence failure from an earlier package.** The cause is not established. Not investigated in this round.
+
+### CI per system (finished runs only)
+
+The branch runs the workflows below for each push. Only runs that finished are recorded.
+
+| Commit | Ubuntu, Windows, macOS (`Rust shell validation`) | `CI · source, renderer and packages` | `Row gate` | `Keyring round trip` | `Rust dependency audit` |
+| --- | --- | --- | --- | --- | --- |
+| `2cd2350` | cancelled on all three (run `44256845617`) | failure: README version (run `44256857218`) | success (`44256857182`) | success (`44256856945`) | success (`44256857022`) |
+| `c1056fc` | cancelled on all three (run `44257869801`) | failure: README version (run `44257879030`) | success (`44257879034`) | success (`44257878924`) | success (`44257878915`) |
+| `0df77cb` | cancelled on all three (run `44258880725`) | cancelled (run `44258888191`) | cancelled (`44258888293`) | success (`44258880704`, `44258888160`) | in progress at the time of writing |
+
+Reading the table:
+
+- The `Rust shell validation` runs were cancelled on all three systems. Their start times match the next push to the branch,
+  so they were superseded by that push. This is an inference from the timestamps, not a platform failure. No Windows or macOS
+  result exists for any commit of this round.
+- The `CI · source, renderer and packages` failure on `2cd2350` and `c1056fc` was `verify:release-metadata`: the README said
+  "version 1.0.5", and the check requires `v1.0.5`. The same failure occurred on `2fd8bb2` (run `44255047842`). `9e64a73` fixes
+  it. Its run was in progress at the time of writing and is not recorded here.
+- The `0df77cb` source and row-gate runs were cancelled after about one minute. Their timestamps match the pushes that followed,
+  so they were superseded, the same inference as above.
+- The runs of `9e64a73` and `0a34a65` were in progress at the time of writing. They are not recorded here, and nothing in this
+  section claims them green.
+
+### CI times before and after (Package 1)
+
+There is no before and after pair. No `Rust shell validation` run of this round finished. The superseded runs lasted 8 to 14
+minutes before they were cancelled, which is not a run time and is not comparable. Trigger reduction is blocked (Stop 2).
+
+### Validation of this round
+
+Run on the tree of `0df77cb`, which the later commits do not change in code.
+
+- `cargo fmt --all -- --check`: pass.
+- `cargo clippy --workspace --all-targets -- -D warnings`: pass.
+- `cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings`: pass.
+- `cargo test --workspace --no-fail-fast`: 672 passed, 0 failed.
+- `trunk build --release` in `crates/noct-ui`: pass.
+- `node scripts/check-shell-ui.mjs`: 21 of 21 scenarios pass, including the four provider scenarios.
+- `node scripts/check-shell-csp.mjs`: pass.
+- `node --test scripts/run-rust-shell.test.mjs`: 7 of 7 pass.
+- `scripts/verify-rust-written-gate.mjs` and `scripts/verify-row-gate.mjs`: both pass.
+- `node scripts/verify-release-metadata.mjs`: pass, after `9e64a73`.
+- `node scripts/ipc-inventory.mjs` produces `docs/ipc-inventory.md` byte for byte, after `0a34a65`.
+- `npm test` (TypeScript suite, run on this round's tree): 98 test files passed, 634 tests passed, 12 skipped, exit 0.
+  No product TypeScript file was changed in this round.
+- actionlint: not run. No workflow file changed in this round.
+
+### Not verified
+
+- No window was opened on any system. The browser checks run Chromium with a mocked `invoke`, not the Tauri webview.
+- No request was sent to a provider, and no network path is used. The address policy was tested with a fake resolver only.
+- The operating system keyring: the `Keyring round trip` workflow succeeded on `2cd2350` and `0df77cb`. The vault tests of this
+  round use an in-memory fake.
+- Orphan secrets after a crash (D9) are not pruned.
+- The timeouts and the size limit are constants that no client applies yet.
+- The CI results of `9e64a73` and `0a34a65` are not recorded here.
+- The commit message of `0a34a65` says "five Rust provider commands". There are six. The message was pushed as it is, and it
+  is not rewritten, because the branch is not force-pushed.
+
+### Dependencies on the owner
+
+1. Choose the native build path for the HTTP client (Stop 1). Until it is chosen, 3B and 3C stay blocked.
+2. Decide the model selector (Stop 3): add a read command for the bindings first, or accept that a save replaces the row. Also
+   decide whether `:free` is checked in the page only or in the core as well.
+3. Review decisions D1 to D9, the network answers in `docs/provider-allowlist-design.md` section 13, and the context divergence.
+4. Decide Stop 2, the trigger reduction for Windows and macOS.
+5. Investigate the intermittent Windows persistence failure on a Windows machine (Stop 5).
+
+### Next session, first task
+
+Decide Stop 1. Then the pinned connection (3B) and the SSE adapter with streaming (3C) can start, and the real chat switch, off by
+default, is added with the adapter.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

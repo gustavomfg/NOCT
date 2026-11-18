@@ -76,6 +76,21 @@ O critério da ADR para a fase 8 é "pacotes assinados validados em três plataf
   afirmações do Tauri em que se apoiam. O Tauri não informa a versão do WebKitGTK, e as páginas de macOS dele dão dois
   valores diferentes.
 
+### Beta 1 do provedor (OpenRouter)
+
+Conferido no commit `0df77cb`, com os commits de documentação depois dele:
+
+- A chave do OpenRouter é salva, conferida e removida por três comandos. Ela fica no cofre de credenciais do sistema
+  operacional, e a página nunca a recebe de volta.
+- A política de rede do endereço do provedor está escrita e testada como um módulo puro. O build ainda não tem cliente HTTP,
+  então nenhuma requisição pode ser feita.
+- As regras de contexto e um consentimento por projeto estão escritos. A beta 1 não envia nada a um provedor: o chat não está
+  ligado, e ainda não existe um interruptor para ele.
+- A página de Ajustes tem a seção da chave e do consentimento. O seletor de modelo não foi feito.
+
+Não feito na beta 1: o cliente HTTP, o adaptador de streaming, o seletor de modelo e a ligação do chat. Os motivos, e o que não
+foi verificado, estão em [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" (em inglês).
+
 ## 3. Verificação
 
 Os resultados abaixo são do commit `de7dba4`, o código que este README descreve. Este README não acrescenta código. As

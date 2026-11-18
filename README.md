@@ -75,6 +75,21 @@ The ADR's criterion for phase 8 is "signed packages validated on three platforms
   [`docs/compatibility.md`](docs/compatibility.md#minimum-platform-versions) has the decision and the Tauri
   statements behind them. Tauri gives no WebKitGTK version, and its macOS pages give two different values.
 
+### Beta 1 provider (OpenRouter)
+
+Checked at commit `0df77cb`, with the documentation commits after it:
+
+- The OpenRouter key is saved, checked and removed through three commands. It is kept in the operating system's credential
+  vault, and the page never receives it back.
+- The network policy for the provider endpoint is written and tested as a pure module. The build has no HTTP client yet, so
+  no request can be made.
+- The context rules and a per-project consent are written. Beta 1 sends nothing to a provider: the chat is not connected,
+  and no switch for it exists yet.
+- The settings page has the key and consent section. The model selector is not built.
+
+Not done in beta 1: the HTTP client, the streaming adapter, the model selector and the chat connection. The reasons, and
+what is not verified, are in [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round".
+
 ## 3. Verification
 
 The results below are for commit `de7dba4`, the code this README describes. This README adds no code. The checks on
