@@ -22,7 +22,7 @@ jobs:
   gate:
     name: Verify the tag, the versions and the shell CI of the tagged commit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 120
     permissions:
       contents: read
       actions: read
@@ -58,22 +58,37 @@ jobs:
             exit 1
           fi
 
-      - name: Require successful shell CI for the tagged commit
+      - name: Wait for the shell CI of the tag and require all three systems to pass
         shell: bash
         run: |
-          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/rust-shell-validation.yml/runs" \
-            -f head_sha="$RELEASE_SHA" -f per_page=100 |
-            node -e '
-              const fs = require("node:fs")
-              const runs = JSON.parse(fs.readFileSync(0, "utf8")).workflow_runs
-                .filter((run) => run.head_sha === process.env.RELEASE_SHA)
-                .filter((run) => run.event === "push" || run.event === "workflow_dispatch")
-                .sort((a, b) => b.id - a.id)
-              const latest = runs[0]
-              if (!latest) throw new Error("No shell CI run exists for the tagged commit. rust-shell-validation.yml must pass on it first.")
-              if (latest.conclusion !== "success") throw new Error("Shell CI run " + latest.html_url + " is " + latest.status + "/" + (latest.conclusion || "pending") + ".")
-              console.log("Verified shell CI: " + latest.html_url)
-            '
+          # The tag starts rust-shell-validation.yml on its own run, with the Linux, Windows and macOS jobs. The gate waits
+          # for that run to finish, and passes only when each of the three jobs succeeded on it. A run of the branch for the
+          # same commit does not count: it runs Linux alone.
+          deadline=$(( $(date +%s) + 6600 ))
+          run_id=""
+          while [ -z "$run_id" ]; do
+            run_id="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/rust-shell-validation.yml/runs" \
+              -f event=push -f per_page=100 \
+              --jq "[.workflow_runs[] | select(.head_sha == \"$RELEASE_SHA\" and .head_branch == \"$RELEASE_TAG\")] | sort_by(.id) | last | .id // empty")"
+            if [ -z "$run_id" ]; then
+              [ "$(date +%s)" -lt "$deadline" ] || { echo "No shell CI run exists for $RELEASE_TAG. rust-shell-validation.yml must run on the tag." >&2; exit 1; }
+              sleep 30
+            fi
+          done
+          echo "Shell CI run for $RELEASE_TAG: $run_id"
+          while [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status)" != completed ]; do
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "The shell CI run $run_id did not finish in time." >&2; exit 1; }
+            sleep 60
+          done
+          for system in ubuntu-latest windows-latest macos-latest; do
+            conclusion="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+              --jq ".jobs[] | select(.name == \"Shell on $system\") | .conclusion")"
+            if [ "$conclusion" != success ]; then
+              echo "Shell CI on $system is ${conclusion:-missing} in run $run_id. Every system must pass before a release." >&2
+              exit 1
+            fi
+          done
+          echo "Verified shell CI on Linux, Windows and macOS: $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .html_url)"
 
   build:
     name: Build unsigned shell (${{ matrix.target }})
