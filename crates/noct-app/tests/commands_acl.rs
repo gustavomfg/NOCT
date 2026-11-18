@@ -1216,6 +1216,75 @@ fn the_provider_key_commands_are_granted_and_refuse_bad_requests_before_the_stor
     }
 }
 
+/// The consent commands are granted to the main window, and a consent is written only for a saved project. The flow is
+/// status, grant, status, revoke, status, and the setting never reaches the settings the interface reads.
+#[test]
+fn the_consent_commands_follow_a_saved_project_and_stay_out_of_the_settings_read() {
+    let scratch = Scratch::new("consent-acl");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = "/synthetic/consent-project";
+    let unsaved = "/synthetic/never-saved";
+
+    assert_eq!(
+        error_of(get_ipc_response(
+            &main,
+            request(
+                &main,
+                "provider_consent_status",
+                json!({ "input": { "workspace": unsaved } })
+            ),
+        ))["code"],
+        "unknown-workspace",
+        "a project that is not saved cannot consent"
+    );
+
+    app.state::<Persistence>()
+        .store
+        .lock()
+        .expect("the store is not poisoned")
+        .workspaces()
+        .touch(project)
+        .expect("the project is saved");
+
+    let consent = |command: &str| {
+        ok_json(get_ipc_response(
+            &main,
+            request(&main, command, json!({ "input": { "workspace": project } })),
+        ))
+    };
+    let expected = |granted: bool| json!({ "workspace": project, "provider": "openrouter", "granted": granted });
+
+    assert_eq!(consent("provider_consent_status"), expected(false));
+    assert_eq!(consent("provider_consent_grant"), expected(true));
+    assert_eq!(consent("provider_consent_status"), expected(true));
+
+    let settings = ok_json(get_ipc_response(
+        &main,
+        request(&main, "settings_get", json!({})),
+    ));
+    assert!(
+        !settings.to_string().contains("consent") && !settings.to_string().contains(project),
+        "the consent is not in the settings the interface reads: {settings}"
+    );
+
+    assert_eq!(consent("provider_consent_revoke"), expected(false));
+    assert_eq!(consent("provider_consent_status"), expected(false));
+
+    for input in [
+        json!({ "input": { "workspace": "" } }),
+        json!({ "input": { "workspace": project, "granted": true } }),
+        json!({ "input": { "workspace": 7 } }),
+        json!({ "input": null }),
+    ] {
+        let error = error_of(get_ipc_response(
+            &main,
+            request(&main, "provider_consent_grant", input.clone()),
+        ));
+        assert_eq!(error["code"], "invalid-input", "{input} is refused");
+    }
+}
+
 /// The provider key commands are not granted to a window outside the capability.
 #[test]
 fn the_provider_key_commands_are_refused_to_another_window() {

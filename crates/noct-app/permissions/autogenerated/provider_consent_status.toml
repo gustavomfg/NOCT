@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-consent-status"
+description = "Enables the provider_consent_status command without any pre-configured scope."
+commands.allow = ["provider_consent_status"]
+
+[[permission]]
+identifier = "deny-provider-consent-status"
+description = "Denies the provider_consent_status command without any pre-configured scope."
+commands.deny = ["provider_consent_status"]

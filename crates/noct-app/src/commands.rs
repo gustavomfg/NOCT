@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::consent::{ProjectConsentRequest, ProjectConsentStatus};
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::{Conversation, Message};
@@ -23,6 +24,7 @@ use noct_secrets::ProviderCredentialVault;
 use tauri::State;
 
 use crate::bootstrap::Persistence;
+use crate::consent;
 use crate::credentials;
 use crate::error::CommandError;
 use crate::logging::measured;
@@ -383,6 +385,42 @@ pub async fn provider_key_remove(
         )
     })
     .await
+}
+
+/// Whether the project has consented to send its context to OpenRouter. The argument is `{ workspace }`.
+#[tauri::command]
+pub async fn provider_consent_status(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<ProjectConsentStatus, CommandError> {
+    let request: ProjectConsentRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || consent::status(&store, request)).await
+}
+
+/// Records the consent of a saved project. The interface sends it only after its consent screen is confirmed.
+#[tauri::command]
+pub async fn provider_consent_grant(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<ProjectConsentStatus, CommandError> {
+    let request: ProjectConsentRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || consent::grant(&store, request)).await
+}
+
+/// Removes the consent of a saved project.
+#[tauri::command]
+pub async fn provider_consent_revoke(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<ProjectConsentStatus, CommandError> {
+    let request: ProjectConsentRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || consent::revoke(&store, request)).await
 }
 
 fn open_vault(data_directory: &Path) -> Result<ProviderCredentialVault, CommandError> {

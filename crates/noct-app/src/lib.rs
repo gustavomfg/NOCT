@@ -7,6 +7,7 @@
 pub mod bootstrap;
 pub mod command_names;
 pub mod commands;
+pub mod consent;
 pub mod credentials;
 pub mod error;
 pub mod logging;
@@ -43,6 +44,9 @@ pub fn command_handler<R: Runtime>()
         commands::provider_key_status,
         commands::provider_key_save,
         commands::provider_key_remove,
+        commands::provider_consent_status,
+        commands::provider_consent_grant,
+        commands::provider_consent_revoke,
     ]
 }
 

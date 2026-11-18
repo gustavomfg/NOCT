@@ -67,7 +67,10 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "workspace_set_favorite",
             "provider_key_status",
             "provider_key_save",
-            "provider_key_remove"
+            "provider_key_remove",
+            "provider_consent_status",
+            "provider_consent_grant",
+            "provider_consent_revoke"
         ]
     );
 }

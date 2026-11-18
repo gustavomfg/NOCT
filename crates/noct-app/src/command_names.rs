@@ -22,6 +22,9 @@ pub const WORKSPACE_SET_FAVORITE: &str = "workspace_set_favorite";
 pub const PROVIDER_KEY_STATUS: &str = "provider_key_status";
 pub const PROVIDER_KEY_SAVE: &str = "provider_key_save";
 pub const PROVIDER_KEY_REMOVE: &str = "provider_key_remove";
+pub const PROVIDER_CONSENT_STATUS: &str = "provider_consent_status";
+pub const PROVIDER_CONSENT_GRANT: &str = "provider_consent_grant";
+pub const PROVIDER_CONSENT_REVOKE: &str = "provider_consent_revoke";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -44,4 +47,7 @@ pub const ALL: &[&str] = &[
     PROVIDER_KEY_STATUS,
     PROVIDER_KEY_SAVE,
     PROVIDER_KEY_REMOVE,
+    PROVIDER_CONSENT_STATUS,
+    PROVIDER_CONSENT_GRANT,
+    PROVIDER_CONSENT_REVOKE,
 ];
