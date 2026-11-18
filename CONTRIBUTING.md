@@ -23,15 +23,16 @@ Before opening a Pull Request, please:
 
 ## Architecture
 
-The project follows a secure Electron architecture.
+The product on this branch is written in Rust. It is a Tauri shell (`crates/noct-app`), a Leptos interface compiled to
+WebAssembly (`crates/noct-ui`) and a SQLite layer (`crates/noct-db`).
 
 Please preserve the separation between:
 
-- Renderer
-- Preload
-- Main Process
+- the interface, which calls only the commands the shell declares;
+- the shell's commands, which check their arguments and the window that calls them;
+- the persistence layer, which the commands use.
 
-Avoid introducing unnecessary coupling between these layers.
+Native capabilities cross the command boundary. Avoid introducing unnecessary coupling between these layers.
 
 ---
 
@@ -54,15 +55,17 @@ Authentication data must never be exposed through the renderer.
 Before submitting a Pull Request, run:
 
 ```bash
-npm run typecheck
-npm run lint
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --no-fail-fast
+(cd crates/noct-ui && trunk build --release)
+npm ci
 npm test
-npm run build
-npm run test:abi
-npm run test:renderer
+npm run check:csp
+npm run check:ui
 ```
 
-If applicable, also run the project's packaging and smoke validation workflows.
+Describe in the Pull Request the commands you ran and any manual validation.
 
 ---
 
@@ -103,8 +106,9 @@ Small and focused Pull Requests are preferred over large changes.
 Recommended environment:
 
 - WebStorm
-- Node.js 24 LTS
-- npm 11+
+- Rust 1.97.1, which `rust-toolchain.toml` pins, with the `wasm32-unknown-unknown` target
+- trunk 0.22.1 (`cargo install --locked trunk@0.22.1`)
+- Node.js 24 LTS and npm 11+, for the Playwright checks and the Node tests of the scripts
 
 The `webstorm` launcher should be available in your system `PATH`.
 

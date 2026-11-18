@@ -44,14 +44,45 @@ fn the_main_window_capability_grants_exactly_the_first_slice() {
 }
 
 #[test]
-fn the_first_slice_is_the_four_commands_of_the_contract() {
+fn the_first_slice_is_the_commands_of_the_contract() {
     assert_eq!(
         command_names::ALL,
         &[
             "settings_get",
             "settings_set",
             "workspaces_list",
-            "conversations_list"
+            "brain_create",
+            "brain_extract",
+            "brain_update",
+            "suggestions_create",
+            "suggestions_status",
+            "models_set_bindings",
+            "models_bindings_get",
+            "models_set_default_model",
+            "ai_save_assistant",
+            "conversations_delete",
+            "workspace_remove",
+            "brain_delete",
+            "artifacts_delete",
+            "conversations_create",
+            "conversations_list",
+            "workspace_set_favorite",
+            "provider_key_status",
+            "provider_key_save",
+            "provider_key_remove",
+            "provider_consent_status",
+            "provider_consent_grant",
+            "provider_consent_revoke",
+            "provider_chat_status",
+            "provider_chat_send",
+            "provider_chat_cancel",
+            "file_changes_list",
+            "file_change_propose",
+            "file_change_approve",
+            "file_change_reject",
+            "file_change_undo",
+            "workspace_add",
+            "provider_chat_set_enabled"
         ]
     );
 }
@@ -72,4 +103,21 @@ fn only_the_main_window_capability_exists() {
     files.sort();
 
     assert_eq!(files, ["default.json"]);
+}
+
+/// The updater's commands are not reachable from the window: no permission of the updater plugin is granted.
+#[test]
+fn the_window_is_granted_no_updater_permission() {
+    let capability: Value = serde_json::from_str(MAIN_CAPABILITY).expect("the capability is JSON");
+    let granted = capability["permissions"]
+        .as_array()
+        .expect("the permissions are a list");
+
+    assert!(
+        granted.iter().all(|permission| !permission
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("updater")),
+        "{granted:?}"
+    );
 }

@@ -269,3 +269,516 @@ fn a_refused_artifact_rolls_back_the_whole_turn() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_refused_conversation_insert_leaves_the_workspace_unsaved() {
+    // The workspace row and the conversation are written in one transaction. The trigger refuses the second
+    // insert, so the first must be rolled back as well.
+    let directory = scratch("store-create-conversation-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_conversations BEFORE INSERT ON conversations
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .create_conversation("/work/project")
+        .expect_err("the refused insert is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let saved: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        saved, 0,
+        "the workspace opened by the same call is rolled back"
+    );
+}
+
+#[test]
+fn a_failed_brain_history_write_leaves_no_memory_behind() {
+    // The memory and its first history entry are written in one transaction. The trigger refuses the history
+    // entry, so the memory must be rolled back as well.
+    let directory = scratch("store-brain-create-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace the memory belongs to is saved");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_brain_history BEFORE INSERT ON brain_memory_history
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let input = noct_core::brain_memory::CreateBrainMemoryInput {
+        conversation_id: None,
+        kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+        scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+        content: "A note".to_string(),
+        confidence: None,
+        source_type: None,
+        source_id: None,
+        status: None,
+    };
+
+    // The workspace exists, so the memory insert succeeds and only the history insert is refused. The message
+    // must name the trigger, or the test would pass for another reason.
+    let error = store
+        .brain_memories()
+        .create("/work/project", &input)
+        .expect_err("the refused history write is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM brain_memories", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "the memory written by the same call is rolled back"
+    );
+}
+
+#[test]
+fn a_failed_brain_history_write_on_update_leaves_the_memory_unchanged() {
+    let directory = scratch("store-brain-update-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace the memory belongs to is saved");
+    let created = store
+        .brain_memories()
+        .create(
+            "/work/project",
+            &noct_core::brain_memory::CreateBrainMemoryInput {
+                conversation_id: None,
+                kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+                scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+                content: "A note".to_string(),
+                confidence: None,
+                source_type: None,
+                source_id: None,
+                status: None,
+            },
+        )
+        .expect("the memory is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_brain_update_history BEFORE INSERT ON brain_memory_history
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let update = noct_core::brain_memory::UpdateBrainMemoryInput {
+        content: Some("A changed note".to_string()),
+        ..Default::default()
+    };
+
+    let error = store
+        .brain_memories()
+        .update(&created.id, "/work/project", &update)
+        .expect_err("the refused history write is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let stored = store
+        .brain_memories()
+        .get(&created.id, "/work/project")
+        .expect("the memory is read")
+        .expect("the memory is stored");
+    assert_eq!(
+        stored.content, "A note",
+        "the change is rolled back with its history entry"
+    );
+}
+
+#[test]
+fn a_refused_candidate_leaves_none_of_the_batch_stored() {
+    // The candidates of one reply are stored as one unit. The second one is refused by the trigger, so the first
+    // must be rolled back as well.
+    let directory = scratch("store-candidates-unit");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace is saved");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_second_candidate BEFORE INSERT ON brain_memories
+             WHEN NEW.content = 'refuse me'
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let candidates = vec![
+        noct_core::brain_memory::BrainMemoryCandidate {
+            kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+            scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+            content: "Store me first".to_string(),
+            confidence: 60,
+        },
+        noct_core::brain_memory::BrainMemoryCandidate {
+            kind: noct_core::brain_memory::BrainMemoryKind::Fact,
+            scope: noct_core::brain_memory::BrainMemoryScope::Workspace,
+            content: "refuse me".to_string(),
+            confidence: 60,
+        },
+    ];
+
+    let error = store
+        .brain_memories()
+        .create_candidates("/work/project", "unused", &candidates)
+        .expect_err("the second candidate is refused");
+    assert!(error.to_string().contains("refused by the test"), "{error}");
+
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM brain_memories", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "the first candidate is rolled back with the batch"
+    );
+}
+
+#[test]
+fn a_failed_suggestion_decision_write_leaves_no_suggestion_behind() {
+    // A review's suggestions and their first decision entries are written in one transaction. The trigger refuses the
+    // decision entry, so the suggestion must be rolled back as well.
+    let directory = scratch("store-suggestions-rollback");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_suggestion_decisions BEFORE INSERT ON suggestion_decisions
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+    let input = sample_suggestion();
+
+    let error = store
+        .suggestions()
+        .reconcile(&conversation.id, "/work/project", &[input], false)
+        .expect_err("the refused decision entry is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let stored: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM suggestions", [], |row| row.get(0))
+        .expect("the count is read");
+    assert_eq!(
+        stored, 0,
+        "the suggestion written by the same call is rolled back"
+    );
+}
+
+fn sample_suggestion() -> noct_core::suggestions::SuggestionInput {
+    noct_core::suggestions::SuggestionInput {
+        title: "Missing tests".to_string(),
+        description: "d".to_string(),
+        reasoning: "r".to_string(),
+        category: noct_core::suggestions::SuggestionCategory::Testing,
+        severity: noct_core::suggestions::SuggestionSeverity::Medium,
+        affected_files: Vec::new(),
+        proposed_changes: String::new(),
+        expected_benefits: Vec::new(),
+        complexity: noct_core::suggestions::SuggestionLevel::Medium,
+        risk: noct_core::suggestions::SuggestionLevel::Medium,
+        evidence: None,
+        confidence: None,
+        source: None,
+        responsible: None,
+    }
+}
+
+#[test]
+fn a_failed_decision_entry_on_a_status_change_leaves_the_status_unchanged() {
+    let directory = scratch("store-suggestion-status-rollback");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    store
+        .suggestions()
+        .reconcile(
+            &conversation.id,
+            "/work/project",
+            &[sample_suggestion()],
+            false,
+        )
+        .expect("the suggestion is stored");
+    let id: String = store
+        .connection()
+        .query_row("SELECT id FROM suggestions", [], |row| row.get(0))
+        .expect("the id is read");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_status_decisions BEFORE INSERT ON suggestion_decisions
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .suggestions()
+        .set_status(
+            &id,
+            noct_core::suggestions::SuggestionStatus::InAnalysis,
+            Some("kept"),
+        )
+        .expect_err("the refused decision entry is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+
+    let (status, result): (String, Option<String>) = store
+        .connection()
+        .query_row(
+            "SELECT status, result FROM suggestions WHERE id=?1",
+            [&id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("the row is read");
+    assert_eq!(
+        status, "new",
+        "the status update is rolled back with its decision"
+    );
+    assert_eq!(result, None);
+}
+
+#[test]
+fn a_refused_model_bindings_write_leaves_no_bindings_behind() {
+    let directory = scratch("store-model-bindings-rollback");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace is saved, for the foreign key");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_model_bindings BEFORE INSERT ON workspace_model_bindings
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .workspace_model_bindings()
+        .set(noct_core::ai::bindings::WorkspaceModelBindings {
+            workspace_id: "/work/project".to_string(),
+            default_binding: None,
+            embedding_binding: None,
+            remote_embedding_allowed: Some(true),
+        })
+        .expect_err("the refused write is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert_eq!(
+        store
+            .workspace_model_bindings()
+            .get("/work/project")
+            .expect("the bindings are read"),
+        None
+    );
+}
+
+#[test]
+fn a_refused_conversation_delete_leaves_the_conversation_in_place() {
+    let directory = scratch("store-conversation-delete-refused");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_conversation_delete BEFORE DELETE ON conversations
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .conversations()
+        .delete(&conversation.id)
+        .expect_err("the refused delete is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert!(
+        store
+            .conversations()
+            .get(&conversation.id)
+            .expect("the conversation is read")
+            .is_some(),
+        "the conversation is still there"
+    );
+}
+
+#[test]
+fn a_refused_project_removal_leaves_the_project_in_place() {
+    let directory = scratch("store-workspace-remove-refused");
+    let store = Store::open(&directory).expect("open");
+    store
+        .workspaces()
+        .touch("/work/project")
+        .expect("the workspace is saved");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_workspace_remove BEFORE DELETE ON workspaces
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .workspaces()
+        .remove("/work/project")
+        .expect_err("the refused removal is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    let remaining: i64 = store
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM workspaces WHERE path='/work/project'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the count is read");
+    assert_eq!(remaining, 1, "the project is still saved");
+}
+
+#[test]
+fn a_refused_memory_delete_leaves_the_memory_in_place() {
+    let directory = scratch("store-brain-delete-refused");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/project")
+        .expect("the conversation is created");
+    let memory = store
+        .brain_memories()
+        .create(
+            "/work/project",
+            &noct_core::brain_memory::CreateBrainMemoryInput {
+                kind: noct_core::brain_memory::BrainMemoryKind::Decision,
+                scope: noct_core::brain_memory::BrainMemoryScope::Conversation,
+                conversation_id: Some(conversation.id.clone()),
+                content: "Prefer small commits".to_string(),
+                confidence: None,
+                source_type: None,
+                source_id: None,
+                status: None,
+            },
+        )
+        .expect("the memory is created");
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_memory_delete BEFORE DELETE ON brain_memories
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .brain_memories()
+        .delete(&memory.id, "/work/project")
+        .expect_err("the refused delete is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert!(
+        store
+            .brain_memories()
+            .get(&memory.id, "/work/project")
+            .expect("the memory is read")
+            .is_some(),
+        "the memory is still there"
+    );
+}
+
+#[test]
+fn a_refused_artifact_delete_leaves_the_artifact_in_place() {
+    let directory = scratch("store-artifact-delete-refused");
+    let store = Store::open(&directory).expect("open");
+    let conversation = store
+        .create_conversation("/work/alpha")
+        .expect("conversation")
+        .id;
+    let diagram = json!({ "language": "mermaid" });
+    let turn = AssistantTurn {
+        conversation_id: &conversation,
+        workspace: "/work/alpha",
+        content: "Resposta",
+        metadata: None,
+        markdown_title: "Resposta · 2026",
+        artifacts: &[TurnArtifact {
+            kind: "diagram",
+            title: "Diagrama",
+            file_path: None,
+            content: Some("graph TD"),
+            metadata: Some(&diagram),
+        }],
+    };
+    store.save_assistant_turn(&turn).expect("turn");
+    // The turn stores its Markdown copy as an artifact too, so the diagram is found by its kind.
+    let listed = store.artifacts().list(&conversation).expect("artifacts");
+    let artifact = listed
+        .iter()
+        .find(|artifact| artifact.kind == "diagram")
+        .expect("the diagram is stored")
+        .id
+        .clone();
+    let before = listed.len();
+    store
+        .connection()
+        .execute_batch(
+            "CREATE TRIGGER refuse_artifact_delete BEFORE DELETE ON artifacts
+             BEGIN SELECT RAISE(ABORT, 'refused by the test'); END;",
+        )
+        .expect("the trigger is installed");
+
+    let error = store
+        .artifacts()
+        .delete(&artifact, &conversation)
+        .expect_err("the refused delete is an error");
+    assert!(
+        error.to_string().contains("refused by the test"),
+        "the trigger is the cause: {error}"
+    );
+    assert_eq!(
+        store
+            .artifacts()
+            .list(&conversation)
+            .expect("artifacts")
+            .len(),
+        before,
+        "nothing is removed"
+    );
+}

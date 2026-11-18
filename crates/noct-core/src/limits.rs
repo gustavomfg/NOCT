@@ -20,6 +20,12 @@ pub mod persistence {
     pub const DOCUMENT_CHARACTERS: u64 = 2_000_000;
     pub const DOCUMENT_NAME_CHARACTERS: u64 = 200;
     pub const METADATA_CHARACTERS: u64 = 500_000;
+    /// The longest brain memory content, in UTF-16 units after trimming. `safeBrainMemoryContent` in
+    /// `shared/ipc/schemas.ts` uses the same number.
+    pub const BRAIN_MEMORY_CHARACTERS: u64 = 8_000;
+    /// The longest result of a suggestion decision, in UTF-16 units. `suggestionStatusSchema` in `shared/ipc/schemas.ts`
+    /// uses the same number.
+    pub const SUGGESTION_RESULT_CHARACTERS: u64 = 20_000;
 }
 
 /// Byte limits for files read from an authorized workspace.
@@ -101,6 +107,49 @@ pub mod provider_configuration {
     pub const MAXIMUM_TIMEOUT_MS: u64 = 120_000;
 }
 
+/// Limits of the provider network calls. They apply to every request, and a reply that passes them is still checked by
+/// the policy in `ai::network` before its body is read.
+pub mod provider_network {
+    /// The longest a connection may take to open, in milliseconds.
+    pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
+    /// The longest a whole request may take, in milliseconds, counting the reply.
+    pub const REQUEST_TIMEOUT_MS: u64 = 120_000;
+    /// The longest silence between two reads of the reply, in milliseconds. It bounds a stalled stream, so a dead
+    /// connection never waits for the whole request timeout.
+    pub const STALL_TIMEOUT_MS: u64 = 30_000;
+    /// The most bytes of a reply that the shell reads, so that a reply cannot grow without limit.
+    pub const MAXIMUM_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
+}
+
+/// Limits of the project context sent with a provider call. The caps are the restrictive values of beta 1: a file larger
+/// than one cap is never sent, and the total never passes the budget.
+pub mod provider_context {
+    /// The most bytes of project files one provider call may carry.
+    pub const MAXIMUM_CONTEXT_BYTES: u64 = 128 * 1024;
+    /// The most bytes of one project file the context may carry.
+    pub const MAXIMUM_FILE_BYTES: u64 = 32 * 1024;
+}
+
+/// Limits of a provider key typed in the settings. The key is sent as an HTTP header, so only visible ASCII is
+/// accepted; the bounds are the ones the shell enforces before it stores anything.
+pub mod provider_key {
+    pub const MINIMUM_KEY_CHARACTERS: u64 = 8;
+    pub const MAXIMUM_KEY_CHARACTERS: u64 = 512;
+}
+
+/// Limits of the chat with a provider. The stream is read line by line, so one line and one event have their own cap, and
+/// the answer kept in memory has a cap too.
+pub mod provider_chat {
+    /// The most bytes of one line of the stream, and of the data of one event.
+    pub const MAXIMUM_EVENT_BYTES: usize = 64 * 1024;
+    /// The most characters of an answer the shell keeps.
+    pub const MAXIMUM_ANSWER_CHARACTERS: usize = 64 * 1024;
+    /// The most characters of a question.
+    pub const MAXIMUM_QUESTION_CHARACTERS: usize = 8_000;
+    /// The most characters of a model identifier, such as `vendor/name:free`.
+    pub const MAXIMUM_MODEL_CHARACTERS: usize = 128;
+}
+
 /// Limits of model descriptors. Port of `MODEL_LIMITS` in `shared/ai/model.ts`.
 pub mod model {
     pub const IDENTIFIER_CHARACTERS: u64 = 512;
@@ -108,4 +157,17 @@ pub mod model {
     pub const FAMILY_CHARACTERS: u64 = 500;
     pub const VERSION_CHARACTERS: u64 = 200;
     pub const PRICING_EFFECTIVE_AT_CHARACTERS: u64 = 100;
+}
+
+/// Limits of a proposed change to a project file. A change keeps the whole text of the file before and after it, so both
+/// are capped, and the journal that keeps the changes is capped too.
+pub mod file_change {
+    /// The most bytes of a file a change reads as its base, or writes as its content.
+    pub const MAXIMUM_FILE_BYTES: u64 = 32 * 1024;
+    /// The most bytes of the relative path of a change.
+    pub const MAXIMUM_PATH_BYTES: usize = 512;
+    /// The most changes that may be pending or applied at one time, across all projects.
+    pub const MAXIMUM_OPEN_CHANGES: usize = 50;
+    /// The most closed changes (rejected or undone) the journal keeps; the oldest are dropped first.
+    pub const MAXIMUM_CLOSED_CHANGES: usize = 50;
 }

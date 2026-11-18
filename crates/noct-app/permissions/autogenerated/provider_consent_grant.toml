@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-consent-grant"
+description = "Enables the provider_consent_grant command without any pre-configured scope."
+commands.allow = ["provider_consent_grant"]
+
+[[permission]]
+identifier = "deny-provider-consent-grant"
+description = "Denies the provider_consent_grant command without any pre-configured scope."
+commands.deny = ["provider_consent_grant"]

@@ -56,3 +56,17 @@ pub fn js_trim(text: &str) -> &str {
 pub fn utf16_len(text: &str) -> usize {
     text.encode_utf16().count()
 }
+
+/// A literal that matches its ASCII letters in either case and nothing else, as JavaScript's `/i` without `u` does.
+pub fn ascii_insensitive(literal: &str) -> String {
+    literal
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphabetic() {
+                format!("[{}{}]", c.to_ascii_lowercase(), c.to_ascii_uppercase())
+            } else {
+                regex::escape(&c.to_string())
+            }
+        })
+        .collect()
+}

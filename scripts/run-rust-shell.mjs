@@ -24,7 +24,9 @@ const TRUNK_VERSION = '0.22.1'
 const SERVER_TIMEOUT_MS = 300_000
 
 function usage(message) {
-  console.error(`${message}\nusage: node scripts/run-rust-shell.mjs <dev|release> [--data-dir <absolute path>] [--check]`)
+  console.error(
+    `${message}\nusage: node scripts/run-rust-shell.mjs <dev|release> [--data-dir <absolute path>] [--check]`,
+  )
   process.exitCode = 2
 }
 
@@ -140,21 +142,40 @@ function plan(mode, dataDirectory) {
   ]
 }
 
+// The options after the mode. A value option takes the argument that follows it, and an unknown argument is an error.
+export function parseOptions(rest) {
+  const options = { check: false, dataDirectory: undefined }
+  for (let index = 0; index < rest.length; index += 1) {
+    const argument = rest[index]
+    if (argument === '--check') {
+      options.check = true
+    } else if (argument === '--data-dir') {
+      const value = rest[index + 1]
+      index += 1
+      if (value === undefined || value.startsWith('--')) throw new Error(`${argument} needs a value.`)
+      if (!path.isAbsolute(value)) throw new Error('--data-dir needs an absolute path.')
+      options.dataDirectory = value
+    } else {
+      throw new Error(`unknown argument: ${argument}`)
+    }
+  }
+  return options
+}
+
 async function main(argv) {
   const [mode, ...rest] = argv
   if (mode !== 'dev' && mode !== 'release') return usage('the first argument must be dev or release.')
-  const check = rest.includes('--check')
-  const dataIndex = rest.indexOf('--data-dir')
-  const flagged = rest.filter((value, index) => value !== '--check' && index !== dataIndex && index !== dataIndex + 1)
-  if (flagged.length > 0) return usage(`unknown argument: ${flagged[0]}`)
-  let dataDirectory
-  if (dataIndex !== -1) {
-    dataDirectory = rest[dataIndex + 1]
-    if (!dataDirectory || !path.isAbsolute(dataDirectory)) return usage('--data-dir needs an absolute path.')
+  let options
+  try {
+    options = parseOptions(rest)
+  } catch (error) {
+    return usage(error.message)
   }
+  const { check } = options
 
   checkDevConfiguration()
   const tools = checkTools()
+  const dataDirectory = options.dataDirectory
   for (const line of plan(mode, dataDirectory)) console.log(line)
   console.log(`tools: ${tools.cargo}; ${tools.trunk}`)
   if (check) {

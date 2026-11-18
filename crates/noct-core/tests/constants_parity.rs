@@ -1,4 +1,4 @@
-//! Migration guard: every canonical limit must match `shared/constants.ts` exactly.
+//! Migration guard: every canonical limit must match `ts-reference/constants.ts.txt` exactly.
 //!
 //! The TypeScript file stays the single source of truth until the TypeScript
 //! implementation is retired; this test is removed with it.
@@ -6,7 +6,10 @@
 use noct_core::limits as l;
 use std::collections::HashMap;
 
-const TS_CONSTANTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/constants.ts");
+const TS_CONSTANTS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/ts-reference/constants.ts.txt"
+);
 
 fn is_identifier(text: &str) -> bool {
     let mut chars = text.chars();
@@ -38,7 +41,7 @@ fn typescript_values(source: &str) -> HashMap<String, u64> {
         let previous = values.insert(key.to_string(), value);
         assert!(
             previous.is_none(),
-            "duplicate key `{key}` in shared/constants.ts"
+            "duplicate key `{key}` in ts-reference/constants.ts.txt"
         );
     }
     values
@@ -48,7 +51,7 @@ fn schema_version(source: &str) -> u64 {
     let line = source
         .lines()
         .find(|line| line.starts_with("export const DATABASE_SCHEMA_VERSION = "))
-        .expect("DATABASE_SCHEMA_VERSION declared in shared/constants.ts");
+        .expect("DATABASE_SCHEMA_VERSION declared in ts-reference/constants.ts.txt");
     line.rsplit('=')
         .next()
         .unwrap()
@@ -59,7 +62,8 @@ fn schema_version(source: &str) -> u64 {
 
 #[test]
 fn canonical_limits_match_typescript() {
-    let source = std::fs::read_to_string(TS_CONSTANTS).expect("shared/constants.ts is readable");
+    let source =
+        std::fs::read_to_string(TS_CONSTANTS).expect("ts-reference/constants.ts.txt is readable");
     let ts = typescript_values(&source);
 
     let checks: &[(&str, u64)] = &[
@@ -158,31 +162,32 @@ fn canonical_limits_match_typescript() {
         assert_eq!(
             ts.get(*key),
             Some(expected),
-            "limit `{key}` drifted from shared/constants.ts"
+            "limit `{key}` drifted from ts-reference/constants.ts.txt"
         );
     }
     assert_eq!(
         checks.len(),
         ts.len(),
-        "shared/constants.ts gained or lost a numeric key; mirror it in noct_core::limits"
+        "ts-reference/constants.ts.txt gained or lost a numeric key; mirror it in noct_core::limits"
     );
 }
 
 #[test]
 fn schema_version_matches_typescript() {
-    let source = std::fs::read_to_string(TS_CONSTANTS).expect("shared/constants.ts is readable");
+    let source =
+        std::fs::read_to_string(TS_CONSTANTS).expect("ts-reference/constants.ts.txt is readable");
     assert_eq!(schema_version(&source), l::DATABASE_SCHEMA_VERSION);
 }
 
 const TS_PROVIDER_CONFIGURATION: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../shared/ai/providerConfiguration.ts"
+    "/tests/fixtures/ts-reference/providerConfiguration.ts.txt"
 );
 
 #[test]
 fn provider_configuration_limits_match_typescript() {
     let source = std::fs::read_to_string(TS_PROVIDER_CONFIGURATION)
-        .expect("shared/ai/providerConfiguration.ts is readable");
+        .expect("ts-reference/providerConfiguration.ts.txt is readable");
     let ts = typescript_values(&source);
 
     let checks: &[(&str, u64)] = &[
@@ -228,11 +233,14 @@ fn provider_configuration_limits_match_typescript() {
     );
 }
 
-const TS_MODEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/ai/model.ts");
+const TS_MODEL: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/ts-reference/model.ts.txt"
+);
 
 #[test]
 fn model_limits_match_typescript() {
-    let source = std::fs::read_to_string(TS_MODEL).expect("shared/ai/model.ts is readable");
+    let source = std::fs::read_to_string(TS_MODEL).expect("ts-reference/model.ts.txt is readable");
     let ts = typescript_values(&source);
 
     let checks: &[(&str, u64)] = &[

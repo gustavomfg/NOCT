@@ -9,10 +9,17 @@ publish.workspace = true
 [dependencies]
 noct-core = { path = "../noct-core" }
 noct-db = { path = "../noct-db" }
+noct-secrets = { path = "../noct-secrets" }
 serde.workspace = true
 serde_json.workspace = true
+time.workspace = true
 tauri.workspace = true
+tauri-plugin-updater.workspace = true
+tauri-plugin-dialog.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
 
 [features]
 # Serves the interface from the embedded frontend instead of the dev URL. Tauri's own CLI enables it for

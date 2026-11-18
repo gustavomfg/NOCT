@@ -196,6 +196,71 @@ fn bindings_store_one_record_per_workspace_and_validate_on_write() {
     assert!(store.get("/work/alpha").unwrap().is_none());
 }
 
+/// Saving the default model writes one row and keeps the embedding binding and the remote flag as they were.
+#[test]
+fn saving_the_default_model_keeps_the_other_bindings_of_the_row() {
+    let db = Database::open_runtime(&scratch("default-model")).unwrap();
+    Workspaces::new(db.connection())
+        .touch("/work/alpha")
+        .unwrap();
+    let store = ModelBindings::new(db.connection());
+    let embedding = ModelReference {
+        provider_id: "local-embeddings".to_string(),
+        model_id: "nomic-embed".to_string(),
+    };
+    store
+        .set(WorkspaceModelBindings {
+            workspace_id: "/work/alpha".to_string(),
+            default_binding: None,
+            embedding_binding: Some(embedding.clone()),
+            remote_embedding_allowed: Some(false),
+        })
+        .unwrap();
+
+    let default = ModelReference {
+        provider_id: "openrouter".to_string(),
+        model_id: "openai/gpt-4o".to_string(),
+    };
+    let saved = store
+        .set_default_model("/work/alpha", Some(default.clone()))
+        .unwrap();
+    assert_eq!(saved.default_binding, Some(default.clone()));
+
+    let stored = store.get("/work/alpha").unwrap().expect("the row stays");
+    assert_eq!(stored.default_binding, Some(default));
+    assert_eq!(stored.embedding_binding, Some(embedding.clone()));
+    assert_eq!(stored.remote_embedding_allowed, Some(false));
+
+    let cleared = store.set_default_model("/work/alpha", None).unwrap();
+    assert_eq!(cleared.default_binding, None);
+    let after = store.get("/work/alpha").unwrap().expect("the row stays");
+    assert_eq!(after.embedding_binding, Some(embedding));
+    assert_eq!(after.remote_embedding_allowed, Some(false));
+}
+
+/// A workspace with no row yet gets one, with only the default set.
+#[test]
+fn the_default_model_of_a_workspace_without_bindings_starts_a_row() {
+    let db = Database::open_runtime(&scratch("default-model-new")).unwrap();
+    Workspaces::new(db.connection())
+        .touch("/work/beta")
+        .unwrap();
+    let store = ModelBindings::new(db.connection());
+    store
+        .set_default_model(
+            "/work/beta",
+            Some(ModelReference {
+                provider_id: "openrouter".to_string(),
+                model_id: "a/b:free".to_string(),
+            }),
+        )
+        .unwrap();
+    let stored = store.get("/work/beta").unwrap().expect("a row was started");
+    assert_eq!(stored.embedding_binding, None);
+    assert_eq!(stored.remote_embedding_allowed, None);
+    assert_eq!(stored.default_binding.unwrap().model_id, "a/b:free");
+}
+
 #[test]
 fn relocating_a_workspace_moves_its_rows_and_bindings_and_keeps_its_favorite() {
     let db = Database::open_runtime(&scratch("relocate")).unwrap();

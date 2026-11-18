@@ -1,0 +1,237 @@
+//! The rules of a proposed change that need no disk: the relative path, the sensitive names, the moves of a change, and the
+//! journal's limits. The disk checks are in `noct-app/tests/file_changes.rs`.
+
+use noct_core::file_change::{
+    FileChange, FileChangeJournal, FileChangeStatus, JournalRefusal, PathRefusal,
+    check_relative_path, fits_limit, is_sensitive_name,
+};
+use noct_core::limits::file_change::{
+    MAXIMUM_CLOSED_CHANGES, MAXIMUM_FILE_BYTES, MAXIMUM_OPEN_CHANGES,
+};
+
+fn change(id: &str, status: FileChangeStatus) -> FileChange {
+    FileChange {
+        id: id.to_string(),
+        workspace: "/projects/one".to_string(),
+        path: "src/lib.rs".to_string(),
+        status,
+        base: Some("old\n".to_string()),
+        content: "new\n".to_string(),
+    }
+}
+
+#[test]
+fn a_plain_relative_path_is_accepted_with_its_names() {
+    assert_eq!(
+        check_relative_path("src/lib/mod.rs"),
+        Ok(vec![
+            "src".to_string(),
+            "lib".to_string(),
+            "mod.rs".to_string()
+        ])
+    );
+}
+
+#[test]
+fn a_path_that_leaves_the_project_is_refused() {
+    assert_eq!(
+        check_relative_path("../outside.txt"),
+        Err(PathRefusal::Traversal)
+    );
+    assert_eq!(
+        check_relative_path("src/../../outside.txt"),
+        Err(PathRefusal::Traversal)
+    );
+    assert_eq!(
+        check_relative_path("/etc/passwd"),
+        Err(PathRefusal::NotRelative)
+    );
+    assert_eq!(
+        check_relative_path("C:/Windows/win.ini"),
+        Err(PathRefusal::Forbidden)
+    );
+    assert_eq!(
+        check_relative_path("src\\..\\x.txt"),
+        Err(PathRefusal::Forbidden)
+    );
+}
+
+#[test]
+fn a_path_with_an_empty_dot_or_nul_name_is_refused() {
+    assert_eq!(check_relative_path(""), Err(PathRefusal::Empty));
+    assert_eq!(
+        check_relative_path("src//lib.rs"),
+        Err(PathRefusal::Forbidden)
+    );
+    assert_eq!(check_relative_path("./lib.rs"), Err(PathRefusal::Forbidden));
+    assert_eq!(check_relative_path("src/"), Err(PathRefusal::Forbidden));
+    assert_eq!(check_relative_path("a\0b.txt"), Err(PathRefusal::Forbidden));
+}
+
+#[test]
+fn a_name_that_windows_would_read_differently_is_refused() {
+    assert_eq!(check_relative_path("notes."), Err(PathRefusal::Forbidden));
+    assert_eq!(check_relative_path("notes "), Err(PathRefusal::Forbidden));
+}
+
+#[test]
+fn a_path_over_the_limit_is_refused() {
+    let long = format!("{}.txt", "a/".repeat(300));
+    assert_eq!(check_relative_path(&long), Err(PathRefusal::TooLong));
+}
+
+#[test]
+fn credential_files_and_folders_are_sensitive_at_any_depth() {
+    for path in [
+        ".env",
+        "config/.env.production",
+        "keys/server.pem",
+        "certs/tls.key",
+        "id_rsa",
+        "deploy/id_ed25519",
+        "config/database-credentials.json",
+        "app/secret_settings.toml",
+        ".npmrc",
+        ".git/config",
+        "nested/.git/HEAD",
+        ".ssh/config",
+    ] {
+        assert_eq!(
+            check_relative_path(path),
+            Err(PathRefusal::Sensitive),
+            "{path} must be refused"
+        );
+    }
+}
+
+#[test]
+fn ordinary_names_near_the_sensitive_ones_are_allowed() {
+    for path in [
+        ".gitignore",
+        ".github/workflows/ci.yml",
+        "src/tokenizer.rs",
+        "docs/keyboard.md",
+        "src/id_map.rs",
+        "README.md",
+    ] {
+        assert!(check_relative_path(path).is_ok(), "{path} must be allowed");
+    }
+}
+
+#[test]
+fn sensitive_names_are_matched_without_regard_to_case() {
+    assert!(is_sensitive_name(".ENV"));
+    assert!(is_sensitive_name("Server.PEM"));
+    assert!(is_sensitive_name("Credentials.json"));
+}
+
+#[test]
+fn a_change_moves_only_along_the_allowed_edges() {
+    use FileChangeStatus::*;
+    assert!(Pending.allows(Applied));
+    assert!(Pending.allows(Rejected));
+    assert!(Applied.allows(Undone));
+    assert!(
+        Applied.allows(Pending),
+        "a failed write goes back to pending"
+    );
+    assert!(Undone.allows(Applied), "a failed undo goes back to applied");
+
+    assert!(!Rejected.allows(Applied), "a rejected change is closed");
+    assert!(!Undone.allows(Pending));
+    assert!(!Pending.allows(Undone), "a pending change cannot be undone");
+    assert!(!Applied.allows(Rejected));
+    assert!(!Pending.allows(Pending));
+}
+
+#[test]
+fn the_journal_refuses_an_unknown_or_forbidden_move() {
+    let mut journal = FileChangeJournal::default();
+    journal
+        .add(change("a", FileChangeStatus::Rejected))
+        .unwrap();
+
+    assert_eq!(
+        journal.set_status("missing", FileChangeStatus::Applied),
+        Err(JournalRefusal::Unknown)
+    );
+    assert_eq!(
+        journal.set_status("a", FileChangeStatus::Applied),
+        Err(JournalRefusal::InvalidTransition)
+    );
+    assert_eq!(
+        journal.find("a").unwrap().status,
+        FileChangeStatus::Rejected
+    );
+}
+
+#[test]
+fn the_journal_refuses_a_new_change_past_the_open_limit() {
+    let mut journal = FileChangeJournal::default();
+    for index in 0..MAXIMUM_OPEN_CHANGES {
+        journal
+            .add(change(&format!("open-{index}"), FileChangeStatus::Pending))
+            .unwrap();
+    }
+    assert_eq!(
+        journal.add(change("one-more", FileChangeStatus::Pending)),
+        Err(JournalRefusal::TooManyOpen)
+    );
+}
+
+#[test]
+fn closed_changes_are_dropped_oldest_first_and_open_ones_are_kept() {
+    let mut journal = FileChangeJournal::default();
+    journal
+        .add(change("keep-open", FileChangeStatus::Pending))
+        .unwrap();
+    for index in 0..(MAXIMUM_CLOSED_CHANGES + 5) {
+        journal
+            .add(change(
+                &format!("closed-{index}"),
+                FileChangeStatus::Rejected,
+            ))
+            .unwrap();
+    }
+
+    let closed: Vec<&str> = journal
+        .changes
+        .iter()
+        .filter(|item| !item.status.is_open())
+        .map(|item| item.id.as_str())
+        .collect();
+    assert_eq!(closed.len(), MAXIMUM_CLOSED_CHANGES);
+    assert_eq!(
+        closed.first().copied(),
+        Some("closed-5"),
+        "the oldest five are dropped"
+    );
+    assert!(
+        journal.find("keep-open").is_some(),
+        "an open change is never dropped"
+    );
+}
+
+#[test]
+fn a_change_for_one_project_does_not_show_in_another() {
+    let mut journal = FileChangeJournal::default();
+    journal
+        .add(change("here", FileChangeStatus::Pending))
+        .unwrap();
+    let mut other = change("there", FileChangeStatus::Pending);
+    other.workspace = "/projects/two".to_string();
+    journal.add(other).unwrap();
+
+    let ids: Vec<String> = journal
+        .for_workspace("/projects/one")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    assert_eq!(ids, vec!["here".to_string()]);
+}
+
+#[test]
+fn the_text_limit_is_the_same_byte_count_the_disk_read_uses() {
+    assert!(fits_limit(&"a".repeat(MAXIMUM_FILE_BYTES as usize)));
+    assert!(!fits_limit(&"a".repeat(MAXIMUM_FILE_BYTES as usize + 1)));
+}

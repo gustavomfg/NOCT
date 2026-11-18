@@ -61,14 +61,47 @@ impl<'a> Workspaces<'a> {
         Self { conn }
     }
 
-    /// Favorites first, then most recently opened.
+    /// Favorites first, then most recently opened, then path. The path only breaks ties, so the order is total;
+    /// the TypeScript list has no such tie-break, and its order among equal keys is SQLite's.
     pub fn list(&self) -> Result<Vec<WorkspaceRow>> {
         let mut statement = self.conn.prepare(
             "SELECT path, name, favorite, authorized, created_at, last_opened_at
-             FROM workspaces ORDER BY favorite DESC, last_opened_at DESC",
+             FROM workspaces ORDER BY favorite DESC, last_opened_at DESC, path ASC",
         )?;
         let rows = statement
             .query_map([], workspace_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// The rows that come after `after` in the order of [`Workspaces::list`], at most `limit` of them. `after` is
+    /// the key of the last row of the previous page, `(favorite, last_opened_at, path)`, or `None` for the first
+    /// page. The comparison is on the stored values, so a row that no longer exists still bounds the next page.
+    pub fn page_after(
+        &self,
+        after: Option<(bool, &str, &str)>,
+        limit: usize,
+    ) -> Result<Vec<WorkspaceRow>> {
+        let (favorite, last_opened_at, path) = match after {
+            Some((favorite, last_opened_at, path)) => {
+                (Some(i64::from(favorite)), Some(last_opened_at), Some(path))
+            }
+            None => (None, None, None),
+        };
+        let mut statement = self.conn.prepare(
+            "SELECT path, name, favorite, authorized, created_at, last_opened_at
+             FROM workspaces
+             WHERE ?1 IS NULL OR favorite < ?1
+                OR (favorite = ?1 AND last_opened_at < ?2)
+                OR (favorite = ?1 AND last_opened_at = ?2 AND path > ?3)
+             ORDER BY favorite DESC, last_opened_at DESC, path ASC LIMIT ?4",
+        )?;
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let rows = statement
+            .query_map(
+                params![favorite, last_opened_at, path, limit],
+                workspace_from_row,
+            )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }

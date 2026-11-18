@@ -1,18 +1,20 @@
-//! The window: the sidebar, the three modes, the settings (Ajustes) and the fixed question box, laid out as in
-//! docs/New_Design/mockup-vidro-painel.html. The projects, the findings and the diffs are EXAMPLE data
-//! (`examples.rs`). The settings are read with `settings_get` (`settings.rs`). No control in this window runs
-//! a command or writes a file: the approval, the revert and the confirmation are shown, not carried out.
+//! The window: the sidebar (`sidebar.rs`), the three modes, the settings (Ajustes) and, in Revisar, the conversation with
+//! the chat (`chat_panel.rs`), laid out as in docs/New_Design/mockup-v2.html. The sidebar's projects come from
+//! `workspaces_list` (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The build and document modes
+//! are not available yet: they say so and offer no control for the work, so nothing in this window runs a command or
+//! writes a file.
 
 use leptos::prelude::*;
 
+use crate::chat_panel;
 use crate::dom;
-use crate::examples::{
-    DiffKind, DiffLine, EXAMPLE_BUILD_DIFF, EXAMPLE_BUILD_FILE, EXAMPLE_COMMAND, EXAMPLE_DOC_DIFF,
-    EXAMPLE_DOC_FILE, EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_PROJECTS, EXAMPLE_VAULT,
-};
 use crate::ipc;
+use crate::provider::ProviderView;
 use crate::settings::{self, SettingsView};
+use crate::settings_panel;
+use crate::sidebar::{self, Shared};
 use crate::theme::Theme;
+use crate::workspaces::{self, WorkspacesView};
 
 /// The three modes of the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,12 +31,27 @@ pub fn App() -> impl IntoView {
     let system_dark = dom::system_prefers_dark();
     let (theme, set_theme) = signal(Theme::from_setting(None, system_dark));
     let (theme_touched, set_theme_touched) = signal(false);
+    // The shell's message for a theme that was not saved. It is shown until the next press of the button.
+    let (theme_error, set_theme_error) = signal(None::<String>);
+
+    // The glass layer is on unless this viewer turned it off before. The page starts with it on, so only a stored "off"
+    // changes what the page shows.
+    let glass = RwSignal::new(dom::stored_glass().unwrap_or(true));
+    Effect::new(move |_| dom::set_glass(glass.get()));
 
     let (mode, set_mode) = signal(Mode::Review);
-    let (settings_open, set_settings_open) = signal(false);
-    let (project, set_project) = signal(0_usize);
-    let (approved, set_approved) = signal(false);
-    let (asked, set_asked) = signal(false);
+    let shared = Shared {
+        current: RwSignal::new(None),
+        projects: RwSignal::new(WorkspacesView::Loading),
+        settings_open: RwSignal::new(false),
+        key: RwSignal::new(ProviderView::Loading),
+        bindings: RwSignal::new(None),
+        chat: RwSignal::new(ProviderView::Loading),
+        adding: RwSignal::new(false),
+        add_error: RwSignal::new(None),
+        reload: RwSignal::new(0),
+    };
+    let settings_open = shared.settings_open;
 
     let (settings_view, set_settings_view) = signal(SettingsView::Loading);
     let read_settings = move || {
@@ -51,12 +68,61 @@ pub fn App() -> impl IntoView {
     };
     read_settings();
 
+    // The chat switch is read once. Until the shell answers, the line over the composer says it is being checked.
+    let chat = chat_panel::ChatState::new(shared);
+    chat.read_status();
+    chat.watch_consent();
+
+    // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
+    // shell replied with. A refused save says so, and its controls go back to the settings the shell holds.
+    let (saving, set_saving) = signal(false);
+    let (save_error, set_save_error) = signal(None::<String>);
+    let save_setting = move |payload: String| {
+        set_saving.set(true);
+        set_save_error.set(None);
+        ipc::call_with(settings::SET_COMMAND, &payload, move |outcome| {
+            set_saving.set(false);
+            match settings::saved(outcome) {
+                Ok(view) => set_settings_view.set(view),
+                Err(failure) => {
+                    set_save_error.set(Some(failure.message));
+                    set_settings_view.update(|_| {});
+                }
+            }
+        });
+    };
+
+    // The project list is read when the window opens, and again after a retry or an added project.
+    Effect::new(move |_| {
+        shared.reload.track();
+        shared.projects.set(WorkspacesView::Loading);
+        ipc::call_with(
+            workspaces::COMMAND,
+            &workspaces::first_page_payload(),
+            move |outcome| {
+                shared.projects.set(workspaces::settle(outcome));
+            },
+        );
+    });
+
     Effect::new(move |_| dom::set_root_attribute("data-theme", theme.get().attribute()));
 
-    let toggle_theme = move |_| {
+    // The theme changes at once and is saved with `settings_set`. A saved reply is the settings the shell holds, so
+    // the settings area shows the theme that was saved; a refused save keeps the theme on screen and says so.
+    let choose_theme = move |next: Theme| {
         set_theme_touched.set(true);
-        set_theme.update(|current| *current = current.toggled());
+        set_theme.set(next);
+        set_theme_error.set(None);
+        ipc::call_with(
+            settings::SET_COMMAND,
+            &settings::theme_request(next.setting()),
+            move |outcome| match settings::saved(outcome) {
+                Ok(view) => set_settings_view.set(view),
+                Err(failure) => set_theme_error.set(Some(failure.message)),
+            },
+        );
     };
+    let toggle_theme = move |_| choose_theme(theme.get_untracked().toggled());
     let theme_button_label = move || match theme.get() {
         Theme::Light => "Usar tema escuro",
         Theme::Dark => "Usar tema claro",
@@ -65,7 +131,7 @@ pub fn App() -> impl IntoView {
     let pressed = move |target: Mode| (!settings_open.get() && mode.get() == target).to_string();
     let open_mode = move |chosen: Mode| {
         set_mode.set(chosen);
-        set_settings_open.set(false);
+        shared.close_settings();
     };
 
     view! {
@@ -88,50 +154,22 @@ pub fn App() -> impl IntoView {
                         }}
                     </button>
                 </div>
-                <nav class="nav" aria-label="Projetos">
-                    <div class="nav__label">"Projetos"</div>
-                    {EXAMPLE_PROJECTS
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, name)| {
-                            view! {
-                                <button
-                                    type="button"
-                                    class="nav__item row"
-                                    aria-current=move || (project.get() == index).then_some("true")
-                                    on:click=move |_| set_project.set(index)
-                                >
-                                    {name}
-                                </button>
-                            }
-                        })
-                        .collect_view()}
-                </nav>
-                <div class="spacer"></div>
-                <div class="sidebar__bottom">
-                    <div class="status">
-                        <div class="status__label">"Modelo"</div>
-                        <div class="status__value">{EXAMPLE_MODEL}</div>
-                        <div class="status__note">"Exemplo"</div>
-                    </div>
-                    <div class="status">
-                        <div class="status__label">"Cofre de chaves"</div>
-                        <div class="status__value">{EXAMPLE_VAULT}</div>
-                        <div class="status__note">"Exemplo: ainda não lido do backend"</div>
-                    </div>
-                    <button
-                        type="button"
-                        class="nav__item nav__item--muted row"
-                        aria-current=move || settings_open.get().then_some("page")
-                        on:click=move |_| set_settings_open.set(true)
-                    >
-                        "Ajustes"
-                    </button>
-                </div>
+                {move || {
+                    theme_error.get().map(|message| {
+                        view! {
+                            <p class="note" role="alert" data-testid="theme-error">{message}</p>
+                        }
+                    })
+                }}
+                {sidebar::sidebar(shared)}
             </aside>
 
             <div class="content">
-                <header class="modes">
+                <header class="topbar">
+                    <div class="crumb" data-testid="crumb">
+                        {move || crumb_view(shared, mode.get(), settings_open.get())}
+                    </div>
+                    <div class="modes">
                     <div class="segmented" role="group" aria-label="Modo de trabalho">
                         <button
                             type="button"
@@ -158,226 +196,120 @@ pub fn App() -> impl IntoView {
                             "Documentar"
                         </button>
                     </div>
+                    </div>
+                    <div class=move || {
+                        if settings_open.get() || mode.get() != Mode::Review {
+                            "topbar__end is-hidden"
+                        } else {
+                            "topbar__end"
+                        }
+                    }>
+                        <button
+                            class="icon-btn row"
+                            type="button"
+                            aria-label="Nova conversa"
+                            title="Nova conversa"
+                            on:click=move |_| chat.new_conversation()
+                        >
+                            {pencil_icon()}
+                        </button>
+                    </div>
                 </header>
 
                 <main class="main" id="main">
                     <div class="stack">
                         {move || {
                             if settings_open.get() {
-                                settings_panel(settings_view, read_settings).into_any()
+                                settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass).into_any()
                             } else {
                                 match mode.get() {
-                                    Mode::Review => review_panel().into_any(),
-                                    Mode::Build => {
-                                        build_panel(approved, set_approved).into_any()
-                                    }
-                                    Mode::Docs => docs_panel().into_any(),
+                                    Mode::Review => chat_panel::thread(chat).into_any(),
+                                    Mode::Build => build_panel().into_any(),
+                                    Mode::Docs => unavailable_panel(
+                                        "Documentar",
+                                        "Atualizações incrementais em Markdown, só depois da sua confirmação.",
+                                    )
+                                    .into_any(),
                                 }
                             }
                         }}
                     </div>
                 </main>
-
-                <div class="composer-wrap">
-                    <form
-                        class="composer"
-                        on:submit=move |event| {
-                            event.prevent_default();
-                            set_asked.set(true);
-                        }
-                    >
-                        <label for="ask" class="sr-only">"Pergunte sobre o projeto"</label>
-                        <input
-                            id="ask"
-                            class="composer__input"
-                            type="text"
-                            autocomplete="off"
-                            placeholder="Pergunte sobre o projeto"
-                        />
-                        <button class="composer__send" type="submit" aria-label="Enviar">
-                            {arrow_icon()}
-                        </button>
-                    </form>
-                    <p class="note" aria-live="polite" data-testid="ask-note">
-                        {move || {
-                            if asked.get() {
-                                "Perguntas ainda não são respondidas nesta fatia."
-                            } else {
-                                ""
-                            }
-                        }}
-                    </p>
-                </div>
+                {move || {
+                    (mode.get() == Mode::Review && !settings_open.get())
+                        .then(|| chat_panel::composer(chat))
+                }}
             </div>
         </div>
     }
 }
 
-/// The review mode: read-only findings, each with its severity, its file and its description. EXAMPLE.
-fn review_panel() -> impl IntoView {
+/// A mode the shell does not run yet. It says so, and offers no control for the work, so that nothing in it can be
+/// approved, reverted or confirmed.
+fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView {
     view! {
-        <div class="stack">
-            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
+        <div class="stack" data-testid="unavailable">
             <div>
-                <h1 class="h1">"Revisão"</h1>
-                <p class="lead">"Análise somente leitura, com as evidências ao lado de cada achado."</p>
+                <h1 class="h1">{heading}</h1>
+                <p class="lead">{lead}</p>
             </div>
-            {EXAMPLE_FINDINGS
-                .iter()
-                .map(|finding| {
-                    view! {
-                        <article class="card">
-                            <div class="finding__head">
-                                <span class=finding.severity.class()>{finding.severity.label()}</span>
-                                <h2 class="h2">{finding.title}</h2>
-                            </div>
-                            <code class="path">{finding.path}</code>
-                            <p class="body">{finding.body}</p>
-                        </article>
-                    }
-                })
-                .collect_view()}
+            <section class="card">
+                <p class="body" role="status">
+                    "Ainda não disponível nesta versão. Nada é executado nem gravado nesta tela."
+                </p>
+            </section>
         </div>
     }
 }
 
-/// The build mode: a command waiting for approval, then a diff with a revert. EXAMPLE, nothing is run.
-fn build_panel(approved: ReadSignal<bool>, set_approved: WriteSignal<bool>) -> impl IntoView {
+/// The steps of Build, as the product will run them. Nothing here runs or writes anything, and no control approves, refuses
+/// or reverts a change, so the steps are only a description.
+fn build_panel() -> impl IntoView {
     view! {
-        <div class="stack">
-            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
+        <div class="stack" data-testid="build">
             <div>
                 <h1 class="h1">"Construir"</h1>
                 <p class="lead">"Cada comando espera a sua aprovação. Toda alteração pode ser revertida."</p>
             </div>
-            <section class="card">
-                <div class="eyebrow" hidden=move || approved.get()>"AGUARDANDO APROVAÇÃO"</div>
-                <code class="cmd">{EXAMPLE_COMMAND}</code>
-                <div class="actions" hidden=move || approved.get()>
-                    <button type="button" class="btn">"Negar"</button>
-                    <button
-                        type="button"
-                        class="btn btn--primary"
-                        on:click=move |_| set_approved.set(true)
-                    >
-                        "Aprovar"
-                    </button>
+            <section class="card" data-testid="build-steps">
+                <div class="step">
+                    <span class="step__n">"1"</span>
+                    <p><b>"Você descreve"</b>" a mudança que quer fazer."</p>
                 </div>
-                <p class="lead" hidden=move || !approved.get()>
-                    "Aprovado. Esta é uma tela de exemplo: nenhum comando foi executado."
-                </p>
-            </section>
-            <section class="card card--flush">
-                <div class="card__head">
-                    <code class="path">{EXAMPLE_BUILD_FILE}</code>
-                    <button type="button" class="btn btn--ghost">"Reverter"</button>
+                <div class="step">
+                    <span class="step__n">"2"</span>
+                    <p><b>"O NOCT mostra o diff"</b>" de cada arquivo antes de gravar."</p>
                 </div>
-                <div class="diff">{EXAMPLE_BUILD_DIFF.iter().map(diff_line).collect_view()}</div>
+                <div class="step">
+                    <span class="step__n">"3"</span>
+                    <p><b>"Você aprova ou recusa"</b>" cada arquivo. Nada é gravado sem a sua aprovação."</p>
+                </div>
             </section>
+            <p class="lead">"Chega na próxima versão."</p>
         </div>
     }
 }
 
-/// The document mode: a prose diff, kept only after the person confirms it. EXAMPLE, nothing is written.
-fn docs_panel() -> impl IntoView {
-    view! {
-        <div class="stack">
-            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
-            <div>
-                <h1 class="h1">"Documentar"</h1>
-                <p class="lead">"Atualizações incrementais em Markdown, só depois da sua confirmação."</p>
-            </div>
-            <section class="card card--flush">
-                <div class="card__head">
-                    <code class="path">{EXAMPLE_DOC_FILE}</code>
-                </div>
-                <div class="prose">
-                    {EXAMPLE_DOC_DIFF.iter().map(prose_line).collect_view()}
-                </div>
-                <div class="card__foot">
-                    <button type="button" class="btn">"Descartar"</button>
-                    <button type="button" class="btn btn--primary">"Confirmar alteração"</button>
-                </div>
-            </section>
-        </div>
+/// The trail of the top bar: the current project and the mode, or only Ajustes while they are open.
+fn crumb_view(shared: Shared, mode: Mode, settings_open: bool) -> AnyView {
+    if settings_open {
+        return view! { <b>"Ajustes"</b> }.into_any();
     }
-}
-
-/// The settings (Ajustes) in the same layout: the saved values as the shell returns them, with the states of
-/// the read and the way to try again.
-fn settings_panel(
-    settings_view: ReadSignal<SettingsView>,
-    retry: impl Fn() + Copy + Send + Sync + 'static,
-) -> impl IntoView {
-    view! {
-        <div class="stack" data-testid="settings">
-            <div>
-                <h1 class="h1">"Ajustes"</h1>
-                <p class="lead">"Preferências salvas. O NOCT lê estes valores ao abrir a janela."</p>
-            </div>
-            <section class="card" aria-label="Preferências salvas">
-                {move || match settings_view.get() {
-                    SettingsView::Loading => view! {
-                        <p class="lead" role="status" data-testid="settings-loading">
-                            "Carregando configurações…"
-                        </p>
-                    }
-                    .into_any(),
-                    SettingsView::Failed(failure) => view! {
-                        <div class="error-card" role="alert" data-testid="settings-error">
-                            <div>
-                                <strong>"Não foi possível carregar as configurações."</strong>
-                                <p>{failure.message}</p>
-                            </div>
-                            <button class="btn" type="button" on:click=move |_| retry()>
-                                "Tentar novamente"
-                            </button>
-                        </div>
-                    }
-                    .into_any(),
-                    SettingsView::Ready(saved) => view! {
-                        <dl class="settings-facts" data-testid="settings-values">
-                            {settings::rows(&saved)
-                                .into_iter()
-                                .map(|(label, value)| view! { <dt>{label}</dt><dd>{value}</dd> })
-                                .collect_view()}
-                        </dl>
-                    }
-                    .into_any(),
-                }}
-            </section>
-            <p class="note">
-                "O botão de tema da barra lateral muda só esta sessão. A linha Tema mostra a preferência salva."
-            </p>
-        </div>
-    }
-}
-
-fn diff_line(line: &DiffLine) -> impl IntoView {
-    let (class, sign, spoken) = match line.kind {
-        DiffKind::Added => ("diff__line diff__line--add", "+", "Adicionada: "),
-        DiffKind::Removed => ("diff__line diff__line--del", "−", "Removida: "),
+    let project = sidebar::current_name(shared).unwrap_or_else(|| "Nenhum projeto".to_string());
+    let mode_label = match mode {
+        Mode::Review => "Revisar",
+        Mode::Build => "Construir",
+        Mode::Docs => "Documentar",
     };
-    view! {
-        <div class=class>
-            <span aria-hidden="true">{sign}</span>
-            <span class="sr-only">{spoken}</span>
-            <span>{line.text}</span>
-        </div>
-    }
+    view! { <b>{project}</b> " · " {mode_label} }.into_any()
 }
 
-fn prose_line(line: &DiffLine) -> impl IntoView {
-    let (class, sign, spoken) = match line.kind {
-        DiffKind::Added => ("prose-add", "+", "Adicionada: "),
-        DiffKind::Removed => ("prose-del", "−", "Removida: "),
-    };
+fn pencil_icon() -> impl IntoView {
     view! {
-        <p class=class>
-            <span aria-hidden="true">{sign}</span>
-            <span class="sr-only">{spoken}</span>
-            {line.text}
-        </p>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+        </svg>
     }
 }
 
@@ -394,14 +326,6 @@ fn sun_icon() -> impl IntoView {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-        </svg>
-    }
-}
-
-fn arrow_icon() -> impl IntoView {
-    view! {
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 19V5M5 12l7-7 7 7" />
         </svg>
     }
 }

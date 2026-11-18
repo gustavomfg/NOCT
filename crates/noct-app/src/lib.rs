@@ -7,10 +7,16 @@
 pub mod bootstrap;
 pub mod command_names;
 pub mod commands;
+pub mod consent;
+pub mod credentials;
 pub mod error;
+pub mod file_changes;
 pub mod logging;
 pub mod navigation;
+pub mod provider_chat;
+pub mod provider_transport;
 pub mod services;
+pub mod updater;
 pub mod window;
 pub mod workspace_scope;
 
@@ -24,7 +30,38 @@ pub fn command_handler<R: Runtime>()
         commands::settings_get,
         commands::settings_set,
         commands::workspaces_list,
+        commands::brain_create,
+        commands::brain_extract,
+        commands::brain_update,
+        commands::suggestions_create,
+        commands::suggestions_status,
+        commands::models_set_bindings,
+        commands::models_bindings_get,
+        commands::models_set_default_model,
+        commands::ai_save_assistant,
+        commands::conversations_delete,
+        commands::workspace_remove,
+        commands::brain_delete,
+        commands::artifacts_delete,
+        commands::conversations_create,
         commands::conversations_list,
+        commands::workspace_set_favorite,
+        commands::provider_key_status,
+        commands::provider_key_save,
+        commands::provider_key_remove,
+        commands::provider_consent_status,
+        commands::provider_consent_grant,
+        commands::provider_consent_revoke,
+        commands::provider_chat_status,
+        commands::provider_chat_send,
+        commands::provider_chat_cancel,
+        commands::file_changes_list,
+        commands::file_change_propose,
+        commands::file_change_approve,
+        commands::file_change_reject,
+        commands::file_change_undo,
+        commands::workspace_add,
+        commands::provider_chat_set_enabled,
     ]
 }
 
@@ -37,7 +74,9 @@ pub fn context<R: Runtime>() -> tauri::Context<R> {
 
 /// Runs the shell: opens the persistence in the data directory, then the main window.
 pub fn run() {
-    tauri::Builder::default()
+    let context = context();
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(command_handler())
         .setup(|app| {
             let default = app.path().app_data_dir()?;
@@ -46,9 +85,15 @@ pub fn run() {
                 default,
             )?;
             app.manage(bootstrap::open(&directory)?);
+            app.manage(std::sync::Arc::new(provider_chat::ChatControl::default()));
             window::create_main_window(app)?;
             Ok(())
-        })
-        .run(context())
+        });
+    // The updater is registered only when its configuration is complete and safe. A configuration that is not safe
+    // stops the start: it is a defect of the build, and the shipped section is checked by the tests of `updater`.
+    let builder =
+        updater::with_plugin(builder, context.config()).expect("the updater configuration is safe");
+    builder
+        .run(context)
         .expect("error while running the NOCT shell");
 }

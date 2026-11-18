@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-file-change-reject"
+description = "Enables the file_change_reject command without any pre-configured scope."
+commands.allow = ["file_change_reject"]
+
+[[permission]]
+identifier = "deny-file-change-reject"
+description = "Denies the file_change_reject command without any pre-configured scope."
+commands.deny = ["file_change_reject"]

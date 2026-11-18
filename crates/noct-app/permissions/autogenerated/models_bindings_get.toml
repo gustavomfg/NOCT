@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-models-bindings-get"
+description = "Enables the models_bindings_get command without any pre-configured scope."
+commands.allow = ["models_bindings_get"]
+
+[[permission]]
+identifier = "deny-models-bindings-get"
+description = "Denies the models_bindings_get command without any pre-configured scope."
+commands.deny = ["models_bindings_get"]

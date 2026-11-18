@@ -1,5 +1,5 @@
 //! The colour theme the window shows. The saved theme comes from `settings_get`. The sidebar button changes
-//! the theme for this session only: this slice has no `settings_set`, so nothing is saved.
+//! the theme at once and saves it with `settings_set`; a save that the shell refuses is shown beside the button.
 //!
 //! The design (docs/New_Design/design.md) says light is the default, and that dark follows the system only
 //! when the person has not chosen a theme. A saved setting that was never set means "follow the system".
@@ -28,6 +28,14 @@ impl Theme {
         match self {
             Theme::Light => Theme::Dark,
             Theme::Dark => Theme::Light,
+        }
+    }
+
+    /// The theme as the settings store it, for `settings_set`.
+    pub fn setting(self) -> AppTheme {
+        match self {
+            Theme::Light => AppTheme::Light,
+            Theme::Dark => AppTheme::Dark,
         }
     }
 
@@ -70,6 +78,13 @@ mod tests {
         assert_eq!(Theme::Light.toggled(), Theme::Dark);
         assert_eq!(Theme::Light.toggled().toggled(), Theme::Light);
         assert_eq!(Theme::Dark.toggled().toggled(), Theme::Dark);
+    }
+
+    #[test]
+    fn a_theme_is_saved_as_the_setting_it_shows() {
+        for theme in [Theme::Light, Theme::Dark] {
+            assert_eq!(Theme::from_setting(Some(theme.setting()), true), theme);
+        }
     }
 
     #[test]

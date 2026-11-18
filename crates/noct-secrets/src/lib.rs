@@ -26,4 +26,5 @@ pub use error::VaultError;
 pub use keyring_core::CredentialStore;
 pub use platform::default_store;
 pub use reference::CredentialReference;
+pub use secrecy::{ExposeSecret, SecretString};
 pub use vault::{MASTER_KEY_ACCOUNT, ProviderCredentialVault, SERVICE_NAME};

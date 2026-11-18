@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-brain-extract"
+description = "Enables the brain_extract command without any pre-configured scope."
+commands.allow = ["brain_extract"]
+
+[[permission]]
+identifier = "deny-brain-extract"
+description = "Denies the brain_extract command without any pre-configured scope."
+commands.deny = ["brain_extract"]

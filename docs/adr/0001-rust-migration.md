@@ -116,18 +116,21 @@ schema 32 must open in Rust and return identical rows.
 Each phase ends with a parity gate: the matching TypeScript tests must pass
 against the Rust code, or the difference must be recorded as an intentional change.
 
-| Phase | Scope (TypeScript lines) | Gate |
-| --- | --- | --- |
-| 0. Foundation | Workspace; `noct-native` (Linux); `noct-core` limits and contracts; Tauri shell | **Done on branch**: see [Evidence](#evidence) |
-| 1. Contracts | `shared/` (3,100) to `noct-core` | Contract tests; JSON fixtures produced by the TypeScript code |
-| 2. Persistence | `electron/database` + `persistence` (about 5,000) to `noct-db` | Database, migration, durability and recovery tests; real schema-32 fixtures. **In progress**: see [Progress](#progress) |
-| 3. Native rollback | macOS (APFS clone, `renameatx_np`) and Windows (232-line header) backends | `native-rollback-validation.yml` on Linux, macOS and Windows |
-| 4. Workspace services | workspaces, change control, project index, semantic index, validation, engineering (about 6,000) | Their Vitest suites, ported |
-| 5. AI | `electron/ai` and `security` (about 4,100) | Provider adapter, tool loop and vault tests |
-| 6. IPC and shell | `electron/ipc`, `main.ts`, `runtime` (about 3,600) to Tauri commands and setup | Boundary tests; navigation and permission checks |
-| 7. UI | `src/` (6,622 TSX) to Leptos, reusing the CSS | Renderer tests and canonical screenshots |
-| 8. Updates and packaging | `electron/updates`, `electron-builder`, release workflows, smoke scripts | Signed packages validated on three platforms |
-| 9. Retirement | Remove `electron/`, TypeScript, Vite, npm, Node requirements | All phases green; `AGENTS.md`, `docs/` and `CONTRIBUTING.md` updated |
+The last column was checked on 2026-11-17 against `0ae0fb8`. Each status names the code or
+workflow it rests on; a phase marked partly done claims only the items named.
+
+| Phase | Scope (TypeScript lines) | Gate | Status (2026-11-17) |
+| --- | --- | --- | --- |
+| 0. Foundation | Workspace; `noct-native` (Linux); `noct-core` limits and contracts; Tauri shell | **Done on branch**: see [Evidence](#evidence) | Done on branch |
+| 1. Contracts | `shared/` (3,100) to `noct-core` | Contract tests; JSON fixtures produced by the TypeScript code | Not reviewed in this update |
+| 2. Persistence | `electron/database` + `persistence` (about 5,000) to `noct-db` | Database, migration, durability and recovery tests; real schema-32 fixtures | **In progress**: see [Progress](#progress). The CI wiring of the gate is done in `row-gate.yml` |
+| 3. Native rollback | macOS (APFS clone, `renameatx_np`) and Windows (232-line header) backends | `native-rollback-validation.yml` on Linux, macOS and Windows | **Partly done, Linux only.** `crates/noct-native` has `linux.rs`. No macOS or Windows backend exists in the Rust tree. The workflow on this branch comes from `main`: its paths cover the C++ worker and the Electron files, not the Rust worker, so it does not gate this phase |
+| 4. Workspace services | workspaces, change control, project index, semantic index, validation, engineering (about 6,000) | Their Vitest suites, ported | **Partly done.** Repositories for workspaces, change sets, project index, semantic index, validation runs and engineering intelligence exist in `crates/noct-db/src/repositories`, with contracts in `noct-core`. The services that run on them were not checked one by one, so no service is claimed as ported |
+| 5. AI | `electron/ai` and `security` (about 4,100) | Provider adapter, tool loop and vault tests | **Partly done.** The credential vault is in `crates/noct-secrets` ([ADR 0002](0002-envelope-provider-credentials.md)). Not ported: provider adapters, the tool loop and an HTTP transport, since no HTTP client is declared in a workspace manifest. `noct-core/src/ai` holds the contracts for provider configuration, models and bindings |
+| 6. IPC and shell | `electron/ipc`, `main.ts`, `runtime` (about 3,600) to Tauri commands and setup | Boundary tests; navigation and permission checks | **Partly done.** A first slice of four commands (`settings_get`, `settings_set`, `workspaces_list`, `conversations_list`) runs behind the `main` window capability, tested with Tauri's mock runtime. The rest of the command surface is not ported |
+| 7. UI | `src/` (6,622 TSX) to Leptos, reusing the CSS | Renderer tests and canonical screenshots | **Partly done.** `crates/noct-ui` has the window layout, settings, themes and the project list. `scripts/check-shell-ui.mjs` checks them in Chromium with a mock per command. Most of the renderer is not ported |
+| 8. Updates and packaging | `electron/updates`, `electron-builder`, release workflows, smoke scripts | Signed packages validated on three platforms | **Not started on the Rust side.** `tauri.conf.json` sets `bundle.active` to `false`, and no workflow on this branch runs `tauri build`. The packaging and release workflows present here are the ones from `main` |
+| 9. Retirement | Remove `electron/`, TypeScript, Vite, npm, Node requirements | All phases green; `AGENTS.md`, `docs/` and `CONTRIBUTING.md` updated | **Not started** |
 
 Phases 1 to 4 can overlap once phase 2 lands. Phase 7 cannot start before phase
 6, because the UI calls the commands that phase 6 defines.
@@ -317,8 +320,9 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
 - **Done, phase 2 closure** (see [Phase 2 closure](#phase-2-closure-cut-gaps-and-decisions)):
   the public open path, upgrade fixtures for the nine tagged lines from 0.5.0-beta to 1.0.2
   with pinned sources, and the operation observer with its catalog.
-- **Remaining, phase 2:** the realism condition on real data before any public release, the
-  call sites of the observer (phase 6), and CI wiring for the gate.
+- **Remaining, phase 2:** the realism condition on real data before any public release, and
+  the call sites of the observer (phase 6). The CI wiring for the gate is done; see item 4 of
+  [Phase 2 closure](#phase-2-closure-cut-gaps-and-decisions).
 - **Done, phase 6 (first slice, not yet checked in a running window):** the shell opens the
   store and the file log in `NOCT_DATA_DIR` (an absolute path) or in the application data
   folder, which is not the Electron folder `Nocturne Studio`. `build.rs` declares the four
@@ -348,7 +352,7 @@ Recorded on branch `migration/rust`. Each item names the commit that delivers it
   Not verified: the debug and release windows in a running webview, on any platform. The run modes are in
   [docs/rust-shell.md](../rust-shell.md); they were checked by their plan and by the dev server answering,
   not by opening the window.
-- **Not started:** phases 3 to 9.
+- **Phases 3 to 9:** not closed. Their state is in the [phase table](#phases), which is the reference for this section.
 
 The row gate now reads rows that the TypeScript repositories wrote at schema 32, and it
 upgrades a database that release 0.9.5-beta wrote. The migrations of that release are read
@@ -386,10 +390,12 @@ Decisions for closing phase 2:
    `scripts/verify-row-gate.mjs` checks the pins before it compiles anything, so a moved tag or
    an edited source stops the gate. The pins are recomputed with
    `node scripts/release-lines.mjs --pin`, and the diff is reviewed like any other change.
-4. **Gate in CI.** The gate runs locally with `node scripts/verify-row-gate.mjs`. Merging phase 2
-   into `main` requires the gate to pass in CI. The CI job must check out with
-   `fetch-depth: 0` and fetch the tags, because the pins resolve tag commits. Until that job
-   exists, the local run is the gate.
+4. **Gate in CI.** The gate runs locally with `node scripts/verify-row-gate.mjs`, and CI runs it
+   in `.github/workflows/row-gate.yml` on pushes to `migration/rust` and `main` and on pull requests
+   to `main`. The job checks out with `fetch-depth: 0` and the tags, because the pins resolve tag
+   commits. It passed on `0ae0fb8` (run 43980294637). The workflow is not a required check: making
+   it one is a repository setting. Until that setting exists, "merging phase 2 into `main` requires
+   the gate" is a rule of this ADR that GitHub does not enforce.
 5. **No upgrade is registered as unsupported.** All nine lines reach the reference schema and
    the same rows in Rust. If a line diverges later, the divergence is recorded here before the
    test is relaxed.
@@ -448,8 +454,11 @@ No operation calls `Database::measure` yet, so no path pays for the observer tod
 2. **UI framework.** Leptos (recommended here) or Dioxus. Changing this after
    phase 4 is expensive.
 3. **Renderer test harness.** Tauri WebDriver or Playwright against the WASM build.
-4. **Minimum platform versions.** WebKitGTK on Linux (the spike ran on 2.54), WebView2
-   on Windows, WKWebView on macOS. `docs/compatibility.md` must state them.
+4. **Minimum platform versions.** Decided on 2026-11-17 by the project owner: Windows 10 and later (x64), macOS 10.15
+   and later, and Linux by its reference distribution, Ubuntu 22.04 and later, with the WebKitGTK 4.1 family.
+   [compatibility.md](../compatibility.md#minimum-platform-versions) records the values and their sources. Still
+   unconfirmed: the WebKitGTK version that Ubuntu 22.04 ships (the spike ran on 2.54), since no CI job runs on Ubuntu
+   22.04; and `bundle.macOS.minimumSystemVersion`, which the repository does not set yet.
 6. **Provider key storage.** *Partly superseded by
    [ADR 0002](0002-envelope-provider-credentials.md).* Proposed: secrets live only in the operating system
    credential store, with no plaintext or application-encrypted fallback. The

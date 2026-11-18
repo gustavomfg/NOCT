@@ -12,7 +12,10 @@ use icu_normalizer::ComposingNormalizer;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::text::JS_WHITESPACE_CLASS;
+use serde_json::Value;
+
+use crate::limits::persistence::BRAIN_MEMORY_CHARACTERS;
+use crate::text::{JS_WHITESPACE_CLASS, ascii_insensitive, js_trim, utf16_len};
 
 /// The search tokens a retrieval keeps, as the TypeScript repository does.
 const SEARCH_TOKENS: usize = 12;
@@ -158,6 +161,20 @@ pub struct UpdateBrainMemoryInput {
     pub status: Option<BrainMemoryStatus>,
 }
 
+/// Whether a memory may move from one status to another. The lifecycle: candidates are approved or disapproved, active
+/// memories become outdated or are archived, outdated memories return to use or are archived, and archived ones only
+/// return. A status that does not change is always allowed; the caller decides whether that is a change at all.
+pub fn allowed_transition(from: BrainMemoryStatus, to: BrainMemoryStatus) -> bool {
+    use BrainMemoryStatus::{Active, Archived, Candidate, Outdated};
+    matches!(
+        (from, to),
+        (Candidate, Active | Archived)
+            | (Active, Outdated | Archived)
+            | (Outdated, Active | Archived)
+            | (Archived, Active)
+    )
+}
+
 /// A memory an agent proposed, before it is stored as a candidate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -182,6 +199,106 @@ pub fn is_safe_brain_memory_content(value: &str) -> bool {
         }
     }
     !CREDENTIAL.is_match(&widened)
+}
+
+/// The content as the memory schema stores it: trimmed, from 1 to `BRAIN_MEMORY_CHARACTERS` UTF-16 units, and not a
+/// credential. `None` means the content is refused. The check follows `safeBrainMemoryContent` in `shared/ipc/schemas.ts`,
+/// where the trim comes first and the credential check runs on the trimmed text.
+pub fn normalize_brain_content(value: &str) -> Option<String> {
+    let trimmed = js_trim(value);
+    let units = utf16_len(trimmed) as u64;
+    if units == 0 || units > BRAIN_MEMORY_CHARACTERS || !is_safe_brain_memory_content(trimmed) {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+/// The most candidates one reply can propose, as `extractBrainMemoryCandidates` keeps.
+pub const EXTRACTED_CANDIDATES_MAX: usize = 5;
+
+/// The candidates a reply proposes, and the reply without its candidate blocks.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExtractedCandidates {
+    pub candidates: Vec<BrainMemoryCandidate>,
+    pub content: String,
+}
+
+/// The block a reply uses to propose memories. The marker folds ASCII letters only, as the `/i` flag does.
+static MEMORY_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
+    let space = JS_WHITESPACE_CLASS;
+    Regex::new(&format!(
+        "{}[{space}]*\n([\\s\\S]*?)```",
+        ascii_insensitive("```nocturne-memories")
+    ))
+    .expect("the memory block pattern is valid")
+});
+
+/// Reads the memory blocks of a reply. A block that is not JSON is skipped. Inside a block, an item that does not
+/// match the candidate schema is skipped and the others are kept, and a single object counts as a one-item list. At
+/// most `EXTRACTED_CANDIDATES_MAX` candidates are kept. Every block is removed from the reply, kept or not.
+pub fn extract_candidates(content: &str) -> ExtractedCandidates {
+    let mut candidates = Vec::new();
+    for captures in MEMORY_BLOCK.captures_iter(content) {
+        if candidates.len() >= EXTRACTED_CANDIDATES_MAX {
+            break;
+        }
+        let Ok(parsed) = serde_json::from_str::<Value>(&captures[1]) else {
+            continue;
+        };
+        let items = match parsed {
+            Value::Array(items) => items,
+            other => vec![other],
+        };
+        for item in items {
+            if candidates.len() >= EXTRACTED_CANDIDATES_MAX {
+                break;
+            }
+            if let Some(candidate) = candidate_of(item) {
+                candidates.push(candidate);
+            }
+        }
+    }
+    let stripped = MEMORY_BLOCK.replace_all(content, "");
+    ExtractedCandidates {
+        candidates,
+        content: js_trim(&stripped).to_string(),
+    }
+}
+
+/// The candidate schema of `memoryCandidateSchema`: `kind`, `scope` and `content` are required, `confidence` is an
+/// integer from 0 to 100 and defaults to 60, and no other key is allowed.
+fn candidate_of(value: Value) -> Option<BrainMemoryCandidate> {
+    let Value::Object(fields) = value else {
+        return None;
+    };
+    let mut kind = None;
+    let mut scope = None;
+    let mut content = None;
+    let mut confidence = None;
+    for (key, field) in fields {
+        match key.as_str() {
+            "kind" => kind = Some(serde_json::from_value::<BrainMemoryKind>(field).ok()?),
+            "scope" => scope = Some(serde_json::from_value::<BrainMemoryScope>(field).ok()?),
+            "content" => match field {
+                Value::String(text) => content = Some(normalize_brain_content(&text)?),
+                _ => return None,
+            },
+            "confidence" => {
+                let number = field.as_f64()?;
+                if number.fract() != 0.0 || !(0.0..=100.0).contains(&number) {
+                    return None;
+                }
+                confidence = Some(number as i64);
+            }
+            _ => return None,
+        }
+    }
+    Some(BrainMemoryCandidate {
+        kind: kind?,
+        scope: scope?,
+        content: content?,
+        confidence: confidence.unwrap_or(60),
+    })
 }
 
 /// The FTS5 expression a search uses: the Unicode tokens of the NFKC text, each quoted and

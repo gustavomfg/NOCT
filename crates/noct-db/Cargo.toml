@@ -17,3 +17,5 @@ uuid.workspace = true
 
 [dev-dependencies]
 sha2.workspace = true
+# The authorizer hook, to fail one statement in a test. Dev-only: the application build does not get it.
+rusqlite = { workspace = true, features = ["hooks"] }

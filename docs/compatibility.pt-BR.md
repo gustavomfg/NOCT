@@ -7,6 +7,10 @@ Outros ambientes recusam a mutação com `UNSUPPORTED`; captura de checkpoints,
 inspeção de diffs e aceitação continuam disponíveis. O worker nativo exige
 toolchain C++17 de desenvolvimento, sem alterar o ABI SQLite/Electron.
 
+O shell Rust em `migration/rust` tem só o backend de rollback de Linux. Em macOS e
+Windows ele recusa a restauração com `UNSUPPORTED`. Veja
+[backends de rollback em Rust](rust-native-rollback-backends.md).
+
 [English](compatibility.md)
 
 ## Alvos oficiais do aplicativo
@@ -32,6 +36,35 @@ de desenvolvimento até passarem pelos mesmos smoke checks e gates.
 Use `npm run test:abi` para verificar o carregamento do módulo nativo no
 runtime empacotado antes da suíte completa. A compatibilidade N-API não
 substitui o smoke do pacote.
+
+## Versões mínimas de plataforma
+
+O item 4 da [ADR 0001](adr/0001-rust-migration.md#open-decisions) está resolvido para os pisos de plataforma.
+**Decisão do projeto, em 2026-11-17, pelo responsável do projeto:** Windows 10 ou posterior (x64); macOS 10.15 ou
+posterior; Linux pela distribuição de referência, Ubuntu 22.04 ou posterior. O Tauri documenta o que exige e qual é o
+padrão da configuração dele. Ele não define o piso de suporte do NOCT, então cada linha mostra a afirmação do Tauri ao
+lado do piso decidido.
+
+Fontes, lidas em 2026-11-17:
+
+- [Pré-requisitos](https://v2.tauri.app/start/prerequisites/), "Last updated: Aug 20, 2026";
+- [Referência de configuração](https://v2.tauri.app/reference/config/), "Last updated: Jul 23, 2023";
+- [Instalador do Windows](https://v2.tauri.app/distribute/windows-installer/), "Last updated: Nov 5, 2026".
+
+As páginas foram lidas por uma ferramenta de busca, não por um navegador. O texto entre aspas foi copiado da
+página buscada. O restante é paráfrase.
+
+| Plataforma | Piso | O que a documentação do Tauri afirma | Status |
+| --- | --- | --- | --- |
+| Windows | Windows 10 ou posterior, x64 (decidido) | A página de pré-requisitos lista "Windows 7 and later" em System Dependencies. A página do instalador diz "By default, the Microsoft Installer (`.msi`) does not work on Windows 7" e tem uma seção "Supporting Windows 7". Nenhuma das duas define um mínimo para um aplicativo distribuído. | Decidido: Windows 10 ou posterior, x64, sem número de build definido. O Windows 7 não é suportado. As duas afirmações tratam de coisas diferentes: a página de pré-requisitos cobre a toolchain de desenvolvimento, e a nota do instalador cobre o bootstrap do MSI no Windows 7. O NOCT não tem o Windows 7 como alvo. Nenhum número de build está definido. |
+| WebView2 (Windows) | Runtime obrigatório. Nenhuma versão mínima definida. | A dica do Windows diz "WebView 2 is already installed on Windows 10 (from version 1803 onward) and later versions of Windows." O bloco padrão de `bundle > windows` define `minimumWebview2Version` como `null`, e `webviewInstallMode` tem como padrão um `downloadBootstrapper` silencioso. A página do instalador diz "Your application WILL NOT work if the user does not have the runtime installed." | Confirmado: o runtime é obrigatório. O número 1803 descreve a instalação prévia, não um piso de suporte. O NOCT não define versão do WebView2. |
+| macOS | macOS 10.15 (Catalina) ou posterior (decidido) | A página de pré-requisitos lista "macOS Catalina (10.15) and later" em System Dependencies. A referência de configuração define `minimumSystemVersion` como "A version string indicating the minimum macOS X version that the bundled application supports. Defaults to `10.13`." | Decidido: 10.15. Os dois valores do Tauri são diferentes: 10.15 é o pré-requisito de desenvolvimento, e 10.13 é o padrão do bundler para o aplicativo. `bundle.macOS.minimumSystemVersion` ainda não está definido no repositório. Defina como 10.15 quando a configuração do bundle for escrita, porque senão vale o padrão do Tauri. O `electron-builder.json5` também não define mínimo para macOS. Versão do WKWebView: o Tauri não informa, não conferido. |
+| Linux | Ubuntu 22.04 ou posterior, como distribuição de referência, com WebKitGTK 4.1 (família `webkit2gtk-4.1`). | A página de pré-requisitos dá os pacotes de desenvolvimento 4.1 por distribuição, por exemplo `libwebkit2gtk-4.1-dev` (Debian), `webkit2gtk-4.1` (Arch), `webkit2gtk4.1-devel` (Fedora) e `webkit2gtk-4.1-dev` (Alpine). Não informa a versão do WebKitGTK. A aba do openSUSE indica `webkit2gtk3-devel`. | Decidido pela distribuição de referência: Ubuntu 22.04 ou posterior. A família de pacotes está confirmada pelo Tauri. A versão do WebKitGTK no Ubuntu 22.04 não foi conferida, e este documento não define uma. O spike rodou com WebKitGTK 2.54.2 (ADR 0001), que é uma medição, não um piso. Nenhum job do CI roda em Ubuntu 22.04: os workflows usam `ubuntu-latest` e `ubuntu-24.04`. Não conferi se o `webkit2gtk3-devel` do openSUSE fornece a API 4.1. |
+| Toolchain Rust | 1.97.1 | As páginas do Tauri não informam versão do Rust. | Uma fixação do projeto em `rust-toolchain.toml`, feita pelo commit `751894e`. Não é um requisito do Tauri. |
+
+Não conferido: qualquer afirmação do Tauri sobre a versão do WKWebView e os campos de iOS da referência de
+configuração. A página de configuração foi lida inteira, exceto um trecho, lido só por um resumo. Os campos usados
+acima foram lidos literalmente de outras partes da página.
 
 ## Compatibilidade de IA
 

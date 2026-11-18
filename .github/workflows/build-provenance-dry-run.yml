@@ -1,0 +1,41 @@
+name: Build provenance dry run
+
+# A dry run of build provenance attestation, approved for this branch only. It writes a small subject file from the commit
+# and the run, and attests that file with actions/attest-build-provenance. It publishes nothing: no release, no asset, no
+# package, and no change to any branch. It uses no repository secret. The attestation is signed with the OpenID Connect
+# token that GitHub issues to the job, which needs the `id-token` permission and no stored credential. The Electron release
+# workflows are not changed by it.
+
+on:
+  push:
+    branches: [migration/rust]
+    paths:
+      - ".github/workflows/build-provenance-dry-run.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  attest:
+    name: attest a dry-run subject
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Write the dry-run subject
+        env:
+          RUN_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p dry-run
+          printf 'NOCT build provenance dry run\ncommit %s\nrun %s\n' "$RUN_SHA" "$RUN_ID" > dry-run/subject.txt
+          sha256sum dry-run/subject.txt
+
+      - name: Attest the dry-run subject
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dry-run/subject.txt

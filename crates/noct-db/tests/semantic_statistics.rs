@@ -20,6 +20,7 @@ use noct_db::repositories::project_index::ProjectIndex;
 use noct_db::repositories::semantic_index::{PersistedSemanticUnit, SemanticIndex};
 use noct_db::runtime::DATABASE_FILE_NAME;
 use noct_db::{Database, OpenOptions, StatisticsOutcome};
+use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::{Connection, OptionalExtension};
 
 mod common;
@@ -104,7 +105,8 @@ fn fill(database: &Database, workspace: &str, numbers: Range<usize>) {
 
 /// Starts a run and ends it with `status` and `indexed_units`, as the indexing service does.
 fn end_run(database: &Database, id: &str, status: SemanticRunStatus, indexed_units: i64) {
-    let index = SemanticIndex::new(database.connection());
+    // The database's own sink, as `Store::semantic_index` passes it, so a logged failure reaches the test.
+    let index = SemanticIndex::with_diagnostics(database.connection(), database.diagnostics());
     let mut run = SemanticIndexRun {
         id: id.to_string(),
         workspace: WORKSPACE.to_string(),
@@ -481,6 +483,81 @@ fn a_large_round_still_running_does_not_refresh_the_statistics() {
     end_run(&database, "run-running", SemanticRunStatus::Running, 10_000);
 
     assert_eq!(rows_per_workspace(database.connection()), None);
+}
+
+/// Denies the first `ANALYZE` check of this connection and allows the rest. The first check is the
+/// statistics refresh: a round's, or the one at close. `PRAGMA optimize` makes its own `ANALYZE` check
+/// afterwards, and it is allowed, so it still runs. Denying every check fails the optimize too (checked
+/// on this build), and a lock held by another connection fails both steps, so this hook is the only
+/// injection found here that fails the refresh alone.
+fn deny_first_analyze(connection: &mut Connection) {
+    let mut denied = false;
+    connection
+        .authorizer(Some(move |context: AuthContext<'_>| {
+            if matches!(context.action, AuthAction::Analyze { .. }) && !denied {
+                denied = true;
+                return Authorization::Deny;
+            }
+            Authorization::Allow
+        }))
+        .expect("authorizer");
+}
+
+#[test]
+fn a_failed_analysis_after_a_large_round_is_logged_and_the_round_still_updates() {
+    let directory = scratch("statistics-round-end-denied");
+    let (mut database, recording) = open_recording(&directory);
+    fill(&database, WORKSPACE, 0..10_000);
+    deny_first_analyze(database.connection_mut());
+
+    // `end_run` expects the update to succeed: the analysis that fails is after the round is recorded.
+    end_run(
+        &database,
+        "run-denied",
+        SemanticRunStatus::Completed,
+        10_000,
+    );
+
+    let run = SemanticIndex::new(database.connection())
+        .latest_run(WORKSPACE)
+        .expect("latest run")
+        .expect("the run exists");
+    assert_eq!(
+        run.status,
+        SemanticRunStatus::Completed,
+        "the round is recorded"
+    );
+    assert_eq!(
+        rows_per_workspace(database.connection()),
+        None,
+        "the analysis did not run, so no statistics were written"
+    );
+    let entries = recording.entries();
+    assert_eq!(entries.len(), 1, "the failure is logged once: {entries:?}");
+    assert!(entries[0].starts_with(EVENT), "{entries:?}");
+    assert!(entries[0].contains("after a large round"), "{entries:?}");
+}
+
+#[test]
+fn a_failed_statistics_step_at_close_still_runs_the_optimize_and_the_close_succeeds() {
+    let directory = scratch("statistics-close-denied");
+    let (mut database, recording) = open_recording(&directory);
+    fill(&database, WORKSPACE, 0..10_000);
+    deny_first_analyze(database.connection_mut());
+
+    database
+        .close()
+        .expect("the close succeeds: the statistics failure is only logged");
+
+    let entries = recording.entries();
+    assert_eq!(entries.len(), 1, "the failure is logged once: {entries:?}");
+    assert!(entries[0].contains("on close"), "{entries:?}");
+    // PRAGMA optimize ran after the failed refresh. It stored estimates for the table, not the exact
+    // figure of 10,000 rows.
+    let connection = Connection::open(directory.join(DATABASE_FILE_NAME)).expect("connection");
+    let stored = rows_per_workspace(&connection);
+    assert!(stored.is_some(), "PRAGMA optimize stored statistics");
+    assert_ne!(stored, Some(10_000), "and they are the sampled estimates");
 }
 
 /// Measurement, not a check: `cargo test --release -p noct-db --test semantic_statistics -- --ignored --nocapture`.

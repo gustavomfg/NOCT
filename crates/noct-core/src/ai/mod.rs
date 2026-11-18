@@ -2,8 +2,15 @@
 //! `shared/ai`.
 
 pub mod bindings;
+pub mod consent;
+pub mod context;
 pub mod model;
+pub mod network;
+pub mod openrouter;
 pub mod provider_configuration;
+pub mod provider_key;
+pub mod sse;
+pub mod turn;
 
 use serde::{Deserialize, Serialize};
 

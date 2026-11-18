@@ -1,6 +1,6 @@
 [package]
 name = "noct-native"
-description = "NOCT native boundary: operation-scoped rollback worker. Linux backend ported from native/rollback-boundary.cpp."
+description = "NOCT native boundary: operation-scoped rollback worker. Linux, macOS and Windows backends ported from native/rollback-boundary.cpp and native/rollback-windows.h."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,3 +12,16 @@ path = "src/main.rs"
 
 [dependencies]
 libc.workspace = true
+
+# The Windows backend calls the Win32 API directly. Only these feature sets are enabled; the NT structures the backend
+# needs are declared in platform/windows.rs, so the Wdk feature set stays off.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_WindowsProgramming",
+] }

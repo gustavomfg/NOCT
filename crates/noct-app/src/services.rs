@@ -4,13 +4,35 @@
 
 use std::path::PathBuf;
 
-use noct_core::contracts::{Conversation, Workspace};
+use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::turn::turn_artifacts;
+use noct_core::brain_memory::{
+    BrainMemory, BrainMemoryScope, BrainMemorySource, CreateBrainMemoryInput,
+    InitialBrainMemoryStatus, UpdateBrainMemoryInput, allowed_transition, extract_candidates,
+};
+use noct_core::contracts::{Conversation, Message, Role, Workspace, WorkspaceAvailability};
+use noct_core::ipc::ReplyRequest;
+use noct_core::ipc::ai::SaveAssistantRequest;
+use noct_core::ipc::artifacts::{ArtifactDeleteRequest, ArtifactDeletion};
+use noct_core::ipc::brain::{
+    BrainMemoryCreateRequest, BrainMemoryDeleteRequest, BrainMemoryExtraction,
+    BrainMemoryUpdateRequest,
+};
 use noct_core::ipc::conversations::{
     ConversationCursor, ConversationPage, ConversationPageRequest,
 };
 use noct_core::ipc::settings::{AppSettings, SettingsUpdate, from_saved, to_saved};
+use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
+use noct_core::ipc::workspaces::{
+    WorkspaceCursor, WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest,
+};
+use noct_core::suggestions::{
+    Suggestion, SuggestionSnapshot, allowed_suggestion_transition, extract_suggestions,
+    review_comparison_markdown,
+};
+use noct_core::validation::uuid_text;
 use noct_db::repositories::workspaces::WorkspaceRow;
-use noct_db::store::Store;
+use noct_db::store::{AssistantTurn, Store, TurnArtifact};
 
 use crate::error::CommandError;
 use crate::logging::DiagnosticGate;
@@ -49,6 +71,88 @@ pub fn workspace_rows(store: &Store) -> Result<Vec<WorkspaceRow>, CommandError> 
         .map_err(|_| CommandError::Persistence)
 }
 
+/// One page of the saved workspaces, as the rows the page holds and whether another row follows them. The store
+/// reads `limit` rows after the request's cursor, plus one to learn whether a row follows; so the read is bounded
+/// by the limit, not by the number of projects. The availability of each row is checked later, by the caller, and
+/// only for the rows of this page.
+pub fn workspace_page_rows(
+    store: &Store,
+    request: &WorkspacePageRequest,
+) -> Result<(Vec<WorkspaceRow>, bool), CommandError> {
+    let after = request.cursor.as_ref().map(|cursor| {
+        (
+            cursor.favorite,
+            cursor.last_opened_at.as_str(),
+            cursor.path.as_str(),
+        )
+    });
+    let mut rows = store
+        .workspaces()
+        .page_after(after, request.limit.saturating_add(1))
+        .map_err(|_| CommandError::Persistence)?;
+    let has_more = rows.len() > request.limit;
+    rows.truncate(request.limit);
+    Ok((rows, has_more))
+}
+
+/// The key of a project row, as the cursor of the page that ends with it.
+fn cursor_of(row: &WorkspaceRow) -> WorkspaceCursor {
+    WorkspaceCursor {
+        favorite: row.favorite,
+        last_opened_at: row.last_opened_at.clone(),
+        path: row.path.clone(),
+    }
+}
+
+/// The page of rows the store returned, with their availability. The cursor is the key of the last row, and it is
+/// present only when a row follows the page.
+pub fn workspace_page_from_rows(
+    rows: Vec<WorkspaceRow>,
+    has_more: bool,
+    blocked: &[PathBuf],
+) -> WorkspacePage {
+    let next_cursor = if has_more {
+        rows.last().map(cursor_of)
+    } else {
+        None
+    };
+    WorkspacePage {
+        items: workspaces_from_rows(rows, blocked),
+        has_more,
+        next_cursor,
+    }
+}
+
+/// Marks a saved project as a favorite, or unmarks it. The project must be saved: a request for a path that is not
+/// saved is refused with `UnknownWorkspace`, and nothing is written. The caller holds the store lock across the
+/// check and the write, so no other write can save or remove the project between them.
+pub fn workspace_set_favorite(
+    store: &Store,
+    request: &WorkspaceFavoriteRequest,
+) -> Result<(), CommandError> {
+    let saved = workspace_rows(store)?
+        .iter()
+        .any(|row| row.path == request.workspace);
+    if !saved {
+        return Err(CommandError::UnknownWorkspace);
+    }
+    store
+        .workspaces()
+        .set_favorite(&request.workspace, request.favorite)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// One page of projects with their availability. It reads the rows under the store lock, which the caller
+/// holds, and checks the page outside of it. Tests use this whole path; the command splits it at the lock.
+pub fn workspace_page(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &WorkspacePageRequest,
+) -> Result<WorkspacePage, CommandError> {
+    let (rows, has_more) = workspace_page_rows(store, request)?;
+    Ok(workspace_page_from_rows(rows, has_more, blocked))
+}
+
 /// Each row with its availability. The check reads the file system, so the caller runs it outside the
 /// store lock. A workspace is authorized only while its folder is available, as `workspace.list` does.
 pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec<Workspace> {
@@ -69,6 +173,494 @@ pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec
             }
         })
         .collect()
+}
+
+/// Saves a folder the person chose as a project. The path must be absolute, an existing folder that can be read, outside
+/// the blocked roots, and not saved already. The checks run before the write, under the store lock the caller holds, so
+/// nothing is written when one fails. The project is saved as opened now and authorized, since the person chose it.
+pub fn workspace_add(
+    store: &Store,
+    blocked: &[PathBuf],
+    folder: &std::path::Path,
+) -> Result<Workspace, CommandError> {
+    if !folder.is_absolute() {
+        return Err(CommandError::InvalidInput);
+    }
+    let path = folder.to_str().ok_or(CommandError::WorkspaceRefused(
+        "O caminho desta pasta não pode ser lido pelo NOCT.",
+    ))?;
+    let inspection = workspace_scope::inspect(path, blocked);
+    if inspection.availability != noct_core::contracts::WorkspaceAvailability::Available {
+        return Err(CommandError::WorkspaceRefused(
+            inspection
+                .message
+                .unwrap_or("Não foi possível validar a pasta do projeto."),
+        ));
+    }
+    if workspace_rows(store)?.iter().any(|row| row.path == path) {
+        return Err(CommandError::WorkspaceExists);
+    }
+    store
+        .workspaces()
+        .touch(path)
+        .map_err(|_| CommandError::Persistence)?;
+    let row = workspace_rows(store)?
+        .into_iter()
+        .find(|row| row.path == path)
+        .ok_or(CommandError::Persistence)?;
+    workspaces_from_rows(vec![row], blocked)
+        .pop()
+        .ok_or(CommandError::Persistence)
+}
+
+/// Checks that a saved project may take a write: its folder is available and outside the blocked roots, and its row is
+/// authorized. Each refusal is `UnknownWorkspace`, and nothing is written.
+pub fn authorized_workspace(
+    store: &Store,
+    blocked: &[PathBuf],
+    workspace: &str,
+) -> Result<(), CommandError> {
+    let inspection = workspace_scope::inspect(workspace, blocked);
+    if !matches!(inspection.availability, WorkspaceAvailability::Available) {
+        return Err(CommandError::UnknownWorkspace);
+    }
+    let authorized = workspace_rows(store)?
+        .iter()
+        .any(|row| row.path == workspace && row.authorized);
+    if authorized {
+        Ok(())
+    } else {
+        Err(CommandError::UnknownWorkspace)
+    }
+}
+
+/// Creates a conversation in a project that is saved, authorized and available. The folder must pass the scope check
+/// with the blocked roots, and the project must be saved and authorized. Either refusal is `UnknownWorkspace`, and
+/// nothing is written. The write opens the project and creates the conversation in one transaction.
+///
+/// The TypeScript shell also creates the `.nocturne` workspace context here. The Rust shell does not do that yet, so
+/// this command writes the database only. The gap is recorded in `docs/status.md`.
+pub fn conversation_create(
+    store: &Store,
+    blocked: &[PathBuf],
+    workspace: &str,
+) -> Result<Conversation, CommandError> {
+    if workspace.is_empty() {
+        return Err(CommandError::InvalidInput);
+    }
+    authorized_workspace(store, blocked, workspace)?;
+    let row = store
+        .create_conversation(workspace)
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(Conversation {
+        id: row.id,
+        title: row.title,
+        workspace: row.workspace,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
+}
+
+/// Creates a candidate brain memory in the project of a conversation, as the TypeScript shell stores a manual memory. The
+/// conversation must exist, and its project must pass the same check as a conversation write. A conversation-scoped
+/// memory keeps its conversation; a workspace-scoped one keeps none. The repository writes the memory and its history
+/// entry in one transaction.
+pub fn brain_create(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryCreateRequest,
+) -> Result<BrainMemory, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let input = CreateBrainMemoryInput {
+        conversation_id: match request.scope {
+            BrainMemoryScope::Conversation => Some(request.conversation_id.clone()),
+            BrainMemoryScope::Workspace => None,
+        },
+        kind: request.kind,
+        scope: request.scope,
+        content: request.content.clone(),
+        confidence: None,
+        source_type: Some(BrainMemorySource::Manual),
+        source_id: None,
+        status: Some(InitialBrainMemoryStatus::Candidate),
+    };
+    store
+        .brain_memories()
+        .create(&conversation.workspace, &input)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Changes a brain memory of a conversation's project. The conversation must exist, and its project must pass the check
+/// of a conversation write. The memory must exist in that project, and a status change must follow the lifecycle; a
+/// status that stays the same is not a change. The conversation of a conversation-scoped memory is the one of the
+/// request, and a workspace-scoped memory keeps none. The repository writes the change and its history entry in one
+/// transaction.
+pub fn brain_update(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryUpdateRequest,
+) -> Result<BrainMemory, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let workspace = conversation.workspace.as_str();
+    let current = store
+        .brain_memories()
+        .get(&request.memory_id, workspace)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownMemory)?;
+    if let Some(status) = request.status
+        && status != current.status
+        && !allowed_transition(current.status, status)
+    {
+        return Err(CommandError::InvalidTransition);
+    }
+    let input = UpdateBrainMemoryInput {
+        kind: request.kind,
+        scope: request.scope,
+        conversation_id: match request.scope {
+            Some(BrainMemoryScope::Conversation) => Some(Some(request.conversation_id.clone())),
+            Some(BrainMemoryScope::Workspace) => Some(None),
+            None => None,
+        },
+        content: request.content.clone(),
+        confidence: request.confidence,
+        status: request.status,
+    };
+    store
+        .brain_memories()
+        .update(&request.memory_id, workspace, &input)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// The warning of a reply whose memories could not be stored. It is the TypeScript text. The reply itself is kept.
+const CANDIDATES_NOT_SAVED: &str =
+    "A resposta foi preservada, mas não foi possível salvar as candidatas do Segundo Cérebro.";
+
+/// Reads the memory blocks of an assistant reply and stores its candidates in the project of the conversation. The
+/// conversation and its project are checked as in a conversation write. A failure to store is not an error: the reply
+/// comes back without memories, with the warning, as the TypeScript shell does. The candidates are stored as one unit.
+pub fn brain_extract(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &ReplyRequest,
+) -> Result<BrainMemoryExtraction, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let extracted = extract_candidates(&request.content);
+    match store.brain_memories().create_candidates(
+        &conversation.workspace,
+        &request.conversation_id,
+        &extracted.candidates,
+    ) {
+        Ok(memories) => Ok(BrainMemoryExtraction {
+            memories,
+            content: extracted.content,
+            warning: None,
+        }),
+        Err(_) => Ok(BrainMemoryExtraction {
+            memories: Vec::new(),
+            content: extracted.content,
+            warning: Some(CANDIDATES_NOT_SAVED.to_string()),
+        }),
+    }
+}
+
+/// The warnings of a reply without a usable review snapshot. They are the TypeScript texts, and the earlier suggestions
+/// are kept.
+const SNAPSHOT_INVALID: &str =
+    "O snapshot de sugestões é inválido ou incompleto; sugestões anteriores foram preservadas.";
+const SNAPSHOT_ABSENT: &str =
+    "A resposta não trouxe um snapshot estruturado; sugestões anteriores foram preservadas.";
+
+/// Reads the review snapshot of a reply and reconciles its suggestions with the conversation's history. The conversation
+/// and its project are checked as in a conversation write. A reply without a usable snapshot stores nothing: it comes
+/// back with the warning and its text. The comparison with the previous review is appended to the text, as in TypeScript.
+pub fn suggestions_create(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &ReplyRequest,
+) -> Result<SuggestionCreation, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let extracted = extract_suggestions(&request.content);
+    if !extracted.structured {
+        let warning = match extracted.snapshot {
+            SuggestionSnapshot::Invalid => SNAPSHOT_INVALID,
+            SuggestionSnapshot::Valid | SuggestionSnapshot::Absent => SNAPSHOT_ABSENT,
+        };
+        return Ok(SuggestionCreation {
+            suggestions: Vec::new(),
+            comparison: None,
+            content: extracted.content,
+            warning: Some(warning.to_string()),
+        });
+    }
+    let reconciliation = store
+        .suggestions()
+        .reconcile(
+            &request.conversation_id,
+            &conversation.workspace,
+            &extracted.suggestions,
+            false,
+        )
+        .map_err(|_| CommandError::Persistence)?;
+    let markdown = review_comparison_markdown(&reconciliation.comparison);
+    let content = [extracted.content.as_str(), markdown.as_str()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    Ok(SuggestionCreation {
+        suggestions: reconciliation.suggestions,
+        comparison: Some(reconciliation.comparison),
+        content,
+        warning: None,
+    })
+}
+
+/// Moves a suggestion of a conversation to a new status. The conversation and its project are checked first, then the
+/// suggestion must belong to the conversation, then the move must be one the lifecycle allows. Setting the status it
+/// already has changes nothing, and the store writes the decision entry in the same transaction as the status.
+pub fn suggestions_status(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &SuggestionStatusRequest,
+) -> Result<Suggestion, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let current = store
+        .suggestions()
+        .get(&request.suggestion_id, Some(&request.conversation_id))
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownSuggestion)?;
+    if request.status != current.status
+        && !allowed_suggestion_transition(current.status, request.status)
+    {
+        return Err(CommandError::InvalidSuggestionTransition);
+    }
+    store
+        .suggestions()
+        .set_status(
+            &request.suggestion_id,
+            request.status,
+            request.result.as_deref(),
+        )
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Stores the model bindings of a project and returns them. The bindings are validated first, as the TypeScript handler
+/// does, and then the project is checked as in a conversation write: it must be saved, authorized and available. A write
+/// replaces the bindings the project had.
+pub fn models_set_bindings(
+    store: &Store,
+    blocked: &[PathBuf],
+    bindings: WorkspaceModelBindings,
+) -> Result<WorkspaceModelBindings, CommandError> {
+    let bindings = bindings
+        .validated()
+        .map_err(|_| CommandError::InvalidInput)?;
+    authorized_workspace(store, blocked, &bindings.workspace_id)?;
+    store
+        .workspace_model_bindings()
+        .set(bindings)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// The model bindings of an authorized project, or none when the project has none.
+pub fn models_bindings(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: noct_core::ai::bindings::ProjectBindingsRequest,
+) -> Result<Option<WorkspaceModelBindings>, CommandError> {
+    authorized_workspace(store, blocked, &request.workspace)?;
+    store
+        .workspace_model_bindings()
+        .get(&request.workspace)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Sets the default OpenRouter model of an authorized project, or clears it with `null`. The identifier is checked
+/// before the project is read. Every other binding of the project is kept by the repository in the same transaction.
+pub fn models_set_default(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: noct_core::ai::bindings::DefaultModelRequest,
+) -> Result<WorkspaceModelBindings, CommandError> {
+    let model = request
+        .model_id()
+        .map_err(|_| CommandError::InvalidInput)?
+        .map(noct_core::ai::bindings::openrouter_default)
+        .transpose()
+        .map_err(|_| CommandError::InvalidInput)?;
+    authorized_workspace(store, blocked, &request.workspace)?;
+    store
+        .workspace_model_bindings()
+        .set_default_model(&request.workspace, model)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// The title of an assistant reply's Markdown artifact: `Resposta · ` and the UTC time of the write. The TypeScript shell
+/// writes the local time of the system instead, which this shell does not read yet.
+fn reply_title() -> String {
+    let format =
+        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second] UTC");
+    // The components above always format; the empty fallback only keeps the title a string.
+    let when = time::OffsetDateTime::now_utc()
+        .format(&format)
+        .unwrap_or_default();
+    format!("Resposta · {when}")
+}
+
+/// Stores an assistant reply with its metadata, and the artifacts the metadata names: one per listed file, and a report
+/// for a diff. The conversation and its project are checked as in a conversation write. The reply comes back as the
+/// stored message.
+pub fn ai_save_assistant(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &SaveAssistantRequest,
+) -> Result<Message, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let derived = turn_artifacts(request.metadata.as_ref());
+    let artifacts: Vec<TurnArtifact<'_>> = derived
+        .iter()
+        .map(|artifact| TurnArtifact {
+            kind: artifact.kind,
+            title: &artifact.title,
+            file_path: artifact.file_path.as_deref(),
+            content: artifact.content.as_deref(),
+            metadata: None,
+        })
+        .collect();
+    let title = reply_title();
+    let stored = store
+        .save_assistant_turn(&AssistantTurn {
+            conversation_id: &request.conversation_id,
+            workspace: &conversation.workspace,
+            content: &request.content,
+            metadata: request.metadata.as_ref(),
+            markdown_title: &title,
+            artifacts: &artifacts,
+        })
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(Message {
+        id: stored.id,
+        conversation_id: stored.conversation_id,
+        role: Role::Assistant,
+        content: stored.content,
+        metadata: stored.metadata,
+        created_at: stored.created_at,
+    })
+}
+
+/// Deletes a conversation with its messages and artifacts, which the store's foreign keys remove with it. The id must be a
+/// UUID, as `idSchema` requires, and the conversation and its project are checked as in a conversation write. Nothing is
+/// removed from the project's folder.
+pub fn conversation_delete(
+    store: &Store,
+    blocked: &[PathBuf],
+    id: &str,
+) -> Result<(), CommandError> {
+    let id = uuid_text("conversationId", id).map_err(|_| CommandError::InvalidInput)?;
+    let conversation = store
+        .conversations()
+        .get(&id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    store
+        .conversations()
+        .delete(&conversation.id)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Removes a project's record. The store's foreign keys remove what is tied to the project's path: its model bindings,
+/// index, executions, checkpoints, brain memories and evidence. The conversations, their messages and their artifacts are
+/// not tied to the path, so they stay in the store, as in the TypeScript shell. The path must not be empty, as
+/// `z.string().min(1)` requires. Like the TypeScript shell, this does not check that the project is saved or authorized,
+/// and removing a path that is not saved is not an error. Nothing is removed from the folder itself.
+pub fn workspace_remove(store: &Store, workspace: &str) -> Result<(), CommandError> {
+    if workspace.is_empty() {
+        return Err(CommandError::InvalidInput);
+    }
+    store
+        .workspaces()
+        .remove(workspace)
+        .map_err(|_| CommandError::Persistence)
+}
+
+/// Deletes a memory of the conversation's project. The conversation and its project are checked as in a memory write. A
+/// memory that is not in that project, or was already removed, is `unknown-memory`, as the TypeScript shell refuses it.
+pub fn brain_delete(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &BrainMemoryDeleteRequest,
+) -> Result<(), CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let removed = store
+        .brain_memories()
+        .delete(&request.memory_id, &conversation.workspace)
+        .map_err(|_| CommandError::Persistence)?;
+    if removed {
+        Ok(())
+    } else {
+        Err(CommandError::UnknownMemory)
+    }
+}
+
+/// Deletes an artifact of a conversation. The conversation and its project are checked first. The row is removed; a file the
+/// artifact names is left in the project folder, as in the TypeScript shell. An artifact that is not in the conversation, or
+/// was already removed, is `unknown-artifact`.
+pub fn artifact_delete(
+    store: &Store,
+    blocked: &[PathBuf],
+    request: &ArtifactDeleteRequest,
+) -> Result<ArtifactDeletion, CommandError> {
+    let conversation = store
+        .conversations()
+        .get(&request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?
+        .ok_or(CommandError::UnknownConversation)?;
+    authorized_workspace(store, blocked, &conversation.workspace)?;
+    let removed = store
+        .artifacts()
+        .delete(&request.artifact_id, &request.conversation_id)
+        .map_err(|_| CommandError::Persistence)?;
+    if removed {
+        Ok(ArtifactDeletion { deleted: true })
+    } else {
+        Err(CommandError::UnknownArtifact)
+    }
 }
 
 /// One page of conversations after the cursor of the request. The store is asked for one row more than the

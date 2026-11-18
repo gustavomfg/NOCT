@@ -7,11 +7,12 @@
 use std::collections::{HashMap, HashSet};
 
 use noct_core::limits::collection_page::SUGGESTIONS as PAGE_LIMIT;
+use noct_core::limits::persistence::SUGGESTION_RESULT_CHARACTERS;
 use noct_core::suggestions::{
     DEFAULT_CONFIDENCE, DEFAULT_RESPONSIBLE, DEFAULT_SOURCE, ReviewComparison,
     ReviewComparisonItem, ReviewSeverityChange, Suggestion, SuggestionCategory, SuggestionEvidence,
     SuggestionHistoryEntry, SuggestionInput, SuggestionLevel, SuggestionReconciliation,
-    SuggestionSeverity, SuggestionStatus, suggestion_identity,
+    SuggestionSeverity, SuggestionStatus, allowed_suggestion_transition, suggestion_identity,
 };
 use noct_core::text::utf16_prefix;
 use rusqlite::types::ToSql;
@@ -28,7 +29,6 @@ use crate::{Error, Result, transaction};
 const NOT_FOUND: &str = "Sugestão não encontrada.";
 const INVALID_ROW: &str = "A sugestão persistida está inválida.";
 /// The longest result a status change keeps, in UTF-16 units, as the TypeScript repository cuts it.
-const RESULT_CHARACTERS: usize = 20_000;
 const RESOLVED_REASON: &str = "A sugestão não reapareceu na revisão estruturada atual.";
 
 const SELECT: &str = "SELECT id, workspace_id, conversation_id, title, description, reasoning, \
@@ -279,14 +279,14 @@ impl<'a> Suggestions<'a> {
             if current == status {
                 return self.get(id, None)?.ok_or_else(not_found);
             }
-            if !allowed_transition(current, status) {
+            if !allowed_suggestion_transition(current, status) {
                 return Err(Error::Message(format!(
                     "Transição de sugestão inválida: {} → {}.",
                     current.as_str(),
                     status.as_str()
                 )));
             }
-            let kept = result.map(|text| utf16_prefix(text, RESULT_CHARACTERS));
+            let kept = result.map(|text| utf16_prefix(text, SUGGESTION_RESULT_CHARACTERS as usize));
             let changed = self.conn.execute(
                 "UPDATE suggestions SET status=?1,result=?2,updated_at=?3 WHERE id=?4",
                 params![status.as_str(), kept, updated_at, id],
@@ -435,21 +435,6 @@ impl<'a> Suggestions<'a> {
             });
         }
         Ok(suggestions)
-    }
-}
-
-/// The transitions a suggestion may make. A rejected, resolved or invalid suggestion is final.
-fn allowed_transition(from: SuggestionStatus, to: SuggestionStatus) -> bool {
-    use SuggestionStatus::{Accepted, Deferred, InAnalysis, Invalid, New, Rejected, Resolved};
-    match from {
-        New => matches!(
-            to,
-            InAnalysis | Accepted | Rejected | Resolved | Deferred | Invalid
-        ),
-        InAnalysis => matches!(to, Accepted | Rejected | Resolved | Deferred | Invalid),
-        Accepted => matches!(to, Resolved | Rejected | Deferred | Invalid),
-        Deferred => matches!(to, InAnalysis | Accepted | Rejected | Resolved | Invalid),
-        Rejected | Resolved | Invalid => false,
     }
 }
 

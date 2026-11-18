@@ -3,7 +3,6 @@
   "private": true,
   "version": "1.0.5",
   "description": "Local-first desktop engineering workspace for projects and any AI provider the developer chooses.",
-  "desktopName": "NOCT",
   "license": "MIT",
   "author": "NOCT contributors",
   "type": "module",
@@ -13,76 +12,11 @@
     "npm": ">=11 <12"
   },
   "scripts": {
-    "build:boundary": "node scripts/build-native-boundary.mjs",
-    "prebuild": "npm run build:boundary",
-    "prebuild:app": "npm run build:boundary",
-    "pretest": "npm run build:boundary",
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "build:app": "tsc && vite build",
-    "typecheck": "tsc --noEmit",
-    "rebuild:native": "electron-builder install-app-deps",
-    "postinstall": "electron-builder install-app-deps && npm run build:boundary",
-    "lint": "eslint . --report-unused-disable-directives --max-warnings 0 && npm run lint:design",
-    "lint:design": "node scripts/check-design-system.mjs",
-    "test": "node scripts/run-tests.mjs",
-    "test:abi": "node scripts/run-tests.mjs --abi-only",
-    "test:renderer": "playwright test",
-    "test:renderer:update": "playwright test --update-snapshots",
-    "benchmark:sqlite": "node scripts/benchmark-sqlite-sync.mjs",
-    "test:watch": "node scripts/run-tests.mjs --watch",
-    "package": "npm run build && electron-builder",
-    "package:dir": "npm run build && electron-builder --dir",
-    "smoke:package": "node scripts/smoke-package.mjs",
-    "rehearse:packaged-recovery": "node scripts/rehearse-packaged-recovery.mjs",
-    "rehearse:updater": "electron scripts/rehearse-updater.mjs",
-    "checksums": "node scripts/smoke-package.mjs --checksums",
-    "verify:signatures": "node scripts/verify-package-signature.mjs --require",
-    "verify:release-metadata": "node scripts/verify-release-metadata.mjs",
-    "verify:release-assets": "node scripts/verify-release-assets.mjs",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@fontsource-variable/geist": "^5.2.9",
-    "@fontsource-variable/geist-mono": "^5.2.8",
-    "better-sqlite3": "13.0.3",
-    "chokidar": "4.0.3",
-    "electron-updater": "^6.8.9",
-    "lucide-react": "^1.24.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "react-markdown": "^10.1.0",
-    "typescript": "^6.0.3",
-    "zod": "^4.6.7",
-    "zustand": "^5.0.14"
-  },
-  "overrides": {
-    "js-yaml": "4.3.2"
+    "test": "node --test scripts/*.test.mjs",
+    "check:ui": "node scripts/check-shell-ui.mjs",
+    "check:csp": "node scripts/check-shell-csp.mjs"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.61.1",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.64.0",
-    "@typescript-eslint/parser": "^8.64.0",
-    "@vitejs/plugin-react": "^6.0.3",
-    "electron": "43.8.4",
-    "electron-builder": "^26.15.7",
-    "eslint": "^10.7.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.3",
-    "globals": "^17.0.0",
-    "postcss": "^8.5.16",
-    "vite": "^8.1.6",
-    "vite-plugin-electron": "^1.1.0",
-    "vitest": "^4.1.12"
-  },
-  "main": "dist-electron/main.js",
-  "allowScripts": {
-    "electron@43.8.4": true,
-    "better-sqlite3@13.0.3": true,
-    "electron-winstaller@5.4.0": true
+    "playwright": "^1.61.1"
   }
 }

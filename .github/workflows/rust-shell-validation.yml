@@ -1,17 +1,27 @@
 name: Rust shell validation
 
-# The Rust shell and its interface, on Linux, Windows and macOS. Each system builds the workspace, runs its
-# tests, and compiles the release shell with `custom-protocol`, then checks that the built interface is in
-# the binary. No window is opened on any system. The checks that need Node, a browser or the release-line
-# bases run on Linux only: the permission drift, the output differential, the shell's Content-Security-Policy
-# and settings area in Chromium, the log redaction fixture and the IPC contract samples. It runs on pushes to
-# the migration branch only, and by dispatch once this file is on the default branch. There is no pull
-# request trigger.
+# The Rust shell and its interface. Linux runs on every push to the migration branch. Windows and macOS run only on a
+# rust-v tag, on a pull request to main, on the nightly schedule, and on a manual dispatch: the systems are chosen by the
+# `plan` job below. Each system builds the workspace, runs its tests, and compiles the release shell with
+# `custom-protocol`, then checks that the built interface is in the binary. No window is opened on any system. The
+# checks that need Node and a browser run on Linux only: the permission drift, the shell's Content-Security-Policy and
+# settings area in Chromium, and the tests of the launcher and of the release workflow.
+#
+# The release gate in shell-release.yml waits for the run of the tag itself, and passes only when all three systems
+# succeeded on it.
 
 on:
   push:
     branches:
       - migration/rust
+    tags:
+      - 'rust-v*'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Nightly, at 03:17 UTC.
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -22,23 +32,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    name: Choose the systems for this event
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      systems: ${{ steps.choose.outputs.systems }}
+    steps:
+      - name: Choose the systems
+        id: choose
+        shell: bash
+        run: |
+          # Linux runs on every event. Windows and macOS run only for a pushed rust-v tag, or for any event that is not a
+          # push: a pull request to main, the nightly schedule and a manual dispatch.
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" != refs/tags/rust-v* ]]; then
+            systems='["ubuntu-latest"]'
+          else
+            systems='["ubuntu-latest","windows-latest","macos-latest"]'
+          fi
+          echo "Systems for $GITHUB_EVENT_NAME on $GITHUB_REF: $systems"
+          echo "systems=$systems" >> "$GITHUB_OUTPUT"
+
   shell:
     name: Shell on ${{ matrix.os }}
+    needs: plan
     runs-on: ${{ matrix.os }}
-    # Each run builds without a cache, so a cold Windows or macOS build can take most of this time.
+    # The Cargo registry, the Cargo git cache, the target directory and the trunk binary are cached per system, keyed by
+    # the toolchain and the lock files. A cold build can still take most of the time limit.
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON(needs.plan.outputs.systems) }}
     steps:
       - name: Check out the repository with its tags
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          # The release-line bases are compiled from the sources of each tag (Linux only).
-          fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
+
+      - name: Restore the Cargo, target and trunk caches
+        # The official cache action, pinned by commit. The key names the system, the toolchain and the locks; a run
+        # that finds no exact key restores the newest cache of the same system and toolchain, and then saves its own.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/trunk
+            ~/.cargo/bin/trunk.exe
+            target
+          key: shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            shell-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install the Linux packages that Tauri needs
         if: matrix.os == 'ubuntu-latest'
@@ -65,10 +111,6 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: npm ci
 
-      - name: Write the release-line bases and the TypeScript outputs for the differential
-        if: matrix.os == 'ubuntu-latest'
-        run: node scripts/generate-output-differential.mjs
-
       - name: Add the WebAssembly target and check the pinned toolchain
         shell: bash
         run: |
@@ -80,8 +122,14 @@ jobs:
           test "$(rustc --version | cut -d' ' -f2)" = "$pinned"
 
       - name: Install trunk at a pinned version
+        # A cached binary is used only when it reports the pinned version, by the rule of scripts/run-rust-shell.mjs.
         shell: bash
-        run: cargo install --locked trunk@0.22.1
+        run: |
+          current="$(trunk --version 2>/dev/null || true)"
+          if [[ "$current" != *0.22.1 ]]; then
+            cargo install --locked trunk@0.22.1
+          fi
+          [[ "$(trunk --version)" == *0.22.1 ]]
 
       - name: Build the interface with trunk
         shell: bash
@@ -106,8 +154,8 @@ jobs:
           fi
 
       - name: Run the workspace tests
-        # The ignored tests are not run here: the output differential and the row gate run on Linux below,
-        # and the operating system keyring has its own workflow (keyring-round-trip.yml) on all three systems.
+        # The ignored tests are not run here: they are benchmarks and measurements, and the operating system keyring,
+        # which has its own workflow (keyring-round-trip.yml) on all three systems.
         # --no-fail-fast runs every test binary, so one run shows every failure on a system, not only the first.
         shell: bash
         run: cargo test --workspace --no-fail-fast
@@ -126,11 +174,6 @@ jobs:
           wasm="$(basename "$1")"
           grep -a -q -F "$wasm" "$binary" || { echo "The release shell does not embed $wasm"; exit 1; }
 
-      - name: Compare the four first-slice outputs with TypeScript over the nine release lines (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: cargo test -p noct-app --test output_differential -- --ignored
-
       - name: Install the Chromium of Playwright (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: npx playwright install --with-deps chromium
@@ -143,10 +186,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: node scripts/check-shell-ui.mjs
 
-      - name: Check the log redaction fixture against TypeScript (Linux)
+      - name: Test the launcher and the release and workflow checks (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: node scripts/generate-log-redaction-fixture.mjs --check
+        run: node --test scripts/run-rust-shell.test.mjs scripts/shell-latest-json.test.mjs scripts/shell-release.test.mjs scripts/rust-shell-validation.test.mjs
 
-      - name: Check the IPC contract samples against zod and TypeScript (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: node scripts/generate-ipc-samples.mjs --check

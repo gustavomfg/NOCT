@@ -1,0 +1,385 @@
+name: Release · shell
+
+# The Rust shell's release. It is written and not yet run: the only trigger is a `rust-v*` tag, and no step of this change
+# pushes one. A `rust-v` tag starts no Electron workflow, because stable-release.yml and package-validation.yml match
+# `v` tags only. Each shell release is a pre-release that is never the latest. The updater reads the manifest of the
+# `updater-feed` pre-release, which this workflow moves to the new release. docs/shell-updater.md lists what must be
+# settled before the first tag. The signing secrets are read only by the `sign` job, from the `release` environment.
+
+on:
+  push:
+    tags:
+      - 'rust-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shell-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Verify the tag, the versions and the shell CI of the tagged commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Require a stable rust-v tag that names the shell version
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^rust-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a stable tag such as rust-v1.0.6.' >&2; exit 1; }
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG" || { echo 'Run the release from its tag.' >&2; exit 1; }
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
+          version="$(node -p "require('./crates/noct-app/tauri.conf.json').version")"
+          test "$RELEASE_TAG" = "rust-v$version" || { echo 'The tag does not match crates/noct-app/tauri.conf.json.' >&2; exit 1; }
+          grep -qx "version = \"$version\"" Cargo.toml || { echo 'Cargo.toml and tauri.conf.json disagree on the version.' >&2; exit 1; }
+          test -f "docs/releases/$RELEASE_TAG.md" || { echo 'Release notes are missing.' >&2; exit 1; }
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$RELEASE_TAG is already published; this workflow never replaces a release." >&2
+            exit 1
+          fi
+
+      - name: Wait for the shell CI of the tag and require all three systems to pass
+        shell: bash
+        run: |
+          # The release run is the newest push run of the tagged commit. The tag starts it with the Linux, Windows and macOS
+          # jobs, and the gate waits for it to finish. The gate passes only when each of the three jobs succeeded. A run of
+          # the migration branch for the same commit has the Linux job alone, so it fails the check; it is not accepted.
+          deadline=$(( $(date +%s) + 6600 ))
+          run_id=""
+          while [ -z "$run_id" ]; do
+            run_id="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/rust-shell-validation.yml/runs" \
+              -f event=push -f head_sha="$RELEASE_SHA" -f per_page=100 |
+              node -e '
+                const fs = require("node:fs")
+                const runs = JSON.parse(fs.readFileSync(0, "utf8")).workflow_runs
+                  .filter((run) => run.head_sha === process.env.RELEASE_SHA)
+                  .sort((a, b) => b.id - a.id)
+                if (runs[0]) console.log(runs[0].id)
+              ')"
+            if [ -z "$run_id" ]; then
+              [ "$(date +%s)" -lt "$deadline" ] || { echo "No shell CI run exists for $RELEASE_TAG. rust-shell-validation.yml must run on the tag." >&2; exit 1; }
+              sleep 30
+            fi
+          done
+          echo "Shell CI run for $RELEASE_TAG: $run_id"
+          while [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status)" != completed ]; do
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "The shell CI run $run_id did not finish in time." >&2; exit 1; }
+            sleep 60
+          done
+          for system in ubuntu-latest windows-latest macos-latest; do
+            conclusion="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+              --jq ".jobs[] | select(.name == \"Shell on $system\") | .conclusion")"
+            if [ "$conclusion" != success ]; then
+              echo "Shell CI on $system is ${conclusion:-missing} in run $run_id. Every system must pass before a release." >&2
+              exit 1
+            fi
+          done
+          echo "Verified shell CI on Linux, Windows and macOS: $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .html_url)"
+
+  build:
+    name: Build unsigned shell (${{ matrix.target }})
+    needs: gate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            bundle: appimage
+          - os: windows-latest
+            target: windows-x86_64
+            bundle: nsis
+          - os: macos-latest
+            target: darwin-aarch64
+            bundle: app
+    env:
+      # The AppImage tooling runs without FUSE on hosted runners.
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install the Linux packages that Tauri needs
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          for source in /etc/apt/sources.list.d/*; do
+            if [ -f "$source" ] && grep -qi 'dl.google.com/linux/chrome' "$source"; then
+              sudo rm -f "$source"
+            fi
+          done
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libxdo-dev librsvg2-dev libayatana-appindicator3-dev
+
+      - name: Add the WebAssembly target and check the pinned toolchain
+        shell: bash
+        run: |
+          rustup target add wasm32-unknown-unknown
+          rustc --version
+          cargo --version
+          pinned="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          test -n "$pinned"
+          test "$(rustc --version | cut -d' ' -f2)" = "$pinned"
+
+      - name: Install trunk and the Tauri CLI at pinned versions
+        shell: bash
+        run: |
+          cargo install --locked trunk@0.22.1
+          cargo install --locked tauri-cli@2.12.4
+
+      - name: Build the bundle without signing it
+        # `--no-sign` leaves the updater artifact unsigned on purpose: this job holds no signing secret. The bundler
+        # still writes the artifact each updater installs, because createUpdaterArtifacts is set for this build only.
+        # The committed configuration keeps bundle.active false.
+        shell: bash
+        working-directory: crates/noct-app
+        run: |
+          cargo tauri build --ci --no-sign --bundles "${{ matrix.bundle }}" \
+            --config '{"bundle":{"active":true,"createUpdaterArtifacts":true}}'
+
+      - name: Stage the updater artifact
+        shell: bash
+        run: |
+          artifacts=()
+          while IFS= read -r file; do artifacts+=("$file"); done < <(
+            find target/release/bundle -type f \( -name '*.AppImage' -o -name '*-setup.exe' -o -name '*.app.tar.gz' \)
+          )
+          if [ "${#artifacts[@]}" -ne 1 ]; then
+            echo "Expected one updater artifact, found ${#artifacts[@]}." >&2
+            printf '%s\n' "${artifacts[@]}" >&2
+            exit 1
+          fi
+          mkdir -p updater-unsigned
+          cp "${artifacts[0]}" updater-unsigned/
+
+      - name: Upload the unsigned updater artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: shell-unsigned-${{ matrix.target }}
+          path: updater-unsigned/*
+          if-no-files-found: error
+          retention-days: 3
+
+  sign:
+    name: Sign the updater artifacts and write latest.json
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # The only job that reads the signing secrets, and only in the step that signs the artifacts.
+    environment: release
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Download the unsigned artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: shell-unsigned-*
+          path: unsigned
+
+      - name: Install minisign and the Tauri CLI at pinned versions
+        # No signing secret is in the environment of this step.
+        shell: bash
+        run: |
+          for source in /etc/apt/sources.list.d/*; do
+            if [ -f "$source" ] && grep -qi 'dl.google.com/linux/chrome' "$source"; then
+              sudo rm -f "$source"
+            fi
+          done
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends minisign
+          cargo install --locked tauri-cli@2.12.4
+
+      - name: Sign each updater artifact with the release key
+        # The secrets reach this step only. `signer sign` reads TAURI_SIGNING_PRIVATE_KEY and its password from the
+        # environment, so the key does not appear on a command line.
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || { echo 'The release signing key is not set in the release environment.' >&2; exit 1; }
+          version="$(node -p "require('./crates/noct-app/tauri.conf.json').version")"
+          count=0
+          while IFS= read -r file; do
+            cargo tauri signer sign --app-version "$version" "$file"
+            test -s "$file.sig"
+            count=$((count + 1))
+          done < <(find unsigned -type f ! -name '*.sig')
+          test "$count" -gt 0
+
+      - name: Verify every signature against the configured public key
+        # minisign checks the signature and its trusted comment. The public key is the one in the configuration, so a
+        # signature made with another key stops the release here.
+        shell: bash
+        run: |
+          pubkey="$RUNNER_TEMP/updater.pub"
+          node -e "process.stdout.write(Buffer.from(require('./crates/noct-app/tauri.conf.json').plugins.updater.pubkey, 'base64').toString('utf8'))" > "$pubkey"
+          minisig_dir="$RUNNER_TEMP/minisig"
+          mkdir -p "$minisig_dir"
+          while IFS= read -r file; do
+            minisig="$minisig_dir/$(basename "$file").minisig"
+            base64 -d < "$file.sig" > "$minisig"
+            minisign -Vm "$file" -p "$pubkey" -x "$minisig"
+          done < <(find unsigned -type f ! -name '*.sig')
+
+      - name: Write latest.json from the signed artifacts
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          version="$(node -p "require('./crates/noct-app/tauri.conf.json').version")"
+          mkdir -p release-output
+          node scripts/shell-latest-json.mjs --version "$version" --tag "$RELEASE_TAG" --repository "$REPOSITORY" \
+            --pub-date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --unsigned-dir unsigned --output release-output/latest.json
+          while IFS= read -r file; do cp "$file" release-output/; done < <(find unsigned -type f ! -name '*.sig')
+          ls -l release-output
+
+      - name: Upload the release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: shell-release-output
+          path: release-output/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Attest and publish the shell release
+    needs: sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The updater feed is one release that every shell release updates, so two publications never run at once.
+    concurrency:
+      group: shell-updater-feed
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_SHA: ${{ github.sha }}
+      FEED_TAG: updater-feed
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download the release assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: shell-release-output
+          path: release-output
+
+      - name: Require the tag to be unchanged since the gate
+        shell: bash
+        run: |
+          # An annotated tag lists its tag object first and the commit it names as `refs/tags/<tag>^{}`, so the commit
+          # is taken from the peeled line, and from the plain line only for a lightweight tag.
+          remote="$(git ls-remote --tags origin)"
+          tagged="$(printf '%s\n' "$remote" | awk -v peeled="refs/tags/$RELEASE_TAG^{}" '$2 == peeled { print $1 }')"
+          [ -n "$tagged" ] || tagged="$(printf '%s\n' "$remote" | awk -v ref="refs/tags/$RELEASE_TAG" '$2 == ref { print $1 }')"
+          test "$tagged" = "$RELEASE_SHA" || { echo 'The tag changed; refusing publication.' >&2; exit 1; }
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'The release already exists; refusing to replace published assets.' >&2
+            exit 1
+          fi
+
+      - name: Attest the provenance of the release assets
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'release-output/*'
+
+      - name: Publish the release from the exact tag as a pre-release, never as the latest
+        # The Electron application reads the release marked latest, so a shell release must not take that mark. The
+        # manifest is not attached here: it goes to the updater feed, below.
+        shell: bash
+        run: |
+          mapfile -t artifacts < <(find release-output -type f ! -name latest.json)
+          test "${#artifacts[@]}" -gt 0
+          gh release create "$RELEASE_TAG" "${artifacts[@]}" --verify-tag --prerelease --latest=false \
+            --notes-file "docs/releases/$RELEASE_TAG.md" --title "NOCT Shell $RELEASE_TAG"
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" != "$RELEASE_TAG" || {
+            echo 'The shell release was marked latest; the Electron updater reads that release.' >&2
+            exit 1
+          }
+
+      - name: Move the updater feed to this release
+        # The feed is the pre-release `updater-feed`, whose only asset is latest.json. It is created once and then
+        # replaced. It never moves back to an older version: an installed copy would refuse that version, and the feed
+        # would hide a newer release.
+        shell: bash
+        run: |
+          version="$(node -p "require('./crates/noct-app/tauri.conf.json').version")"
+          if gh release view "$FEED_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release download "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$RUNNER_TEMP/feed" --clobber
+            # The version guard is a quoted heredoc, so shellcheck reads it as JavaScript, not as shell text.
+            NEW_VERSION="$version" FEED_FILE="$RUNNER_TEMP/feed/latest.json" node <<'JS'
+            const fs = require('node:fs')
+            const parts = (text) => text.split('.').map(Number)
+            const next = parts(process.env.NEW_VERSION)
+            const current = JSON.parse(fs.readFileSync(process.env.FEED_FILE, 'utf8')).version
+            const order = [0, 1, 2].map((index) => next[index] - parts(current)[index]).find((difference) => difference !== 0) ?? 0
+            if (order < 0) {
+              console.error(`The feed holds ${current}, newer than ${process.env.NEW_VERSION}; refusing to move it back.`)
+              process.exit(1)
+            }
+          JS
+            gh release upload "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" \
+              --prerelease --latest=false --title "Updater feed" \
+              --notes "The manifest the NOCT shell's updater reads. It names the newest shell release; each shell release is a pre-release."
+          fi
+
+      - name: Verify the feed serves the manifest that was signed
+        shell: bash
+        run: |
+          gh release download "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$RUNNER_TEMP/published" --clobber
+          cmp "$RUNNER_TEMP/published/latest.json" release-output/latest.json

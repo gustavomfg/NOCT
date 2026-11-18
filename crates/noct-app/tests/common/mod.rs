@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+pub mod fake_provider;
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 

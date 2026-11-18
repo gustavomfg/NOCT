@@ -1,75 +1,152 @@
 {
-  "source": "shared/types.ts (Workspace[])",
+  "source": "shared/types.ts ({ items: Workspace[]; hasMore: boolean; nextCursor: { favorite: boolean; lastOpenedAt: string; path: string } | null })",
   "valid": [
-    [],
-    [
-      {
-        "path": "/work/alpha",
-        "name": "alpha",
-        "favorite": true,
-        "authorized": true,
-        "availability": "available",
-        "createdAt": "2026-01-01T00:00:00.000Z",
-        "lastOpenedAt": "2026-01-02T00:00:00.000Z"
-      }
-    ],
-    [
-      {
-        "path": "/work/beta",
-        "name": "beta",
+    {
+      "items": [],
+      "hasMore": false,
+      "nextCursor": null
+    },
+    {
+      "items": [
+        {
+          "path": "/work/alpha",
+          "name": "alpha",
+          "favorite": true,
+          "authorized": true,
+          "availability": "available",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      "hasMore": false,
+      "nextCursor": null
+    },
+    {
+      "items": [
+        {
+          "path": "/work/beta",
+          "name": "beta",
+          "favorite": false,
+          "authorized": false,
+          "availability": "missing",
+          "availabilityMessage": "A pasta não existe.",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      "hasMore": true,
+      "nextCursor": {
         "favorite": false,
-        "authorized": false,
-        "availability": "missing",
-        "availabilityMessage": "A pasta não existe.",
-        "createdAt": "2026-01-01T00:00:00.000Z",
-        "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+        "lastOpenedAt": "2026-01-02T00:00:00.000Z",
+        "path": "/work/beta"
       }
-    ]
+    }
   ],
   "invalid": [
-    [
-      {
-        "path": "/work/alpha",
-        "name": "alpha",
-        "favorite": true,
-        "authorized": true,
-        "availability": "online",
-        "createdAt": "2026-01-01T00:00:00.000Z",
+    {
+      "items": [
+        {
+          "path": "/work/alpha",
+          "name": "alpha",
+          "favorite": true,
+          "authorized": true,
+          "availability": "online",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      "hasMore": false,
+      "nextCursor": null
+    },
+    {
+      "items": [
+        {
+          "path": "/work/alpha",
+          "name": "alpha",
+          "favorite": true,
+          "availability": "available",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      "hasMore": false,
+      "nextCursor": null
+    },
+    {
+      "items": [
+        {
+          "path": "/work/alpha",
+          "name": "alpha",
+          "favorite": true,
+          "authorized": true,
+          "availability": "available",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "lastOpenedAt": "2026-01-02T00:00:00.000Z",
+          "availabilityMessage": null
+        }
+      ],
+      "hasMore": false,
+      "nextCursor": null
+    },
+    {
+      "items": [
+        {
+          "path": "/work/alpha",
+          "name": "alpha",
+          "favorite": "yes",
+          "authorized": true,
+          "availability": "available",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      "hasMore": false,
+      "nextCursor": null
+    },
+    {
+      "items": [],
+      "hasMore": "no",
+      "nextCursor": null
+    },
+    {
+      "items": []
+    },
+    {
+      "items": [],
+      "hasMore": false
+    },
+    {
+      "items": [],
+      "hasMore": false,
+      "nextCursor": null,
+      "offset": 0
+    },
+    {
+      "items": [],
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": false,
         "lastOpenedAt": "2026-01-02T00:00:00.000Z"
       }
-    ],
-    [
-      {
-        "path": "/work/alpha",
-        "name": "alpha",
-        "favorite": true,
-        "availability": "available",
-        "createdAt": "2026-01-01T00:00:00.000Z",
-        "lastOpenedAt": "2026-01-02T00:00:00.000Z"
-      }
-    ],
-    [
-      {
-        "path": "/work/alpha",
-        "name": "alpha",
-        "favorite": true,
-        "authorized": true,
-        "availability": "available",
-        "createdAt": "2026-01-01T00:00:00.000Z",
+    },
+    {
+      "items": [],
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": "no",
         "lastOpenedAt": "2026-01-02T00:00:00.000Z",
-        "availabilityMessage": null
+        "path": "/work/beta"
       }
-    ],
-    [
-      {
-        "path": "/work/alpha",
-        "name": "alpha",
-        "favorite": "yes",
-        "authorized": true,
-        "availability": "available",
-        "createdAt": "2026-01-01T00:00:00.000Z",
-        "lastOpenedAt": "2026-01-02T00:00:00.000Z"
+    },
+    {
+      "items": [],
+      "hasMore": true,
+      "nextCursor": {
+        "favorite": false,
+        "lastOpenedAt": "2026-01-02T00:00:00.000Z",
+        "path": "/work/beta",
+        "id": "x"
       }
-    ]
+    }
   ]
 }

@@ -1,9 +1,9 @@
-/* The interface of the shell. Classes only: the shell's policy grants no inline style (crates/noct-app/tauri.conf.json).
-   The tokens and the layout follow docs/New_Design/design.md and docs/New_Design/mockup-vidro-painel.html. The
-   light theme is the default; the dark one is selected by <html data-theme="dark">.
+/* The interface of the shell, after docs/New_Design/mockup-v2.html. Classes only: the shell's policy grants no inline
+   style (crates/noct-app/tauri.conf.json), so the layout is written here and the views only name the classes.
 
-   The glass layer is on while <html data-glass="on"> (the default in index.html). "off" keeps the solid colours,
-   and so does prefers-reduced-transparency. The window itself is opaque: the glass is painted inside the page. */
+   The light theme is the default; <html data-theme="dark"> selects the dark tokens. The glass layer is on while
+   <html data-glass="on"> (the default in index.html). "off" keeps the solid colours, and so does the system's
+   prefers-reduced-transparency. The glass rules are all under [data-glass="on"]: the solid rules are the base. */
 
 :root,
 [data-theme="light"] {
@@ -13,13 +13,17 @@
   --surface: #FFFFFF;
   --text: #1D1D1F;
   --muted: #5F6068;
+  --faint: #6E6F78;
   --line: rgba(0, 0, 0, 0.09);
   --accent: #4F46E5;
   --on-accent: #FFFFFF;
   --sel: rgba(79, 70, 229, 0.10);
   --hover: rgba(0, 0, 0, 0.045);
   --track: rgba(0, 0, 0, 0.06);
-  --code: #F3F3F5;
+  --code: rgba(0, 0, 0, 0.045);
+  --ok: #0F6B33;
+  --warn: #8A4B08;
+  --bad: #B42318;
   --add: rgba(22, 128, 60, 0.10);
   --add-text: #0F6B33;
   --del: rgba(180, 35, 24, 0.09);
@@ -27,19 +31,19 @@
   --sev-high: #B42318;
   --sev-mid: #8A4B08;
   --sev-low: #475467;
+  --user-bubble: rgba(79, 70, 229, 0.12);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
 
-  --glass: rgba(255, 255, 255, 0.55);
-  --glass-strong: rgba(255, 255, 255, 0.72);
-  --glass-line: rgba(255, 255, 255, 0.65);
-  --glass-edge: rgba(0, 0, 0, 0.07);
   --bg-a: #E6E8FF;
   --bg-b: #F6E9FF;
   --bg-c: #DDF1FF;
   --blob1: rgba(99, 102, 241, 0.38);
   --blob2: rgba(236, 72, 153, 0.22);
   --blob3: rgba(56, 189, 248, 0.30);
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.65);
   --pane-a: rgba(255, 255, 255, 0.38);
   --pane-b: rgba(255, 255, 255, 0.16);
   --pane-edge: rgba(255, 255, 255, 0.75);
@@ -58,13 +62,17 @@
   --surface: #1C1C1F;
   --text: #F4F4F5;
   --muted: #A0A0AB;
+  --faint: #8E8E99;
   --line: rgba(255, 255, 255, 0.10);
   --accent: #9B9CFF;
   --on-accent: #101012;
   --sel: rgba(155, 156, 255, 0.16);
   --hover: rgba(255, 255, 255, 0.06);
   --track: rgba(255, 255, 255, 0.08);
-  --code: #141416;
+  --code: rgba(0, 0, 0, 0.28);
+  --ok: #7EE2A3;
+  --warn: #F5C26B;
+  --bad: #FCA5A5;
   --add: rgba(74, 222, 128, 0.12);
   --add-text: #7EE2A3;
   --del: rgba(248, 113, 113, 0.12);
@@ -72,28 +80,28 @@
   --sev-high: #FCA5A5;
   --sev-mid: #F5C26B;
   --sev-low: #A0A0AB;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --user-bubble: rgba(155, 156, 255, 0.16);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.22);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
 
-  --glass: rgba(32, 32, 40, 0.50);
-  --glass-strong: rgba(32, 32, 40, 0.68);
-  --glass-line: rgba(255, 255, 255, 0.10);
-  --glass-edge: rgba(0, 0, 0, 0.35);
   --bg-a: #0E0E18;
   --bg-b: #15101F;
   --bg-c: #0B1620;
   --blob1: rgba(129, 140, 248, 0.34);
   --blob2: rgba(217, 70, 239, 0.20);
   --blob3: rgba(34, 211, 238, 0.18);
+  --glass: rgba(32, 32, 40, 0.50);
+  --glass-strong: rgba(32, 32, 40, 0.68);
+  --glass-line: rgba(255, 255, 255, 0.10);
   --pane-a: rgba(255, 255, 255, 0.075);
   --pane-b: rgba(255, 255, 255, 0.025);
-  --pane-edge: rgba(255, 255, 255, 0.16);
-  --pane-hi: rgba(255, 255, 255, 0.22);
+  --pane-edge: rgba(255, 255, 255, 0.14);
+  --pane-hi: rgba(255, 255, 255, 0.20);
   --pane-shadow: rgba(0, 0, 0, 0.5);
-  --pane-sheen: rgba(190, 190, 255, 0.16);
+  --pane-sheen: rgba(190, 190, 255, 0.14);
   --pane-streak: rgba(255, 255, 255, 0.05);
-  --card-a: rgba(255, 255, 255, 0.09);
-  --card-b: rgba(255, 255, 255, 0.04);
+  --card-a: rgba(255, 255, 255, 0.085);
+  --card-b: rgba(255, 255, 255, 0.035);
 }
 
 /* Type and base. Inter when it is installed, otherwise the system face. No font is loaded from a network. */
@@ -116,10 +124,13 @@ body {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
-input {
+input,
+textarea,
+select {
   font: inherit;
   color: inherit;
 }
@@ -129,12 +140,17 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 [hidden] {
   display: none !important;
+}
+
+.mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.93em;
 }
 
 .sr-only {
@@ -146,7 +162,7 @@ button {
   white-space: nowrap;
 }
 
-/* Layout. The sidebar keeps 248px and shrinks to 200px; the content takes the rest. The window never wraps. */
+/* Layout. The sidebar keeps 244px and shrinks to 200px; the content takes the rest. The window never wraps. */
 .app {
   position: relative;
   isolation: isolate;
@@ -158,12 +174,12 @@ button {
 }
 
 .sidebar {
-  flex: 0 1 248px;
+  flex: 0 1 244px;
   min-width: 200px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px 14px;
+  gap: 18px;
+  padding: 18px 12px;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -174,7 +190,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 6px 0 10px;
+  padding: 0 4px 0 10px;
 }
 
 .brand {
@@ -195,6 +211,20 @@ button {
   color: var(--muted);
 }
 
+.icon-btn {
+  transition: background 0.15s, color 0.15s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .row {
   transition: background 0.15s;
 }
@@ -203,37 +233,99 @@ button {
   background: var(--hover);
 }
 
-.nav {
+.sidebar__projects {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 4px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The projects of the sidebar. Names and folders wrap inside the sidebar's width, never past it. */
+.projects {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.nav__label {
-  padding: 0 10px 6px;
-  font-size: 12px;
-  color: var(--muted);
+.project {
+  min-width: 0;
 }
 
-.nav__item {
-  min-height: 40px;
-  padding: 0 12px;
+.proj {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 10px;
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: var(--text);
   text-align: left;
 }
 
-.nav__item[aria-current="true"],
-.nav__item[aria-current="page"] {
+.proj:hover {
+  background: var(--hover);
+}
+
+.proj[aria-current="true"] {
   background: var(--sel);
+}
+
+.proj[aria-current="true"] .project__name {
   color: var(--accent);
   font-weight: 500;
 }
 
-.nav__item--muted {
+.project__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.project__name {
+  min-width: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.project__tag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.project__note {
+  font-size: 12px;
   color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.project__path {
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.project__state {
+  margin: 0;
+  padding: 0 12px;
 }
 
 .spacer {
@@ -243,7 +335,91 @@ button {
 .sidebar__bottom {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.model-card {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
   gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+}
+
+.model-card {
+  transition: border-color 0.15s;
+}
+
+.model-card:hover {
+  border-color: var(--accent);
+}
+
+.model-card__txt {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.model-card__name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-card__sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent);
+}
+
+.dot--off {
+  background: var(--faint);
+  box-shadow: none;
+}
+
+.dot--warn {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent);
+}
+
+.nav__item {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.nav__item:hover,
+.nav__item[aria-current="page"] {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.nav__item[aria-current="page"] {
+  background: var(--sel);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .status {
@@ -263,10 +439,6 @@ button {
   font-weight: 500;
 }
 
-.status__note {
-  margin-top: 2px;
-}
-
 .content {
   position: relative;
   flex: 1 1 0;
@@ -280,10 +452,43 @@ button {
   background: var(--bg);
 }
 
+/* The top bar: the trail on the left, the modes in the middle, the new-conversation button on the right. */
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px 8px;
+}
+
+.crumb {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crumb b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.topbar__end {
+  justify-self: end;
+  display: flex;
+  gap: 4px;
+}
+
 .modes {
   display: flex;
   justify-content: center;
-  padding: 20px 24px 6px;
+}
+
+/* Hidden keeps the space of a control, so the layout does not move when it is hidden. */
+.is-hidden {
+  visibility: hidden;
 }
 
 .segmented {
@@ -297,7 +502,7 @@ button {
 
 .seg {
   min-height: 40px;
-  padding: 0 18px;
+  padding: 0 16px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -307,21 +512,28 @@ button {
   transition: background 0.15s, color 0.15s;
 }
 
+.seg:hover {
+  color: var(--text);
+}
+
 .seg[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .main {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
-  padding: 28px 32px 8px;
+  padding: 12px 32px 24px;
 }
 
 .stack {
-  max-width: 720px;
+  max-width: 740px;
+  width: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -330,7 +542,7 @@ button {
 
 .h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -356,13 +568,14 @@ button {
   color: var(--muted);
 }
 
-.example-banner {
-  margin: 0;
-  padding: 8px 12px;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  color: var(--muted);
-  font-size: 12px;
+/* A refusal or a failure reads apart from a plain note; a confirmation reads as done. */
+.note[role="alert"],
+.note--error {
+  color: var(--bad);
+}
+
+.note--ok {
+  color: var(--ok);
 }
 
 .eyebrow {
@@ -384,10 +597,9 @@ button {
   gap: 6px;
   padding: 16px 18px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
-  transition: transform 0.25s, box-shadow 0.25s, background 0.25s;
 }
 
 .card--flush {
@@ -411,18 +623,6 @@ button {
   gap: 10px;
   padding: 12px 18px;
   border-top: 1px solid var(--line);
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.12);
-}
-
-.finding__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px;
 }
 
 .sev {
@@ -455,29 +655,61 @@ button {
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions--start {
+  justify-content: flex-start;
 }
 
 .btn {
   min-height: 40px;
-  padding: 0 18px;
+  padding: 0 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: transparent;
   color: var(--text);
   font-weight: 500;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, filter 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--hover);
 }
 
 .btn--primary {
-  border: 0;
+  border: 1px solid transparent;
   background: var(--accent);
   color: var(--on-accent);
 }
 
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+.btn--sm {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
 .btn--ghost {
   padding: 0 14px;
-  border: 0;
+  border-color: transparent;
   color: var(--muted);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .diff {
@@ -505,18 +737,6 @@ button {
   color: var(--del-text);
 }
 
-.prose {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 0;
-}
-
-.prose p {
-  margin: 0;
-  padding: 6px 18px;
-}
-
 .error-card {
   display: flex;
   flex-wrap: wrap;
@@ -527,6 +747,548 @@ button {
 
 .error-card p {
   margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.error-card strong {
+  font-weight: 600;
+}
+
+.list > .error-card {
+  border-top: 1px solid var(--line);
+}
+
+/* Empty states: a centred block with an icon, a title, a line and optional suggestions. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 56px 16px 24px;
+  text-align: center;
+}
+
+.empty__icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--sel);
+  color: var(--accent);
+}
+
+.empty__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.empty__lead {
+  margin: 0;
+  max-width: 420px;
+  color: var(--muted);
+}
+
+.suggest {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+  margin-top: 10px;
+}
+
+.suggest button {
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: left;
+}
+
+.suggest button {
+  transition: border-color 0.15s;
+}
+
+.suggest button:hover {
+  border-color: var(--accent);
+}
+
+.suggest small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The conversation. The person's questions sit on the right; each answer has a head with the model, then the text. */
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-top: 6px;
+}
+
+.msg-user {
+  align-self: flex-end;
+  max-width: 78%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 4px 16px;
+  background: var(--user-bubble);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msg-ai__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.avatar {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--sel);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.msg-ai__body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-ai__body p {
+  margin: 0 0 10px;
+}
+
+.msg-ai__body p:last-child {
+  margin: 0;
+}
+
+.chat-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-tools {
+  display: flex;
+  gap: 2px;
+  margin-left: -6px;
+}
+
+.tool {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The consent card, shown inside the conversation until the person allows the project. */
+.consent {
+  flex-direction: row;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.consent__icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+
+.consent h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.consent p {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.consent ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.consent .actions {
+  justify-content: flex-start;
+}
+
+.consent li b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* The composer: fixed under the conversation. The text box grows to a limit, and the bar holds the model and the send. */
+.composer-wrap {
+  padding: 6px 32px 22px;
+}
+
+.composer {
+  width: 100%;
+  max-width: 740px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* The text box has no outline of its own: the whole composer shows the focus. */
+.composer:focus-within,
+[data-glass="on"] .composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  box-shadow: var(--shadow), 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* The text box grows with its text up to a limit. A hidden copy of the text, read from data-value, sizes the cell the
+   box shares with it, so no inline size is written. */
+.grow {
+  display: grid;
+}
+
+.grow::after {
+  content: attr(data-value) " ";
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+}
+
+.grow > textarea,
+.grow::after {
+  grid-area: 1 / 1 / 2 / 2;
+  min-height: 52px;
+  max-height: 180px;
+  padding: 14px 16px 4px;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  resize: none;
+  outline: none;
+  overflow-y: auto;
+}
+
+.composer textarea:disabled {
+  cursor: not-allowed;
+}
+
+.composer textarea::placeholder {
+  color: var(--faint);
+}
+
+.composer__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 8px 10px;
+}
+
+.pill {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pill:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.pill__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__hint {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+/* The line over the composer: what the chat still needs, and the button that resolves it. */
+.need {
+  width: 100%;
+  max-width: 740px;
+  min-height: 40px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.need__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.send {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.send--stop {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.send {
+  transition: filter 0.15s;
+}
+
+.send:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The settings, in groups. A group is a title over a list of rows; a row has a name and a line, and a control. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.group__title {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.item {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+  padding: 12px 16px;
+}
+
+.item + .item {
+  border-top: 1px solid var(--line);
+}
+
+.item__txt {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.item__name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.item__desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.item__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.foot-note {
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.switch {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--track);
+  transition: background 0.2s;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+
+.switch[aria-checked="true"] {
+  background: var(--accent);
+}
+
+.switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+}
+
+.switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.field,
+.select {
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.select {
+  padding-right: 28px;
+}
+
+.field {
+  width: min(100%, 22rem);
+}
+
+.field--wide {
+  width: min(100%, 19rem);
+}
+
+.field--mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.select:disabled,
+.field:disabled {
   color: var(--muted);
 }
 
@@ -547,51 +1309,43 @@ button {
   overflow-wrap: anywhere;
 }
 
-.composer-wrap {
-  padding: 8px 32px 28px;
-}
-
-.composer {
+/* The steps of Construir: three rows with a number, a line each. */
+.soon {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 6px 6px 6px 18px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  flex-direction: column;
+  gap: 12px;
 }
 
-.composer__input {
-  flex: 1;
-  min-width: 0;
-  height: 40px;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-}
-
-.composer__send {
-  width: 40px;
-  height: 40px;
+.step {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--on-accent);
+  gap: 12px;
+  align-items: flex-start;
 }
 
-.composer-wrap .note {
-  max-width: 720px;
-  margin: 6px auto 0;
-  padding: 0 6px;
+.step__n {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--sel);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
 }
 
-/* The glass layer. Solid colours above are the fallback; these rules paint the panes over the gradient. */
+.step p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.step b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* The glass layer. The solid colours above are the fallback; these rules paint the panes over the gradient. */
 [data-glass="on"] .app {
   background:
     radial-gradient(600px 420px at 12% 18%, var(--blob1), transparent 70%),
@@ -603,6 +1357,14 @@ button {
 [data-glass="on"] .sidebar {
   border-color: var(--glass-line);
   background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+
+[data-glass="on"] .model-card,
+[data-glass="on"] .status {
+  border-color: var(--glass-line);
+  background: var(--glass-strong);
 }
 
 [data-glass="on"] .segmented {
@@ -614,15 +1376,12 @@ button {
   background: var(--glass-strong);
 }
 
-[data-glass="on"] .status {
-  border-color: var(--glass-line);
-  background: var(--glass);
-}
-
 [data-glass="on"] .content {
   border-color: var(--pane-edge);
   background: linear-gradient(160deg, var(--pane-a), var(--pane-b));
-  box-shadow: inset 0 1px 0 var(--pane-hi), inset 0 -1px 0 rgba(0, 0, 0, 0.05), 0 24px 60px var(--pane-shadow);
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 24px 60px var(--pane-shadow);
+  -webkit-backdrop-filter: blur(34px) saturate(1.7);
+  backdrop-filter: blur(34px) saturate(1.7);
 }
 
 [data-glass="on"] .content::before {
@@ -634,7 +1393,6 @@ button {
   background:
     radial-gradient(900px 260px at 15% -10%, var(--pane-sheen), transparent 60%),
     linear-gradient(115deg, transparent 40%, var(--pane-streak) 50%, transparent 60%);
-  opacity: 0.9;
 }
 
 [data-glass="on"] .content > * {
@@ -642,34 +1400,41 @@ button {
 }
 
 [data-glass="on"] .card,
-[data-glass="on"] .composer {
+[data-glass="on"] .list,
+[data-glass="on"] .composer,
+[data-glass="on"] .need,
+[data-glass="on"] .suggest button {
   border-color: var(--pane-edge);
   background: linear-gradient(160deg, var(--card-a), var(--card-b));
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+
+/* Translucent panes take the light edge of the prototype and a soft shadow, never the solid theme shadow, which reads as
+   a dark smudge through the glass. */
+[data-glass="on"] .card {
   box-shadow: inset 0 1px 0 var(--pane-hi), 0 6px 18px rgba(0, 0, 0, 0.06);
 }
 
-[data-glass="on"] .card:hover {
-  box-shadow: inset 0 1px 0 var(--pane-hi), 0 14px 32px rgba(0, 0, 0, 0.12);
+[data-glass="on"] .list,
+[data-glass="on"] .need {
+  box-shadow: inset 0 1px 0 var(--pane-hi);
+}
+
+[data-glass="on"] .suggest button {
+  box-shadow: none;
 }
 
 [data-glass="on"] .composer {
-  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.10);
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.12);
 }
 
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  [data-glass="on"] .sidebar,
-  [data-glass="on"] .segmented,
-  [data-glass="on"] .status,
-  [data-glass="on"] .card,
-  [data-glass="on"] .composer {
-    -webkit-backdrop-filter: blur(22px) saturate(1.5);
-    backdrop-filter: blur(22px) saturate(1.5);
-  }
+[data-glass="on"] .composer:focus-within {
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.12), 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
 
-  [data-glass="on"] .content {
-    -webkit-backdrop-filter: blur(34px) saturate(1.7);
-    backdrop-filter: blur(34px) saturate(1.7);
-  }
+[data-glass="on"] .msg-user {
+  border-color: var(--pane-edge);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -678,57 +1443,110 @@ button {
   }
 
   [data-glass="on"] .sidebar,
-  [data-glass="on"] .status {
-    border-color: var(--line);
-    background: var(--side);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-
-  [data-glass="on"] .status {
-    background: var(--surface);
-  }
-
-  [data-glass="on"] .segmented {
-    border-color: transparent;
-    background: var(--track);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-
-  [data-glass="on"] .seg[aria-pressed="true"] {
-    background: var(--surface);
-  }
-
+  [data-glass="on"] .segmented,
+  [data-glass="on"] .card,
+  [data-glass="on"] .list,
+  [data-glass="on"] .composer,
+  [data-glass="on"] .need,
+  [data-glass="on"] .suggest button,
+  [data-glass="on"] .model-card,
+  [data-glass="on"] .status,
   [data-glass="on"] .content {
     border-color: var(--line);
-    background: var(--bg);
+    background: var(--surface);
     box-shadow: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 
+  [data-glass="on"] .sidebar {
+    background: var(--side);
+  }
+
+  [data-glass="on"] .content {
+    background: var(--bg);
+  }
+
   [data-glass="on"] .content::before {
     display: none;
   }
+}
 
-  [data-glass="on"] .card,
-  [data-glass="on"] .composer {
-    border-color: var(--line);
-    background: var(--surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+/* The narrow window (from the 720px minimum to about 900px): the sidebar gives up width, the trail of the top bar and the
+   hint of the composer step aside (the sidebar names the project, and the line over the composer says what is missing),
+   and the controls keep their size. */
+@media (max-width: 920px) {
+  .app {
+    gap: 10px;
+    padding: 10px;
   }
+
+  .sidebar {
+    flex-basis: 208px;
+    min-width: 188px;
+  }
+
+  .topbar {
+    grid-template-columns: 0 auto minmax(0, 1fr);
+    gap: 0;
+    padding: 12px 12px 6px;
+  }
+
+  .crumb {
+    visibility: hidden;
+  }
+
+  .modes {
+    justify-content: flex-start;
+  }
+
+  .seg {
+    padding: 0 12px;
+  }
+
+  .main {
+    padding: 10px 18px 20px;
+  }
+
+  .composer-wrap {
+    padding: 4px 18px 16px;
+  }
+
+  .composer__hint {
+    display: none;
+  }
+
+  .composer__bar .send {
+    margin-left: auto;
+  }
+
+  .suggest {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .msg-user {
+    max-width: 90%;
+  }
+}
+
+.select {
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .row,
   .seg,
-  .card {
+  .btn,
+  .icon-btn,
+  .send,
+  .model-card,
+  .suggest button,
+  .composer,
+  .switch,
+  .switch::after,
+  .caret {
     transition: none;
-  }
-
-  .card:hover {
-    transform: none;
+    animation: none;
   }
 }
