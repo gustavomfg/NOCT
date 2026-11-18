@@ -19,6 +19,15 @@ pub fn first_page_payload() -> String {
     format!(r#"{{"input":{{"limit":{PAGE_LIMIT_MAX}}}}}"#)
 }
 
+/// The command that adds a project. The shell opens the system folder picker; the window sends no path.
+pub const ADD_COMMAND: &str = "workspace_add";
+
+/// The reply of an add: the saved project, or nothing when the picker was closed.
+pub fn settle_added(outcome: Outcome) -> Result<Option<Workspace>, Failure> {
+    let text = ipc::reply(outcome)?;
+    serde_json::from_str::<Option<Workspace>>(&text).map_err(|_| ipc::invalid_response())
+}
+
 /// What the sidebar's project list shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspacesView {

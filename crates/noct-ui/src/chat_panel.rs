@@ -10,11 +10,12 @@ use leptos::prelude::*;
 use leptos::web_sys::KeyboardEvent;
 use noct_core::limits::provider_chat::MAXIMUM_QUESTION_CHARACTERS;
 
-use crate::chat::{self, ChatStatus, CreatedConversation, Phase, Session};
+use crate::chat::{self, CreatedConversation, Phase, Session};
 use crate::dom;
 use crate::ipc;
 use crate::provider::{self, ConsentStatus, ProviderView};
 use crate::sidebar::{self, Shared};
+use crate::workspaces::WorkspacesView;
 
 /// One question of the window and its answer. The session is the answer's state; the turn keeps the question as it was
 /// sent, and the note of the copy button.
@@ -30,7 +31,6 @@ pub struct Turn {
 #[derive(Clone, Copy)]
 pub struct ChatState {
     shared: Shared,
-    status: RwSignal<ProviderView<ChatStatus>>,
     question: RwSignal<String>,
     turns: RwSignal<Vec<Turn>>,
     next_id: RwSignal<u64>,
@@ -53,7 +53,6 @@ impl ChatState {
     pub fn new(shared: Shared) -> Self {
         Self {
             shared,
-            status: RwSignal::new(ProviderView::Loading),
             question: RwSignal::new(String::new()),
             turns: RwSignal::new(Vec::new()),
             next_id: RwSignal::new(0),
@@ -77,16 +76,38 @@ impl ChatState {
         }
     }
 
-    /// Reads the switch. The shell answers with it, and the chat stays closed until it says otherwise.
+    /// Reads the switch. Until the shell answers, nothing is sent.
     pub fn read_status(self) {
+        let chat = self.shared.chat;
         ipc::call(chat::STATUS, move |outcome| {
-            self.status.set(provider::settle(outcome));
+            chat.set(provider::settle(outcome));
         });
     }
 
     fn enabled(self) -> bool {
-        self.status
-            .with(|view| matches!(view, ProviderView::Ready(status) if status.enabled))
+        self.chat_gate() == Gate::Ready
+    }
+
+    /// The chat switch, as the shell last said it.
+    fn chat_gate(self) -> Gate {
+        self.shared.chat.with(|view| match view {
+            ProviderView::Ready(status) if status.enabled => Gate::Ready,
+            ProviderView::Ready(_) => Gate::Missing,
+            ProviderView::Loading => Gate::Loading,
+            ProviderView::Failed(_) => Gate::Failed,
+        })
+    }
+
+    /// The default model of the current project, as the shell last said it.
+    fn model_gate(self) -> Gate {
+        self.shared.bindings.with(|bindings| match bindings {
+            Some(ProviderView::Ready(Some(bindings))) if bindings.default_binding.is_some() => {
+                Gate::Ready
+            }
+            Some(ProviderView::Ready(_)) => Gate::Missing,
+            Some(ProviderView::Failed(_)) => Gate::Failed,
+            Some(ProviderView::Loading) | None => Gate::Loading,
+        })
     }
 
     /// Whether the last question is still running.
@@ -98,7 +119,8 @@ impl ChatState {
         })
     }
 
-    /// Whether the composer may send: the chat is on, a project is chosen, the question has text, and no answer is running.
+    /// Whether the composer may send: the chat is on, a project with a model is chosen, the key is saved, the question has
+    /// text, and no answer is running.
     fn can_send(self) -> bool {
         self.enabled()
             && self
@@ -167,7 +189,20 @@ impl ChatState {
     /// granted or not, so that a missing one can be asked for.
     fn may_send(self, path: &str) -> bool {
         self.key_gate() == Gate::Ready
+            && self.model_gate() == Gate::Ready
             && matches!(self.permission_of(path), Gate::Ready | Gate::Missing)
+    }
+
+    /// Turns the chat on, from the line over the composer. The shell's reply is what the window then holds.
+    fn turn_on(self) {
+        let chat = self.shared.chat;
+        ipc::call_with(
+            chat::SET_ENABLED,
+            &chat::switch_payload(true),
+            move |outcome| {
+                chat.set(provider::settle(outcome));
+            },
+        );
     }
 
     /// Gives the permission of a project, as the card asks. The shell's reply is what the chat then holds.
@@ -203,7 +238,7 @@ impl ChatState {
         if !self.enabled() || !chat::question_is_sendable(&question) || self.busy() {
             return;
         }
-        if self.key_gate() != Gate::Ready {
+        if self.key_gate() != Gate::Ready || self.model_gate() != Gate::Ready {
             return;
         }
         match self.permission_of(&workspace) {
@@ -352,17 +387,32 @@ impl ChatState {
                 .default_binding
                 .as_ref()
                 .map(|model| model.model_id.clone())
-                .unwrap_or_else(|| "Modelo".to_string()),
-            _ => "Modelo".to_string(),
+                .unwrap_or_else(|| "Sem modelo".to_string()),
+            _ => "Sem modelo".to_string(),
         })
     }
 }
 
 /// The conversation: the switch, then each question and its answer, in order.
 pub fn thread(state: ChatState) -> impl IntoView {
+    // The conversation follows its end: a new question, the permission card and an answer that grows are scrolled into
+    // view, unless the person scrolled up to read, in which case the view stays where they left it.
+    let height = StoredValue::new(0.0_f64);
+    Effect::new(move |_| {
+        let count = state.turns.with(Vec::len);
+        let _ = state.turns.with(|turns| {
+            turns
+                .last()
+                .map(|turn| turn.session.with(|session| session.answer().len()))
+        });
+        let awaiting = state.awaiting.with(Option::is_some);
+        let previous = height.get_value();
+        let force = previous == 0.0 || awaiting;
+        let _ = count;
+        height.set_value(dom::follow_end(".main", previous, force));
+    });
     view! {
         <section class="thread" aria-label="Conversa" data-testid="chat">
-            {move || state.status.with(switch_view)}
             {move || empty_state(state)}
             <For
                 each=move || state.turns.get()
@@ -409,7 +459,6 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 <span>{move || state.model_label()}</span>
                 {move || match phase() {
                     Phase::Asking => " · enviando",
-                    Phase::Answering => " · respondendo",
                     _ => "",
                 }}
             </div>
@@ -444,6 +493,7 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                     prop:disabled=move || answer().is_empty()
                     on:click=copy
                 >
+                    {copy_icon()}
                     "Copiar"
                 </button>
                 <button
@@ -455,6 +505,7 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                     }
                     on:click=move |_| state.save(session)
                 >
+                    {bookmark_icon()}
                     "Salvar"
                 </button>
                 {move || copy_note.get().map(|words| view! { <span class="note" role="status">{words}</span> })}
@@ -479,15 +530,20 @@ pub fn composer(state: ChatState) -> impl IntoView {
     let busy = Memo::new(move |_| state.busy());
     view! {
         <div class="composer-wrap">
+            {move || need_view(state)}
             <div class="composer">
                 <label for="chat-question" class="sr-only">"Pergunte sobre o projeto"</label>
+                <div class="grow" data-value=move || state.question.get()>
                 <textarea
                     id="chat-question"
                     rows="1"
                     maxlength=MAXIMUM_QUESTION_CHARACTERS
-                    placeholder="Pergunte sobre o projeto…"
+                    placeholder=move || match sidebar::current_name(state.shared) {
+                        Some(name) => format!("Pergunte sobre {name}…"),
+                        None => "Adicione um projeto para perguntar".to_string(),
+                    }
                     prop:value=move || state.question.get()
-                    prop:disabled=move || !state.enabled()
+                    prop:disabled=move || state.shared.current.with(Option::is_none)
                     on:input=move |event| state.question.set(event_target_value(&event))
                     on:keydown=move |event: KeyboardEvent| {
                         if event.key() == "Enter" && !event.shift_key() && !event.is_composing() {
@@ -499,6 +555,7 @@ pub fn composer(state: ChatState) -> impl IntoView {
                         }
                     }
                 ></textarea>
+                </div>
                 <div class="composer__bar">
                     <button
                         class="pill"
@@ -506,10 +563,19 @@ pub fn composer(state: ChatState) -> impl IntoView {
                         data-testid="composer-model"
                         on:click=move |_| state.shared.open_settings()
                     >
-                        <span class="dot dot--off" aria-hidden="true"></span>
+                        <span
+                            class=move || {
+                                if state.model_gate() == Gate::Ready && state.key_gate() == Gate::Ready {
+                                    "dot"
+                                } else {
+                                    "dot dot--off"
+                                }
+                            }
+                            aria-hidden="true"
+                        ></span>
                         <span class="pill__name mono">{move || state.model_label()}</span>
                     </button>
-                    <span class="composer__hint">{move || hint_words(state.enabled(), state.key_gate(), state.shared.current.get().map(|path| state.permission_of(&path)))}</span>
+                    <span class="composer__hint">"Enter envia · Shift+Enter quebra linha"</span>
                     {move || {
                         if busy.get() {
                             view! {
@@ -546,23 +612,20 @@ pub fn composer(state: ChatState) -> impl IntoView {
     }
 }
 
-/// The switch, as the shell reports it. A read that is still running, or that failed, is said so.
-fn switch_view(view: &ProviderView<ChatStatus>) -> AnyView {
-    match view {
-        ProviderView::Loading => view! {
-            <p class="note" role="status" data-testid="chat-switch-loading">"Verificando o chat…"</p>
-        }
-        .into_any(),
-        ProviderView::Ready(status) => view! {
-            <section class="card">
-                <p class="note" role="status" data-testid="chat-switch">{chat::switch_words(status.enabled)}</p>
-            </section>
-        }
-        .into_any(),
-        ProviderView::Failed(failure) => view! {
-            <p class="note" role="alert" data-testid="chat-switch-error">{failure.message.clone()}</p>
-        }
-        .into_any(),
+fn copy_icon() -> impl IntoView {
+    view! {
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="12" height="12" rx="2" />
+            <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+        </svg>
+    }
+}
+
+fn bookmark_icon() -> impl IntoView {
+    view! {
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3h12v18l-6-4-6 4z" />
+        </svg>
     }
 }
 
@@ -661,24 +724,98 @@ pub fn consent_card(state: ChatState) -> impl IntoView {
     }
 }
 
-/// The line under the composer: what the chat needs before it can send.
-fn hint_words(enabled: bool, key: Gate, permission: Option<Gate>) -> &'static str {
-    const READY: &str = "Enter envia · Shift+Enter quebra linha";
-    if !enabled {
-        return READY;
+/// What the chat still needs before it can send, first missing first, with the action that resolves it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Need {
+    Project,
+    ChatOff,
+    Key,
+    Model,
+    Permission,
+    Checking,
+    Unreadable,
+}
+
+fn need_of(state: ChatState) -> Option<Need> {
+    let path = state.shared.current.get()?;
+    let gates = [
+        (state.chat_gate(), Need::ChatOff),
+        (state.key_gate(), Need::Key),
+        (state.model_gate(), Need::Model),
+        (state.permission_of(&path), Need::Permission),
+    ];
+    for (gate, need) in gates {
+        match gate {
+            Gate::Ready => {}
+            Gate::Missing => return Some(need),
+            Gate::Loading => return Some(Need::Checking),
+            Gate::Failed => return Some(Need::Unreadable),
+        }
     }
-    match key {
-        Gate::Missing => return "Adicione uma chave em Ajustes para perguntar.",
-        Gate::Loading => return "Verificando a chave…",
-        Gate::Failed => return "Não foi possível verificar a chave.",
-        Gate::Ready => {}
+    None
+}
+
+/// The button of the line over the composer: its label and what it does.
+type NeedAction = Option<(&'static str, Box<dyn Fn() + 'static>)>;
+
+/// The line over the composer: what is missing, and a button that resolves it. Nothing is shown when the chat can send.
+fn need_view(state: ChatState) -> AnyView {
+    let need = if state.shared.current.with(Option::is_none) {
+        Some(Need::Project)
+    } else {
+        need_of(state)
+    };
+    let Some(need) = need else {
+        return ().into_any();
+    };
+    // Before the first question, the empty conversation already asks for a project or a key, with its own button.
+    if matches!(need, Need::Project | Need::Key) && state.turns.with(Vec::is_empty) {
+        return ().into_any();
     }
-    match permission {
-        Some(Gate::Missing) => "Este projeto ainda não tem permissão. Enter pede a permissão.",
-        Some(Gate::Loading) => "Verificando a permissão deste projeto…",
-        Some(Gate::Failed) => "Não foi possível ler a permissão deste projeto.",
-        _ => READY,
+    let shared = state.shared;
+    let (words, action): (&str, NeedAction) = match need {
+        Need::Project => (
+            "Adicione um projeto para perguntar.",
+            Some(("Adicionar projeto", Box::new(move || shared.add_project()))),
+        ),
+        Need::ChatOff => (
+            "O chat está desligado. Nada é enviado.",
+            Some(("Ligar", Box::new(move || state.turn_on()))),
+        ),
+        Need::Key => (
+            "Falta a chave do OpenRouter.",
+            Some(("Adicionar chave", Box::new(move || shared.open_settings()))),
+        ),
+        Need::Model => (
+            "Falta o modelo deste projeto.",
+            Some(("Escolher modelo", Box::new(move || shared.open_settings()))),
+        ),
+        Need::Permission => (
+            "Este projeto ainda não pode enviar arquivos.",
+            Some((
+                "Ver permissão",
+                Box::new(move || state.awaiting.set(state.shared.current.get_untracked())),
+            )),
+        ),
+        Need::Checking => ("Verificando…", None),
+        Need::Unreadable => (
+            "Não foi possível ler o estado do chat.",
+            Some(("Abrir Ajustes", Box::new(move || shared.open_settings()))),
+        ),
+    };
+    view! {
+        <div class="need" role="status" data-testid="chat-need">
+            <span class="need__text">{words}</span>
+            {action.map(|(label, run)| {
+                view! {
+                    <button class="btn btn--sm" type="button" data-testid="chat-need-action" on:click=move |_| run()>
+                        {label}
+                    </button>
+                }
+            })}
+        </div>
     }
+    .into_any()
 }
 
 fn shield_icon() -> impl IntoView {
@@ -691,11 +828,27 @@ fn shield_icon() -> impl IntoView {
 
 /// What the conversation shows before its first question: the step that is missing first, or the project's own start.
 fn empty_state(state: ChatState) -> AnyView {
-    if state.turns.with(|turns| !turns.is_empty()) {
+    // The permission card takes the place of the start, so the card is in view with the composer under it.
+    if state.turns.with(|turns| !turns.is_empty()) || state.awaiting.with(Option::is_some) {
         return ().into_any();
     }
     if state.shared.current.with(Option::is_none) {
-        return no_project_view().into_any();
+        // Until the list has arrived, the window does not know yet whether a project exists.
+        return match state.shared.projects.get() {
+            WorkspacesView::Loading => view! {
+                <section class="empty" data-testid="empty-loading">
+                    <p class="empty__lead" role="status">"Carregando projetos…"</p>
+                </section>
+            }
+            .into_any(),
+            WorkspacesView::Failed(_) => view! {
+                <section class="empty" data-testid="empty-projects-error">
+                    <p class="empty__lead" role="status">"A lista de projetos não pôde ser lida. Tente de novo na barra lateral."</p>
+                </section>
+            }
+            .into_any(),
+            WorkspacesView::Ready(_) => no_project_view(state.shared).into_any(),
+        };
     }
     match state.key_gate() {
         Gate::Missing => no_key_view(state.shared).into_any(),
@@ -760,15 +913,23 @@ fn no_key_view(shared: Shared) -> impl IntoView {
     }
 }
 
-/// The step before any conversation: a project has to be chosen. Adding one is not available in this version.
-fn no_project_view() -> impl IntoView {
+/// The step before any conversation: a project has to be added, with the system folder picker.
+fn no_project_view(shared: Shared) -> impl IntoView {
     view! {
         <section class="empty" data-testid="empty-no-project">
             <div class="empty__icon" aria-hidden="true">{folder_icon()}</div>
             <h1 class="empty__title">"Adicione um projeto para começar"</h1>
-            <p class="empty__lead">
-                "Adicionar projetos ainda não está disponível nesta versão. Os projetos já registrados aparecem na barra lateral."
-            </p>
+            <p class="empty__lead">"Escolha a pasta de um projeto. O NOCT só lê os arquivos; nada é alterado."</p>
+            <div class="actions">
+                <button
+                    class="btn btn--primary"
+                    type="button"
+                    prop:disabled=move || shared.adding.get()
+                    on:click=move |_| shared.add_project()
+                >
+                    "Adicionar projeto"
+                </button>
+            </div>
         </section>
     }
 }

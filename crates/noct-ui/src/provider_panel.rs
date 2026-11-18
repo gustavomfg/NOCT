@@ -9,6 +9,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::chat::{self, ChatStatus};
 use crate::ipc;
 use crate::provider::{self, ConsentStatus, KeyStatus, ModelBindingsView, ProviderView};
 use crate::sidebar::{self, Shared};
@@ -68,6 +69,31 @@ pub fn model_group(shared: Shared) -> impl IntoView {
     let model_draft = RwSignal::new(String::new());
     let model_busy = RwSignal::new(false);
     let model_error = RwSignal::new(None::<String>);
+    let model_saved = RwSignal::new(false);
+    let chat_busy = RwSignal::new(false);
+    let chat_error = RwSignal::new(None::<String>);
+    let chat_on = move || {
+        shared
+            .chat
+            .with(|view| matches!(view, ProviderView::Ready(status) if status.enabled))
+    };
+    let toggle_chat = move || {
+        let next = !chat_on();
+        chat_busy.set(true);
+        chat_error.set(None);
+        ipc::call_with(
+            chat::SET_ENABLED,
+            &chat::switch_payload(next),
+            move |outcome| {
+                chat_busy.set(false);
+                match provider::settle::<ChatStatus>(outcome) {
+                    ProviderView::Ready(status) => shared.chat.set(ProviderView::Ready(status)),
+                    ProviderView::Failed(failure) => chat_error.set(Some(failure.message)),
+                    ProviderView::Loading => {}
+                }
+            },
+        );
+    };
 
     // The draft of the default model follows the saved one whenever the shell reports it, so a change of project shows
     // the model of that project.
@@ -131,6 +157,7 @@ pub fn model_group(shared: Shared) -> impl IntoView {
         };
         model_busy.set(true);
         model_error.set(None);
+        model_saved.set(false);
         ipc::call_with(
             provider::MODEL_SET,
             &provider::model_set_payload(&path, model.as_deref()),
@@ -142,6 +169,7 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                             shared
                                 .bindings
                                 .set(Some(ProviderView::Ready(Some(bindings))));
+                            model_saved.set(true);
                         }
                     }
                     ProviderView::Failed(failure) => model_error.set(Some(failure.message)),
@@ -189,7 +217,7 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                 </div>
                 {move || match shared.key.get() {
                     ProviderView::Failed(failure) => view! {
-                        <div class="error-card" role="alert" data-testid="key-error">
+                        <div class="item error-card" role="alert" data-testid="key-error">
                             <div>
                                 <strong>"Não foi possível ler o estado da chave."</strong>
                                 <p>{failure.message}</p>
@@ -245,7 +273,7 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                 }}
                 {move || {
                     key_error.get().map(|message| {
-                        view! { <p class="note" role="alert" data-testid="key-save-error">{message}</p> }
+                        view! { <p class="note note--error" role="alert" data-testid="key-save-error">{message}</p> }
                     })
                 }}
                 <div class="item">
@@ -253,8 +281,8 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                         <div class="item__name">"Modelo padrão"</div>
                         <div class="item__desc">
                             {move || match sidebar::current_name(shared) {
-                                Some(name) => format!("Do projeto {name}. Termine com :free para a versão gratuita."),
-                                None => "Escolha um projeto na barra lateral.".to_string(),
+                                Some(name) => format!("De {name}. Gratuitos terminam em :free."),
+                                None => "Adicione um projeto: o modelo é guardado por projeto.".to_string(),
                             }}
                         </div>
                     </div>
@@ -266,20 +294,40 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                         autocomplete="off"
                         autocapitalize="off"
                         spellcheck="false"
-                        placeholder="fornecedor/modelo"
+                        placeholder="deepseek/deepseek-chat-v3:free"
                         disabled=move || model_busy.get() || shared.current.get().is_none()
                         prop:value=move || model_draft.get()
-                        on:input=move |event| model_draft.set(event_target_value(&event))
+                        on:input=move |event| {
+                            model_saved.set(false);
+                            model_draft.set(event_target_value(&event));
+                        }
+                        on:keydown=move |event: leptos::web_sys::KeyboardEvent| {
+                            if event.key() == "Enter" && !model_draft.get_untracked().trim().is_empty() {
+                                write_model(Some(model_draft.get_untracked().trim().to_string()));
+                            }
+                        }
                     />
-                    <button
-                        class="btn btn--primary"
-                        type="button"
-                        data-testid="model-save"
-                        disabled=move || model_busy.get() || model_draft.get().trim().is_empty()
-                        on:click=move |_| write_model(Some(model_draft.get_untracked().trim().to_string()))
-                    >
-                        "Salvar"
-                    </button>
+                    {move || {
+                        let draft = model_draft.get();
+                        let draft = draft.trim();
+                        let saved = shared.bindings.with(|view| match view {
+                            Some(ProviderView::Ready(bindings)) => saved_model_id(bindings.as_ref()),
+                            _ => String::new(),
+                        });
+                        (!draft.is_empty() && draft != saved).then(|| {
+                            view! {
+                                <button
+                                    class="btn btn--primary"
+                                    type="button"
+                                    data-testid="model-save"
+                                    disabled=move || model_busy.get()
+                                    on:click=move |_| write_model(Some(model_draft.get_untracked().trim().to_string()))
+                                >
+                                    "Salvar"
+                                </button>
+                            }
+                        })
+                    }}
                     {move || {
                         has_saved_model(shared).then(|| {
                             view! {
@@ -298,7 +346,33 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                 </div>
                 {move || {
                     model_error.get().map(|message| {
-                        view! { <p class="note" role="alert" data-testid="model-error">{message}</p> }
+                        view! { <p class="note note--error" role="alert" data-testid="model-error">{message}</p> }
+                    })
+                }}
+                {move || {
+                    model_saved.get().then(|| {
+                        view! { <p class="note note--ok" role="status" data-testid="model-saved">"Modelo salvo."</p> }
+                    })
+                }}
+                <div class="item">
+                    <div class="item__txt">
+                        <div class="item__name">"Chat com o OpenRouter"</div>
+                        <div class="item__desc">{move || chat::switch_words(chat_on())}</div>
+                    </div>
+                    <button
+                        class="switch"
+                        type="button"
+                        role="switch"
+                        aria-label="Chat com o OpenRouter"
+                        data-testid="chat-switch"
+                        aria-checked=move || chat_on().to_string()
+                        disabled=move || chat_busy.get() || !matches!(shared.chat.get(), ProviderView::Ready(_))
+                        on:click=move |_| toggle_chat()
+                    ></button>
+                </div>
+                {move || {
+                    chat_error.get().map(|message| {
+                        view! { <p class="note note--error" role="alert" data-testid="chat-switch-error">{message}</p> }
                     })
                 }}
             </div>
@@ -409,7 +483,7 @@ pub fn permissions_group(shared: Shared) -> impl IntoView {
     view! {
         <div class="group" data-testid="permissions">
             <div class="group__title">"Projetos com permissão de envio"</div>
-            <div class="list">
+            <div class="list" hidden=move || granted.with(Vec::is_empty)>
                 {move || {
                     granted
                         .get()
@@ -446,7 +520,7 @@ pub fn permissions_group(shared: Shared) -> impl IntoView {
             }}
             {move || {
                 error.get().map(|message| {
-                    view! { <p class="note" role="alert" data-testid="permissions-error">{message}</p> }
+                    view! { <p class="note note--error" role="alert" data-testid="permissions-error">{message}</p> }
                 })
             }}
             <div class="foot-note">"A permissão é pedida na primeira pergunta de cada projeto."</div>

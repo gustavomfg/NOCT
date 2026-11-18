@@ -38,6 +38,22 @@ extern "C" {
     #[wasm_bindgen(js_namespace = window, js_name = matchMedia)]
     fn match_media(query: &str) -> MediaQueryList;
 
+    /// The first element that matches a selector, as `document.querySelector` returns it.
+    #[wasm_bindgen(js_namespace = document, js_name = querySelector)]
+    fn query_selector(selector: &str) -> Option<Element>;
+
+    #[wasm_bindgen(method, getter = scrollHeight)]
+    fn scroll_height(this: &Element) -> f64;
+
+    #[wasm_bindgen(method, getter = scrollTop)]
+    fn scroll_top(this: &Element) -> f64;
+
+    #[wasm_bindgen(method, setter = scrollTop)]
+    fn set_scroll_top(this: &Element, value: f64);
+
+    #[wasm_bindgen(method, getter = clientHeight)]
+    fn client_height(this: &Element) -> f64;
+
     /// `window.localStorage.getItem`. A storage that is blocked throws, which `catch` reports.
     #[wasm_bindgen(catch, js_namespace = ["window", "localStorage"], js_name = getItem)]
     fn storage_get(key: &str) -> Result<Option<String>, JsValue>;
@@ -49,6 +65,9 @@ extern "C" {
 
 /// The key under which the glass choice is remembered for this viewer.
 const GLASS_KEY: &str = "noct.glass";
+
+/// The key under which the last project chosen is remembered for this viewer.
+const PROJECT_KEY: &str = "noct.project";
 
 /// Sets an attribute on the `<html>` element, for example `data-theme`.
 pub fn set_root_attribute(name: &str, value: &str) {
@@ -106,4 +125,32 @@ pub fn store_glass(on: bool) {
 /// Shows the glass layer, or not, through `data-glass` on the `<html>` element.
 pub fn set_glass(on: bool) {
     set_root_attribute("data-glass", if on { "on" } else { "off" });
+}
+
+/// The path of the last project this viewer chose, or `None` when none was chosen or the storage cannot be read.
+pub fn stored_project() -> Option<String> {
+    storage_get(PROJECT_KEY)
+        .ok()
+        .flatten()
+        .filter(|path| !path.is_empty())
+}
+
+/// Remembers the project this viewer chose, so the window opens on it next time. A refused write is ignored.
+pub fn store_project(path: &str) {
+    let _ = storage_set(PROJECT_KEY, path);
+}
+
+/// Keeps a scrolling area at its end while its content grows. `previous` is the content height the last call saw: when
+/// the view was at the end then (within a few lines), or `force` is set, the area is scrolled to its new end. Returns the
+/// height to pass next time. An area that is not on the page is left alone.
+pub fn follow_end(selector: &str, previous: f64, force: bool) -> f64 {
+    let Some(area) = query_selector(selector) else {
+        return previous;
+    };
+    let height = area.scroll_height();
+    let distance = previous - area.scroll_top() - area.client_height();
+    if force || distance < 96.0 {
+        area.set_scroll_top(height);
+    }
+    height
 }

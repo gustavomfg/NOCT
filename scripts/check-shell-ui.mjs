@@ -71,13 +71,18 @@ const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
 const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
-const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model']
+const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
 // The chat's commands. The question and the save are the only writes of the chat, and each is a command the person started.
 const CHAT_COMMANDS = ['provider_chat_send', 'provider_chat_cancel', 'conversations_create', 'ai_save_assistant']
 // The words the chat shows, copied from crates/noct-ui/src/chat.rs. The check compares them, so a change there is seen here.
-const SWITCH_OFF = 'O chat com o provedor está desligado nesta versão. Nada é enviado.'
-const SWITCH_ON = 'O chat está ligado. Ele só lê os arquivos de texto do topo do projeto.'
+const NEED_CHAT_OFF = 'O chat está desligado. Nada é enviado.'
+const NEED_KEY = 'Falta a chave do OpenRouter.'
+const NEED_MODEL = 'Falta o modelo deste projeto.'
+const NEED_PERMISSION = 'Este projeto ainda não pode enviar arquivos.'
+const CHAT_MODEL = 'deepseek/deepseek-chat-v3:free'
+// The project the mock's folder picker returns.
+const ADDED_PROJECT = { path: '/work/novo', name: 'novo', favorite: false, authorized: true, availability: 'available', createdAt: '2026-01-04T00:00:00.000Z', lastOpenedAt: '2026-01-04T00:00:00.000Z' }
 const COMPLETE = 'Resposta completa. Você pode salvá-la na conversa.'
 const CANCELLED = 'Cancelado. A resposta parcial não é salva.'
 const STREAM_TRUNCATED = 'A resposta foi interrompida antes do fim. Nada foi salvo.'
@@ -143,8 +148,8 @@ function settingsSaved(theme) {
 // `mode` says how `settings_get` answers, and `projects` how `workspaces_list` answers (default `ready`). `full`
 // runs the interaction checks, which need the settings to show.
 const SCENARIOS = [
-  { name: 'ready-light', mode: 'ready', theme: 'light', full: true, expectTheme: 'light' },
-  { name: 'ready-dark', mode: 'ready', theme: 'dark', full: true, expectTheme: 'dark' },
+  { name: 'ready-light', mode: 'ready', theme: 'light', full: true, chatEnabled: false, expectTheme: 'light' },
+  { name: 'ready-dark', mode: 'ready', theme: 'dark', full: true, chatEnabled: false, expectTheme: 'dark' },
   { name: 'build-and-document-not-yet-available', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
   { name: 'ready-without-a-saved-theme-follows-the-system', mode: 'ready', theme: undefined, scheme: 'dark', expectTheme: 'dark' },
   { name: 'slow-then-ready', mode: 'slow', theme: 'light', expectTheme: 'light' },
@@ -164,12 +169,13 @@ const SCENARIOS = [
   { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, granted: ['/work/alpha'], expectTheme: 'light' },
   { name: 'provider-key-save-refused', mode: 'ready', theme: 'light', keyFails: SECURE_STORAGE_ERROR, provider: true, expectTheme: 'light' },
   { name: 'provider-reply-outside-the-contract', mode: 'invalid', theme: 'light', provider: true, expectTheme: 'light' },
-  { name: 'chat-off-by-default', mode: 'chat', theme: 'light', chatEnabled: false, expectTheme: 'light' },
+  { name: 'chat-turned-off-in-ajustes', mode: 'chat', theme: 'light', chatEnabled: false, expectTheme: 'light' },
+  { name: 'chat-needs-a-model', mode: 'chat', theme: 'light', keyConfigured: true, noModel: true, expectTheme: 'light' },
   {
     name: 'chat-streams-in-order-and-saves-on-request',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true, keyConfigured: true,
+    keyConfigured: true,
     chat: { kind: 'stream-and-save', sequence: [[1, delta(' mundo')], [0, delta('Olá')], [2, DONE]] },
     expectTheme: 'light',
   },
@@ -177,7 +183,7 @@ const SCENARIOS = [
     name: 'chat-save-refused-keeps-the-answer',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true, keyConfigured: true,
+    keyConfigured: true,
     chat: { kind: 'save-refused', sequence: [[0, delta('Olá mundo')], [1, DONE]], saveFails: { code: 'unknown-conversation', message: 'A conversa não existe mais.' } },
     expectTheme: 'light',
   },
@@ -185,7 +191,7 @@ const SCENARIOS = [
     name: 'chat-cancel-keeps-the-text-and-ignores-what-follows',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true, keyConfigured: true,
+    keyConfigured: true,
     chat: { kind: 'hold', sequence: [[0, delta('parcial')], 'hold'], afterCancel: [[1, DONE]] },
     expectTheme: 'light',
   },
@@ -193,7 +199,7 @@ const SCENARIOS = [
     name: 'chat-refused-by-the-shell',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true, keyConfigured: true,
+    keyConfigured: true,
     chat: { kind: 'refused', refused: { code: 'consent-required', message: 'Este projeto ainda não tem consentimento para o OpenRouter. Nada foi enviado.' } },
     expectTheme: 'light',
   },
@@ -201,7 +207,7 @@ const SCENARIOS = [
     name: 'chat-stream-failure-saves-nothing',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true, keyConfigured: true,
+    keyConfigured: true,
     chat: { kind: 'stream-fails', sequence: [[0, delta('pa')], [1, { kind: 'failed', code: 'stream-truncated' }]] },
     expectTheme: 'light',
   },
@@ -248,8 +254,16 @@ function installMock(config) {
   const providerState = {
     configured: config.scenario.keyConfigured === true,
     granted: Object.fromEntries((config.scenario.granted ?? []).map((path) => [path, true])),
-    models: {},
+    // A chat scenario with a key has the model of its project saved, unless it checks the missing model.
+    models:
+      config.scenario.mode === 'chat' && config.scenario.keyConfigured && !config.scenario.noModel
+        ? { '/work/alpha': { workspaceId: '/work/alpha', defaultBinding: { providerId: 'openrouter', modelId: config.chatModel } } }
+        : {},
   }
+  // The chat is on unless the scenario turned it off; Ajustes and the line over the composer change it.
+  const chatState = { enabled: config.scenario.chatEnabled !== false }
+  // The projects the folder picker added.
+  const added = []
   // `workspaces_list` answers with a page: the items, and whether more follow them.
   // The cursor of a page with more is the key of its last project, as the shell writes it.
   const cursorOf = (items) => {
@@ -280,7 +294,15 @@ function installMock(config) {
       return { workspace, provider: 'openrouter', granted: providerState.granted[workspace] }
     }
     if (command === 'models_bindings_get') return providerState.models[payload.input.workspace] ?? null
-    if (command === 'provider_chat_status') return { enabled: config.scenario.chatEnabled === true }
+    if (command === 'provider_chat_status') return { enabled: chatState.enabled }
+    if (command === 'provider_chat_set_enabled') {
+      chatState.enabled = payload.input.enabled === true
+      return { enabled: chatState.enabled }
+    }
+    if (command === 'workspace_add') {
+      added.push(config.addedProject)
+      return config.addedProject
+    }
     if (command === 'conversations_create') return { id: 'conv-1', title: 'alpha', workspace: payload.input, createdAt: '2026-01-03T00:00:00.000Z' }
     if (command === 'ai_save_assistant') {
       return { id: 'msg-1', conversationId: payload.input.conversationId, role: 'assistant', content: payload.input.content, createdAt: '2026-01-03T00:00:00.000Z' }
@@ -295,7 +317,7 @@ function installMock(config) {
     }
     if (command !== 'workspaces_list') return saved
     const more = config.scenario.more === true
-    return { items: config.projects, hasMore: more, nextCursor: more ? cursorOf(config.projects) : null }
+    return { items: [...config.projects, ...added], hasMore: more, nextCursor: more ? cursorOf(config.projects) : null }
   }
   const invalidOf = (command) =>
     command === 'workspaces_list'
@@ -360,7 +382,9 @@ function installMock(config) {
               resolve(replyOf(command, payload))
               break
             case 'empty':
-              resolve(command === 'workspaces_list' ? { items: [], hasMore: false, nextCursor: null } : [])
+              if (command === 'workspaces_list') resolve({ items: [...added], hasMore: false, nextCursor: null })
+              else if (command === 'workspace_add' || command === 'provider_chat_status') resolve(replyOf(command, payload))
+              else resolve([])
               break
             case 'error-then-retry':
               if (attempt === 1) reject(config.shellError)
@@ -495,9 +519,10 @@ async function providerFlow(page, scenario, check) {
 async function chatFlow(page, scenario, check) {
   await page.getByRole('button', { name: 'Revisar', exact: true }).click()
   const calls = () => page.evaluate(() => window.__noctCalls ?? [])
-  const switchLine = page.getByTestId('chat-switch')
-  await switchLine.waitFor({ timeout: 8000 })
   const question = page.locator('#chat-question')
+  await question.waitFor({ timeout: 8000 })
+  const need = page.getByTestId('chat-need')
+  const needText = async () => ((await need.count()) ? (await need.locator('.need__text').textContent())?.trim() : '')
   const send = page.getByTestId('chat-send')
   const answer = page.getByTestId('chat-answer')
   const save = page.getByTestId('chat-save')
@@ -506,17 +531,43 @@ async function chatFlow(page, scenario, check) {
     await page.getByRole('heading', { level: 1 }).filter({ hasText: 'alpha' }).waitFor({ timeout: 8000 })
     check((await page.locator('.suggest button').count()) === 4, 'the empty conversation offers four suggestions')
   }
-  if (!scenario.chatEnabled) {
-    check((await switchLine.textContent())?.trim() === SWITCH_OFF, 'the chat is off by default, and says that nothing is sent')
-    check(await question.isDisabled(), 'the question box is disabled while the chat is off')
+  if (scenario.chatEnabled === false) {
+    await need.getByText(NEED_CHAT_OFF, { exact: true }).waitFor({ timeout: 8000 })
+    check(await question.isEnabled(), 'the question box takes text while the chat is off')
+    await question.fill('rascunho')
     check(await send.isDisabled(), 'the send button is disabled while the chat is off')
     check(!(await calls()).some((call) => call.command === 'provider_chat_send'), 'no question is sent while the chat is off')
     // Without a key, the conversation asks for one, and the button for it is there.
     await page.getByTestId('empty-no-key').waitFor({ timeout: 8000 })
     check(await page.getByRole('button', { name: 'Adicionar chave', exact: true }).isEnabled(), 'without a key, the conversation offers to add one')
+    // "Ligar" turns the chat on, and the line then names the next missing step: the key.
+    await need.getByRole('button', { name: 'Ligar', exact: true }).click()
+    // The key is the next missing step, and the empty conversation already asks for it: the line goes away.
+    await page.waitForFunction(() => !document.querySelector('[data-testid="chat-need"]'), null, { timeout: 8000 })
+    const switches = (await calls()).filter((call) => call.command === 'provider_chat_set_enabled')
+    check(switches.length === 1 && switches[0].payload.input.enabled === true, '"Ligar" turns the chat on with one call')
+    check((await question.inputValue()) === 'rascunho', 'the draft stays in the composer')
+    await question.fill('')
     return
   }
-  check((await switchLine.textContent())?.trim() === SWITCH_ON, 'the chat says it is on, and reads only the top-level text of the project')
+  if (scenario.noModel) {
+    await need.getByText(NEED_MODEL, { exact: true }).waitFor({ timeout: 8000 })
+    check(await question.isEnabled(), 'the question box takes text without a model')
+    await question.fill(CHAT_QUESTION)
+    check(await send.isDisabled(), 'nothing can be sent without a model')
+    await need.getByRole('button', { name: 'Escolher modelo', exact: true }).click()
+    await page.getByTestId('provider').waitFor({ timeout: 8000 })
+    check(await page.getByLabel('Id do modelo padrão', { exact: true }).isEnabled(), 'the model field is enabled once a project is chosen')
+    await page.getByLabel('Id do modelo padrão', { exact: true }).fill(CHAT_MODEL)
+    await page.getByTestId('model-save').click()
+    await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
+    check((await page.getByTestId('model-card-name').textContent())?.trim() === CHAT_MODEL, 'the sidebar card shows the saved model')
+    await page.getByRole('button', { name: 'Revisar', exact: true }).click()
+    check((await page.getByTestId('composer-model').textContent())?.trim() === CHAT_MODEL, 'the composer pill shows the saved model')
+    await need.getByText(NEED_PERMISSION, { exact: true }).waitFor({ timeout: 8000 })
+    check(await send.isEnabled(), 'with a project, a key and a model, the question can be sent')
+    return
+  }
   // The project is the one the sidebar has chosen: there is no project control in the chat.
   const current = await page.locator('.proj[aria-current="true"] .project__name').textContent()
   check(current?.trim() === 'alpha', 'the question goes to the project that the sidebar has chosen')
@@ -525,8 +576,9 @@ async function chatFlow(page, scenario, check) {
   check((await question.inputValue()) === 'Resumo do projeto', 'a suggestion fills the composer')
   check(!(await calls()).some((call) => call.command === 'provider_chat_send'), 'a suggestion sends nothing')
   await question.fill(CHAT_QUESTION)
-  // The permission of the project is read first, and the send button waits for that reply: the hint says so until it comes.
-  await page.waitForFunction(() => !document.querySelector('.composer__hint')?.textContent?.includes('Verificando'), null, { timeout: 8000 })
+  // The permission of the project is read first, and the send button waits for that reply: the line says so until it comes.
+  await need.getByText(NEED_PERMISSION, { exact: true }).waitFor({ timeout: 8000 })
+  check(await question.isEnabled(), 'the question box is never disabled when a project, a key and a model exist')
   check(await send.isEnabled(), 'the send button is enabled once a project and a question are chosen')
   // The project has no permission yet: the question stays in the composer, nothing is sent, and a card asks for it.
   const card = page.getByTestId('consent-card')
@@ -544,6 +596,7 @@ async function chatFlow(page, scenario, check) {
   await page.getByTestId('consent-allow').click()
   await page.getByTestId('consent-granted').waitFor({ timeout: 8000 })
   check(await send.isEnabled(), 'after the permission, the question can be sent')
+  check((await needText()) === '', 'nothing is missing once the project is allowed')
   await send.click()
   await page.waitForFunction(() => (window.__noctCalls ?? []).some((call) => call.command === 'provider_chat_send'))
   const sent = (await calls()).find((call) => call.command === 'provider_chat_send')
@@ -633,6 +686,8 @@ try {
       projects: PROJECTS,
       shellError: SHELL_ERROR,
       modelRefused: MODEL_REFUSED,
+      chatModel: CHAT_MODEL,
+      addedProject: ADDED_PROJECT,
     })
     page.on('pageerror', (error) => result.pageErrors.push(error.message))
     const check = (condition, message) => { if (!condition) result.failures.push(message) }
@@ -721,8 +776,18 @@ try {
         }
         if (projects === 'empty') {
           await page.getByTestId('projects-empty').waitFor({ timeout: 8000 })
-          check((await page.getByTestId('projects-empty').textContent())?.includes('Nenhum projeto registrado ainda.'), 'an empty list says so')
+          check((await page.getByTestId('projects-empty').textContent())?.includes('Nenhum projeto ainda.'), 'an empty list says so')
           check(await page.getByTestId('projects').count() === 0, 'an empty list shows no items')
+          await page.getByRole('button', { name: 'Revisar', exact: true }).click()
+          await page.getByTestId('empty-no-project').waitFor({ timeout: 8000 })
+          check(await page.locator('#chat-question').isDisabled(), 'without a project, the question box is disabled and the line says why')
+          check(await page.getByTestId('empty-no-project').getByRole('button', { name: 'Adicionar projeto', exact: true }).isEnabled(), 'the empty conversation offers to add a project')
+          check(await page.getByTestId('chat-need').count() === 0, 'the line does not repeat what the empty conversation asks')
+          await page.getByTestId('add-project').click()
+          await page.locator('.proj[aria-current="true"] .project__name', { hasText: 'novo' }).waitFor({ timeout: 8000 })
+          check(await page.getByTestId('empty-no-project').count() === 0, 'an added project becomes the current one')
+          check(await page.locator('#chat-question').isEnabled(), 'with a project, the question box takes text')
+          check((await page.getByTestId('crumb').textContent())?.includes('novo'), 'the trail names the added project')
         }
         if (projects === 'ready' || projects === 'slow' || projects === 'error-then-retry') {
           const list = page.getByTestId('projects')
@@ -856,7 +921,7 @@ try {
         await chatFlow(page, { ...scenario, chatEnabled: false }, check)
 
         // A card keeps its box under the pointer: the hover changes the shadow only.
-        const card = page.locator('.card').first()
+        const card = page.getByTestId('model-card')
         const before = await card.boundingBox()
         await card.hover()
         await page.waitForTimeout(300)
@@ -963,7 +1028,7 @@ try {
           `each change in Ajustes is saved once (saves: ${settingSaves})`,
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
-        check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
+        check(count('workspaces_list') === (projects === 'error-then-retry' || projects === 'empty' ? 2 : 1), 'workspaces_list is called once, or once more after a retry or an added project')
         // The key is read once, when the window opens: Ajustes shows the key the sidebar holds, and a change is shown from the
         // reply of its own save.
         check(count('provider_key_status') === 1, `provider_key_status is read once, on load (reads: ${count('provider_key_status')})`)

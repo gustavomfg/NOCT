@@ -23,13 +23,12 @@ pub const LANGUAGE_CHOICES: [(AppLanguage, &str, &str); 2] = [
     (AppLanguage::En, "en", "English"),
 ];
 
-/// The choices of the agent safety select. The words are those of the React settings (`settings.approveFileChanges`
-/// and `settings.approveFileChangesHint`).
+/// The choices of the agent safety select, in words short enough for the narrowest window.
 pub const APPROVAL_CHOICES: [(ApprovalPolicy, &str, &str); 2] = [
     (
         ApprovalPolicy::Untrusted,
         "untrusted",
-        "Pedir aprovação antes de cada alteração de arquivo",
+        "Aprovar cada alteração de arquivo",
     ),
     (
         ApprovalPolicy::OnRequest,

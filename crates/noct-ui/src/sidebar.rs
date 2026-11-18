@@ -5,6 +5,8 @@
 use leptos::prelude::*;
 use noct_core::contracts::Workspace;
 
+use crate::chat::ChatStatus;
+use crate::dom;
 use crate::ipc;
 use crate::provider::{self, KeyStatus, ModelBindingsView, ProviderView};
 use crate::workspaces::{self, WorkspacesView};
@@ -19,6 +21,14 @@ pub struct Shared {
     pub key: RwSignal<ProviderView<KeyStatus>>,
     /// The default model of the current project, as the shell last reported it. `None` when no project is chosen.
     pub bindings: RwSignal<Option<ProviderView<Option<ModelBindingsView>>>>,
+    /// The chat switch, as the shell last reported it. The chat and Ajustes both write it.
+    pub chat: RwSignal<ProviderView<ChatStatus>>,
+    /// Whether the folder picker of "Adicionar projeto" is open.
+    pub adding: RwSignal<bool>,
+    /// The shell's message for a folder that could not be added.
+    pub add_error: RwSignal<Option<String>>,
+    /// Counts the reads of the project list; the window reads the list again each time it changes.
+    pub reload: RwSignal<u64>,
 }
 
 impl Shared {
@@ -30,6 +40,41 @@ impl Shared {
         }
     }
 
+    /// Makes a project the current one, and remembers it for the next time the window opens.
+    pub fn choose(self, path: String) {
+        dom::store_project(&path);
+        if self.current.get_untracked().as_deref() != Some(path.as_str()) {
+            self.current.set(Some(path));
+        }
+    }
+
+    /// Reads the project list again.
+    pub fn reload_projects(self) {
+        self.reload.update(|count| *count += 1);
+    }
+
+    /// Adds a project: the shell opens the system folder picker, checks the folder and saves it. The new project becomes
+    /// the current one. A closed picker changes nothing; a refused folder says why under the list.
+    pub fn add_project(self) {
+        if self.adding.get_untracked() {
+            return;
+        }
+        self.adding.set(true);
+        self.add_error.set(None);
+        ipc::call(workspaces::ADD_COMMAND, move |outcome| {
+            self.adding.set(false);
+            match workspaces::settle_added(outcome) {
+                Ok(Some(workspace)) => {
+                    self.choose(workspace.path);
+                    self.close_settings();
+                    self.reload_projects();
+                }
+                Ok(None) => {}
+                Err(failure) => self.add_error.set(Some(failure.message)),
+            }
+        });
+    }
+
     /// Leaves Ajustes, if they are open.
     pub fn close_settings(self) {
         if self.settings_open.get_untracked() {
@@ -38,8 +83,9 @@ impl Shared {
     }
 }
 
-/// The sidebar. `retry` reads the projects again, for the error card of the list.
-pub fn sidebar(shared: Shared, retry: impl Fn() + Copy + Send + Sync + 'static) -> impl IntoView {
+/// The sidebar.
+pub fn sidebar(shared: Shared) -> impl IntoView {
+    let retry = move || shared.reload_projects();
     // The key is read once, when the window opens. Ajustes reports each change of it through `shared.key`.
     ipc::call(provider::KEY_STATUS, move |outcome| {
         shared.key.set(provider::settle(outcome));
@@ -66,38 +112,62 @@ pub fn sidebar(shared: Shared, retry: impl Fn() + Copy + Send + Sync + 'static) 
         }
     });
 
-    // Pick the first project once the list arrives, so the window opens on a project and the model card has one.
+    // Once the list arrives, the window opens on the project chosen last, or on the first one. A current project that is no
+    // longer listed is replaced the same way, and an empty list leaves no project chosen.
     Effect::new(move |_| {
-        if let WorkspacesView::Ready(page) = shared.projects.get()
-            && shared.current.get_untracked().is_none()
-            && let Some(first) = page.items.first()
+        let WorkspacesView::Ready(page) = shared.projects.get() else {
+            return;
+        };
+        let listed = |path: &str| page.items.iter().any(|workspace| workspace.path == path);
+        if shared
+            .current
+            .get_untracked()
+            .as_deref()
+            .is_some_and(listed)
         {
-            shared.current.set(Some(first.path.clone()));
+            return;
+        }
+        let next = dom::stored_project()
+            .filter(|path| listed(path))
+            .or_else(|| page.items.first().map(|workspace| workspace.path.clone()));
+        match next {
+            Some(path) => shared.choose(path),
+            None => shared.current.set(None),
         }
     });
 
     view! {
+        <div class="sidebar__projects">
         <div class="label-row">
             <span>"Projetos"</span>
             <button
                 class="icon-btn"
                 type="button"
-                disabled=true
+                data-testid="add-project"
                 aria-label="Adicionar projeto"
-                title="Adicionar projeto: ainda não disponível nesta versão"
+                title="Adicionar projeto"
+                prop:disabled=move || shared.adding.get()
+                on:click=move |_| shared.add_project()
             >
                 {plus_icon()}
             </button>
         </div>
+        {move || {
+            shared.add_error.get().map(|message| {
+                view! { <p class="note note--error project__state" role="alert" data-testid="add-project-error">{message}</p> }
+            })
+        }}
         <nav class="nav" aria-label="Projetos">
             {move || projects_view(shared, retry)}
         </nav>
+        </div>
         <div class="spacer"></div>
         <div class="sidebar__bottom">
             <button
                 type="button"
                 class="model-card"
                 data-testid="model-card"
+                title=move || model_name(&shared.bindings.get(), shared.current.get().is_some())
                 on:click=move |_| shared.open_settings()
             >
                 <span class=move || dot_class(&shared.key.get(), &shared.bindings.get())></span>
@@ -116,6 +186,7 @@ pub fn sidebar(shared: Shared, retry: impl Fn() + Copy + Send + Sync + 'static) 
                 aria-current=move || shared.settings_open.get().then_some("page")
                 on:click=move |_| shared.open_settings()
             >
+                {gear_icon()}
                 "Ajustes"
             </button>
         </div>
@@ -204,7 +275,7 @@ fn projects_view(shared: Shared, retry: impl Fn() + Copy + Send + Sync + 'static
         .into_any(),
         WorkspacesView::Ready(page) if page.items.is_empty() => view! {
             <p class="note project__state" data-testid="projects-empty">
-                "Nenhum projeto registrado ainda."
+                "Nenhum projeto ainda. Use + para adicionar."
             </p>
         }
         .into_any(),
@@ -247,16 +318,27 @@ fn project_item(shared: Shared, workspace: &Workspace) -> impl IntoView {
                     (shared.current.get().as_deref() == Some(current_path.as_str())).then_some("true")
                 }
                 on:click=move |_| {
-                    shared.current.set(Some(path.clone()));
+                    shared.choose(path.clone());
                     shared.close_settings();
                 }
             >
-                <span class="project__name">{workspace.name.clone()}</span>
-                {favorite.map(|label| view! { <span class="project__tag">{label}</span> })}
+                <span class="project__head">
+                    <span class="project__name">{workspace.name.clone()}</span>
+                    {favorite.map(|label| view! { <span class="project__tag">{label}</span> })}
+                </span>
                 {note.map(|text| view! { <span class="project__note">{text}</span> })}
                 <span class="path project__path">{workspace.path.clone()}</span>
             </button>
         </li>
+    }
+}
+
+fn gear_icon() -> impl IntoView {
+    view! {
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </svg>
     }
 }
 

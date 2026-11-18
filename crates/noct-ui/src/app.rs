@@ -46,6 +46,10 @@ pub fn App() -> impl IntoView {
         settings_open: RwSignal::new(false),
         key: RwSignal::new(ProviderView::Loading),
         bindings: RwSignal::new(None),
+        chat: RwSignal::new(ProviderView::Loading),
+        adding: RwSignal::new(false),
+        add_error: RwSignal::new(None),
+        reload: RwSignal::new(0),
     };
     let settings_open = shared.settings_open;
 
@@ -64,7 +68,7 @@ pub fn App() -> impl IntoView {
     };
     read_settings();
 
-    // The chat switch is read once. Until the shell answers, the chat section says it is loading.
+    // The chat switch is read once. Until the shell answers, the line over the composer says it is being checked.
     let chat = chat_panel::ChatState::new(shared);
     chat.read_status();
     chat.watch_consent();
@@ -88,7 +92,9 @@ pub fn App() -> impl IntoView {
         });
     };
 
-    let read_workspaces = move || {
+    // The project list is read when the window opens, and again after a retry or an added project.
+    Effect::new(move |_| {
+        shared.reload.track();
         shared.projects.set(WorkspacesView::Loading);
         ipc::call_with(
             workspaces::COMMAND,
@@ -97,8 +103,7 @@ pub fn App() -> impl IntoView {
                 shared.projects.set(workspaces::settle(outcome));
             },
         );
-    };
-    read_workspaces();
+    });
 
     Effect::new(move |_| dom::set_root_attribute("data-theme", theme.get().attribute()));
 
@@ -156,7 +161,7 @@ pub fn App() -> impl IntoView {
                         }
                     })
                 }}
-                {sidebar::sidebar(shared, read_workspaces)}
+                {sidebar::sidebar(shared)}
             </aside>
 
             <div class="content">

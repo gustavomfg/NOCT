@@ -54,7 +54,7 @@ pub fn settings_panel(
                 }
                 .into_any(),
                 SettingsView::Failed(failure) => view! {
-                    <div class="error-card" role="alert" data-testid="settings-error">
+                    <div class="card error-card" role="alert" data-testid="settings-error">
                         <div>
                             <strong>"Não foi possível carregar as configurações."</strong>
                             <p>{failure.message}</p>

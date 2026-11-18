@@ -11,6 +11,13 @@ use serde_json::json;
 
 /// The shell's command that reports the switch.
 pub const STATUS: &str = "provider_chat_status";
+/// The command that turns the chat on or off, from Ajustes or from the line over the composer.
+pub const SET_ENABLED: &str = "provider_chat_set_enabled";
+
+/// The payload of [`SET_ENABLED`].
+pub fn switch_payload(enabled: bool) -> String {
+    format!(r#"{{"input":{{"enabled":{enabled}}}}}"#)
+}
 /// The shell's command that starts a question. Its answer comes on the channel it is given.
 pub const SEND: &str = "provider_chat_send";
 /// The shell's command that stops the running question.
@@ -71,9 +78,9 @@ pub fn question_is_sendable(question: &str) -> bool {
 /// The words for the switch.
 pub fn switch_words(enabled: bool) -> &'static str {
     if enabled {
-        "O chat está ligado. Ele só lê os arquivos de texto do topo do projeto."
+        "Ligado. Só os arquivos de texto do topo do projeto são lidos."
     } else {
-        "O chat com o provedor está desligado nesta versão. Nada é enviado."
+        "Desligado. Nada é enviado ao OpenRouter."
     }
 }
 
@@ -295,9 +302,9 @@ mod tests {
 
     #[test]
     fn the_switch_words_say_what_is_sent_when_it_is_off() {
-        assert!(switch_words(false).contains("desligado"));
+        assert!(switch_words(false).contains("Desligado"));
         assert!(switch_words(false).contains("Nada é enviado"));
-        assert!(switch_words(true).contains("ligado"));
+        assert!(switch_words(true).contains("Ligado"));
     }
 
     #[test]
