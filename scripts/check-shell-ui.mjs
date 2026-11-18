@@ -500,7 +500,7 @@ async function chatFlow(page, scenario, check) {
   const switchLine = page.getByTestId('chat-switch')
   await switchLine.waitFor({ timeout: 8000 })
   const question = page.locator('#chat-question')
-  const send = page.getByRole('button', { name: 'Perguntar', exact: true })
+  const send = page.getByTestId('chat-send')
   const answer = page.getByTestId('chat-answer')
   const save = page.getByTestId('chat-save')
   if (!scenario.chatEnabled) {
@@ -511,7 +511,9 @@ async function chatFlow(page, scenario, check) {
     return
   }
   check((await switchLine.textContent())?.trim() === SWITCH_ON, 'the chat says it is on, and reads only the top-level text of the project')
-  await page.locator('#chat-project').selectOption(CHAT_PROJECT)
+  // The project is the one the sidebar has chosen: there is no project control in the chat.
+  const current = await page.locator('.proj[aria-current="true"] .project__name').textContent()
+  check(current?.trim() === 'alpha', 'the question goes to the project that the sidebar has chosen')
   await question.fill(CHAT_QUESTION)
   check(await send.isEnabled(), 'the send button is enabled once a project and a question are chosen')
   await send.click()
@@ -794,7 +796,7 @@ try {
         }
         check((await page.getByTestId('settings-save-error').count()) === 0, 'a saved change shows no error')
         await page.getByRole('button', { name: 'Revisar', exact: true }).click()
-        check(await page.getByRole('heading', { name: 'Revisão', level: 1 }).isVisible(), 'a mode leaves Ajustes')
+        check((await pressed('Revisar')) === 'true', 'a mode leaves Ajustes')
 
         // The chat is off by default: its switch says so, and nothing can be sent.
         await chatFlow(page, { ...scenario, chatEnabled: false }, check)
@@ -929,7 +931,7 @@ try {
     } finally {
       await context.close()
     }
-    check(result.pageErrors.length === 0, 'the page throws no error')
+    check(result.pageErrors.length === 0, `the page throws no error${result.pageErrors.length ? `: ${result.pageErrors.join(' | ')}` : ''}`)
     result.passed = result.failures.length === 0
     results.push(result)
   }

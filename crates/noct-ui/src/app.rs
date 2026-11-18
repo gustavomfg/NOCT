@@ -1,14 +1,13 @@
-//! The window: the sidebar (`sidebar.rs`), the three modes, the settings (Ajustes) and the question box, laid out as in
-//! docs/New_Design/mockup-v2.html. The sidebar's projects come from `workspaces_list` (`workspaces.rs`) and the settings
-//! from `settings_get` (`settings.rs`). The review findings are EXAMPLE data (`examples.rs`), until the conversation
-//! replaces them. The build and document modes are not available yet: they say so and offer no
-//! control for the work, so nothing in this window runs a command or writes a file.
+//! The window: the sidebar (`sidebar.rs`), the three modes, the settings (Ajustes) and, in Revisar, the conversation with
+//! the chat (`chat_panel.rs`), laid out as in docs/New_Design/mockup-v2.html. The sidebar's projects come from
+//! `workspaces_list` (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The build and document modes
+//! are not available yet: they say so and offer no control for the work, so nothing in this window runs a command or
+//! writes a file.
 
 use leptos::prelude::*;
 
 use crate::chat_panel;
 use crate::dom;
-use crate::examples::EXAMPLE_FINDINGS;
 use crate::ipc;
 use crate::provider::ProviderView;
 use crate::provider_panel;
@@ -61,7 +60,7 @@ pub fn App() -> impl IntoView {
     read_settings();
 
     // The chat switch is read once. Until the shell answers, the chat section says it is loading.
-    let chat = chat_panel::ChatState::new();
+    let chat = chat_panel::ChatState::new(shared);
     chat.read_status();
 
     // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
@@ -213,7 +212,7 @@ pub fn App() -> impl IntoView {
                                 settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared).into_any()
                             } else {
                                 match mode.get() {
-                                    Mode::Review => review_panel(chat, shared.projects.read_only()).into_any(),
+                                    Mode::Review => chat_panel::thread(chat).into_any(),
                                     Mode::Build => unavailable_panel(
                                         "Construir",
                                         "Cada comando espera a sua aprovação. Toda alteração pode ser revertida.",
@@ -229,40 +228,11 @@ pub fn App() -> impl IntoView {
                         }}
                     </div>
                 </main>
-
+                {move || {
+                    (mode.get() == Mode::Review && !settings_open.get())
+                        .then(|| chat_panel::composer(chat))
+                }}
             </div>
-        </div>
-    }
-}
-
-/// The review mode: read-only findings, each with its severity, its file and its description. EXAMPLE.
-fn review_panel(
-    chat: chat_panel::ChatState,
-    projects: ReadSignal<WorkspacesView>,
-) -> impl IntoView {
-    view! {
-        <div class="stack">
-            <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
-            <div>
-                <h1 class="h1">"Revisão"</h1>
-                <p class="lead">"Análise somente leitura, com as evidências ao lado de cada achado."</p>
-            </div>
-            {EXAMPLE_FINDINGS
-                .iter()
-                .map(|finding| {
-                    view! {
-                        <article class="card">
-                            <div class="finding__head">
-                                <span class=finding.severity.class()>{finding.severity.label()}</span>
-                                <h2 class="h2">{finding.title}</h2>
-                            </div>
-                            <code class="path">{finding.path}</code>
-                            <p class="body">{finding.body}</p>
-                        </article>
-                    }
-                })
-                .collect_view()}
-            {chat_panel::chat_section(chat, projects)}
         </div>
     }
 }

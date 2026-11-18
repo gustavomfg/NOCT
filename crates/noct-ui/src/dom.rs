@@ -2,6 +2,9 @@
 //! and the system's colour preference. They go through the page's own DOM, as `ipc.rs` does for the shell, so
 //! the interface needs no extra crate.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -16,6 +19,16 @@ extern "C" {
     #[wasm_bindgen(thread_local_v2, js_namespace = document, js_name = documentElement)]
     static DOCUMENT_ELEMENT: Element;
 
+    /// The promise that the clipboard returns for a write.
+    pub type ClipboardPromise;
+
+    #[wasm_bindgen(method, js_name = then)]
+    fn then(this: &ClipboardPromise, on_resolved: &JsValue, on_rejected: &JsValue) -> JsValue;
+
+    /// `navigator.clipboard.writeText`. It throws when the page has no clipboard, which `catch` reports.
+    #[wasm_bindgen(catch, js_namespace = ["navigator", "clipboard"], js_name = writeText)]
+    fn write_text(text: &str) -> Result<ClipboardPromise, JsValue>;
+
     /// A media query result, as `window.matchMedia` returns it.
     pub type MediaQueryList;
 
@@ -29,6 +42,36 @@ extern "C" {
 /// Sets an attribute on the `<html>` element, for example `data-theme`.
 pub fn set_root_attribute(name: &str, value: &str) {
     DOCUMENT_ELEMENT.with(|root| root.set_attribute(name, value));
+}
+
+type Done = Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>;
+
+/// Copies `text` to the system clipboard. `done` is told whether the copy worked, once the clipboard has answered. When
+/// the page has no clipboard, it is told `false` at once.
+pub fn copy_text(text: &str, done: impl FnOnce(bool) + 'static) {
+    let done: Done = Rc::new(RefCell::new(Some(Box::new(done))));
+    let promise = match write_text(text) {
+        Ok(promise) => promise,
+        Err(_) => {
+            finish(&done, false);
+            return;
+        }
+    };
+    let on_resolved = settle(&done, true);
+    let on_rejected = settle(&done, false);
+    promise.then(&on_resolved, &on_rejected);
+}
+
+fn settle(done: &Done, copied: bool) -> JsValue {
+    let done = Rc::clone(done);
+    Closure::once_into_js(move |_: JsValue| finish(&done, copied))
+}
+
+fn finish(done: &Done, copied: bool) {
+    let next = done.borrow_mut().take();
+    if let Some(next) = next {
+        next(copied);
+    }
 }
 
 /// True when the system asks for a dark appearance.

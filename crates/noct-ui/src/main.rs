@@ -4,7 +4,6 @@ mod app;
 mod chat;
 mod chat_panel;
 mod dom;
-mod examples;
 mod ipc;
 mod provider;
 mod provider_panel;

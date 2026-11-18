@@ -580,13 +580,6 @@ button {
   border-top: 1px solid var(--line);
 }
 
-.finding__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px;
-}
-
 .sev {
   font-size: 12px;
   font-weight: 600;
