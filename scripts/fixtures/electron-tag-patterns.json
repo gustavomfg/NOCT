@@ -1,0 +1,4 @@
+{
+  "source": "electron-final (c8c378b): the tags lists of stable-release.yml and package-validation.yml, negated patterns left out",
+  "patterns": ["v[0-9]*", "v*"]
+}

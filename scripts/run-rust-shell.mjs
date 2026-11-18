@@ -1,19 +1,15 @@
 // Runs the Rust shell locally in one of two modes. docs/rust-shell.md explains each mode and what has
 // been verified.
 //
-//   node scripts/run-rust-shell.mjs dev [--data-dir <absolute path> | --from-fixture <release tag>] [--check]
-//   node scripts/run-rust-shell.mjs release [--data-dir <absolute path> | --from-fixture <release tag>] [--check]
+//   node scripts/run-rust-shell.mjs dev [--data-dir <absolute path>] [--check]
+//   node scripts/run-rust-shell.mjs release [--data-dir <absolute path>] [--check]
 //
 // dev: `trunk serve` starts the interface on the dev port, and a debug build of the shell loads it from
 //      `build.devUrl`. The Trunk server stops when the shell exits.
 // release: `trunk build --release` writes the interface, and a release build compiled with the
 //      `custom-protocol` feature embeds it and loads it. No dev server is needed.
 // --data-dir sets NOCT_DATA_DIR for the shell. Without it the shell uses its default data folder.
-// --from-fixture <tag> starts the shell from the synthetic database of a pinned release line (for example v1.0.2).
-//      The database is built from that tag's sources into target/shell-fixtures, copied into a new folder there,
-//      and the shell opens the copy. The printed path is the folder used. No real data folder is touched.
-// --check prints the plan, verifies the tools and the dev port configuration, and starts nothing. With
-//      --from-fixture it still builds and copies the fixture, so the path it prints is a real one.
+// --check prints the plan, verifies the tools and the dev port configuration, and starts nothing.
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -29,7 +25,7 @@ const SERVER_TIMEOUT_MS = 300_000
 
 function usage(message) {
   console.error(
-    `${message}\nusage: node scripts/run-rust-shell.mjs <dev|release> [--data-dir <absolute path> | --from-fixture <release tag>] [--check]`,
+    `${message}\nusage: node scripts/run-rust-shell.mjs <dev|release> [--data-dir <absolute path>] [--check]`,
   )
   process.exitCode = 2
 }
@@ -148,46 +144,22 @@ function plan(mode, dataDirectory) {
 
 // The options after the mode. A value option takes the argument that follows it, and an unknown argument is an error.
 export function parseOptions(rest) {
-  const options = { check: false, dataDirectory: undefined, fixture: undefined }
+  const options = { check: false, dataDirectory: undefined }
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index]
     if (argument === '--check') {
       options.check = true
-    } else if (argument === '--data-dir' || argument === '--from-fixture') {
+    } else if (argument === '--data-dir') {
       const value = rest[index + 1]
       index += 1
       if (value === undefined || value.startsWith('--')) throw new Error(`${argument} needs a value.`)
-      if (argument === '--data-dir') {
-        if (!path.isAbsolute(value)) throw new Error('--data-dir needs an absolute path.')
-        options.dataDirectory = value
-      } else {
-        options.fixture = value
-      }
+      if (!path.isAbsolute(value)) throw new Error('--data-dir needs an absolute path.')
+      options.dataDirectory = value
     } else {
       throw new Error(`unknown argument: ${argument}`)
     }
   }
-  if (options.dataDirectory && options.fixture) {
-    throw new Error('--data-dir and --from-fixture cannot be used together: the fixture names its own data folder.')
-  }
   return options
-}
-
-// The fixtures of this launcher are written under target/, which the repository ignores.
-const fixturesDirectory = path.join(root, 'target', 'shell-fixtures')
-
-// Copies the fixture database of a pinned release line into a new folder under target/, and returns that folder.
-// The shell opens the copy, so neither the fixture nor a data folder of an installation is written. Each call
-// makes a new folder, which stays until it is deleted.
-export async function copyFixture(tag) {
-  const { readPins, writeFixture } = await import('./release-lines.mjs')
-  if (!readPins().lines.some((line) => line.tag === tag)) {
-    throw new Error(`${tag} is not a pinned release line. The pinned lines are in scripts/fixtures/release-lines.json.`)
-  }
-  const source = writeFixture(tag, path.join(fixturesDirectory, tag, 'source'))
-  const destination = fs.mkdtempSync(path.join(fixturesDirectory, `${tag}-`))
-  fs.copyFileSync(source, path.join(destination, 'nocturne.db'))
-  return destination
 }
 
 async function main(argv) {
@@ -203,11 +175,7 @@ async function main(argv) {
 
   checkDevConfiguration()
   const tools = checkTools()
-  let dataDirectory = options.dataDirectory
-  if (options.fixture) {
-    dataDirectory = await copyFixture(options.fixture)
-    console.log(`fixture: ${options.fixture}; the shell opens a copy in ${dataDirectory}`)
-  }
+  const dataDirectory = options.dataDirectory
   for (const line of plan(mode, dataDirectory)) console.log(line)
   console.log(`tools: ${tools.cargo}; ${tools.trunk}`)
   if (check) {

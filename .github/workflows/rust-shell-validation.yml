@@ -4,13 +4,11 @@ name: Rust shell validation
 # rust-v tag, on a pull request to main, on the nightly schedule, and on a manual dispatch: the systems are chosen by the
 # `plan` job below. Each system builds the workspace, runs its tests, and compiles the release shell with
 # `custom-protocol`, then checks that the built interface is in the binary. No window is opened on any system. The
-# checks that need Node, a browser or the release-line bases run on Linux only: the permission drift, the output
-# differential, the shell's Content-Security-Policy and settings area in Chromium, the log redaction fixture and the
-# IPC contract samples.
+# checks that need Node and a browser run on Linux only: the permission drift, the shell's Content-Security-Policy and
+# settings area in Chromium, and the tests of the launcher and of the release workflow.
 #
 # The release gate in shell-release.yml waits for the run of the tag itself, and passes only when all three systems
-# succeeded on it. A dispatch can also run the Windows persistence check (`windows-persistence`), which repeats the four
-# TypeScript test files that failed once on Windows, and keeps the logs of each run. It runs only when asked for.
+# succeeded on it.
 
 on:
   push:
@@ -25,11 +23,6 @@ on:
     # Nightly, at 03:17 UTC.
     - cron: '17 3 * * *'
   workflow_dispatch:
-    inputs:
-      windows-persistence:
-        description: 'Also run the Windows persistence check: the four test files, 30 times, with their logs kept.'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -75,9 +68,6 @@ jobs:
       - name: Check out the repository with its tags
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          # The release-line bases are compiled from the sources of each tag (Linux only).
-          fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
 
       - name: Restore the Cargo, target and trunk caches
@@ -120,10 +110,6 @@ jobs:
       - name: Install the Node dependencies
         if: matrix.os == 'ubuntu-latest'
         run: npm ci
-
-      - name: Write the release-line bases and the TypeScript outputs for the differential
-        if: matrix.os == 'ubuntu-latest'
-        run: node scripts/generate-output-differential.mjs
 
       - name: Add the WebAssembly target and check the pinned toolchain
         shell: bash
@@ -168,8 +154,8 @@ jobs:
           fi
 
       - name: Run the workspace tests
-        # The ignored tests are not run here: the output differential and the row gate run on Linux below,
-        # and the operating system keyring has its own workflow (keyring-round-trip.yml) on all three systems.
+        # The ignored tests are not run here: they are benchmarks and measurements, and the operating system keyring,
+        # which has its own workflow (keyring-round-trip.yml) on all three systems.
         # --no-fail-fast runs every test binary, so one run shows every failure on a system, not only the first.
         shell: bash
         run: cargo test --workspace --no-fail-fast
@@ -188,11 +174,6 @@ jobs:
           wasm="$(basename "$1")"
           grep -a -q -F "$wasm" "$binary" || { echo "The release shell does not embed $wasm"; exit 1; }
 
-      - name: Compare the four first-slice outputs with TypeScript over the nine release lines (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: cargo test -p noct-app --test output_differential -- --ignored
-
       - name: Install the Chromium of Playwright (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: npx playwright install --with-deps chromium
@@ -205,64 +186,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: node scripts/check-shell-ui.mjs
 
-      - name: Check the log redaction fixture against TypeScript (Linux)
+      - name: Test the launcher and the release and workflow checks (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: node scripts/generate-log-redaction-fixture.mjs --check
+        run: node --test scripts/run-rust-shell.test.mjs scripts/shell-latest-json.test.mjs scripts/shell-release.test.mjs scripts/rust-shell-validation.test.mjs
 
-      - name: Check the IPC contract samples against zod and TypeScript (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: node scripts/generate-ipc-samples.mjs --check
-
-      - name: Test the launcher options and the release-line fixture copy (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: node --test scripts/run-rust-shell.test.mjs
-
-  windows-persistence:
-    name: Windows persistence check, 30 runs
-    if: github.event_name == 'workflow_dispatch' && inputs.windows-persistence
-    runs-on: windows-latest
-    timeout-minutes: 120
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install the dependencies the way the package validation does
-        run: npm ci
-
-      - name: Repeat the four persistence test files, with no retry
-        shell: bash
-        run: |
-          # The files are the ones that failed once on windows-latest with 5 s timeouts and an ENOTEMPTY on a SQLite temp
-          # folder (docs/windows-persistence-flake.md). Each run keeps its own log. A failing run is recorded, not retried.
-          mkdir -p persistence-logs
-          failures=0
-          for run in $(seq 1 30); do
-            log="persistence-logs/run-$(printf '%02d' "$run").log"
-            set +e
-            node scripts/run-tests.mjs tests/buildRollbackBoundary.test.ts tests/checkpointService.test.ts tests/databaseDurability.test.ts tests/startupRecovery.test.ts > "$log" 2>&1
-            code=$?
-            set -e
-            echo "run $run exit $code" | tee -a persistence-logs/summary.txt
-            if [ "$code" -ne 0 ]; then failures=$((failures + 1)); fi
-          done
-          echo "Failed runs: $failures of 30" | tee -a persistence-logs/summary.txt
-          test "$failures" -eq 0
-
-      - name: Keep the logs of every run
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: windows-persistence-logs
-          path: persistence-logs
-          retention-days: 30
-          if-no-files-found: warn

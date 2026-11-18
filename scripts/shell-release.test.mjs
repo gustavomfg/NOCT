@@ -31,12 +31,11 @@ function jobs(text) {
     return blocks;
 }
 const job = jobs(workflow);
-/** The tag patterns of the Electron workflows, as written in their `tags:` lists. Negated patterns are left out. */
+/** The tag patterns of the Electron workflows. Those workflows are removed from this branch, so the patterns are read from
+ *  the fixture frozen at electron-final, where they were written. */
 function electronTagPatterns() {
-    return ['stable-release.yml', 'package-validation.yml'].flatMap((file) => {
-        const text = fs.readFileSync(path.join(process.cwd(), '.github/workflows', file), 'utf8').replace(/\r\n/g, '\n');
-        return [...text.matchAll(/^\s+- '([^']+)'$/gm)].map((match) => match[1]).filter((pattern) => !pattern.startsWith('!'));
-    });
+    const frozen = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'scripts/fixtures/electron-tag-patterns.json'), 'utf8'));
+    return frozen.patterns;
 }
 /** Whether a tag pattern of a workflow, a glob with `*`, matches a tag name. */
 function matchesGlob(pattern, name) {
