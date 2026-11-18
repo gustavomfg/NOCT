@@ -105,9 +105,19 @@ impl ChatState {
                 .shared
                 .current
                 .get()
-                .is_some_and(|path| self.may_ask(&path))
+                .is_some_and(|path| self.may_send(&path))
             && chat::question_is_sendable(&self.question.get())
             && !self.busy()
+    }
+
+    /// The OpenRouter key, as the shell last said it. The chat sends only when a key is configured.
+    fn key_gate(self) -> Gate {
+        self.shared.key.with(|key| match key {
+            ProviderView::Ready(status) if status.configured => Gate::Ready,
+            ProviderView::Ready(_) => Gate::Missing,
+            ProviderView::Loading => Gate::Loading,
+            ProviderView::Failed(_) => Gate::Failed,
+        })
     }
 
     /// Reads the permission of the current project when the project changes, and again when Ajustes close, so a permission
@@ -139,27 +149,25 @@ impl ChatState {
 
     /// The permission of a project, as the shell last said it. A project whose reply has not come, or whose reply is for
     /// another project, is loading.
-    fn permission_of(self, path: &str) -> Permission {
+    fn permission_of(self, path: &str) -> Gate {
         self.consent.with(|consent| match consent {
             Some((known, ProviderView::Ready(status))) if known.as_str() == path => {
                 if status.granted {
-                    Permission::Granted
+                    Gate::Ready
                 } else {
-                    Permission::Missing
+                    Gate::Missing
                 }
             }
-            Some((known, ProviderView::Failed(_))) if known.as_str() == path => Permission::Failed,
-            _ => Permission::Loading,
+            Some((known, ProviderView::Failed(_))) if known.as_str() == path => Gate::Failed,
+            _ => Gate::Loading,
         })
     }
 
-    /// Whether a question may be sent to this project: its permission is known, granted or not, so that a missing one can
-    /// be asked for.
-    fn may_ask(self, path: &str) -> bool {
-        matches!(
-            self.permission_of(path),
-            Permission::Granted | Permission::Missing
-        )
+    /// Whether a question may be sent to this project now: the key is configured, and the project's permission is known,
+    /// granted or not, so that a missing one can be asked for.
+    fn may_send(self, path: &str) -> bool {
+        self.key_gate() == Gate::Ready
+            && matches!(self.permission_of(path), Gate::Ready | Gate::Missing)
     }
 
     /// Gives the permission of a project, as the card asks. The shell's reply is what the chat then holds.
@@ -195,14 +203,17 @@ impl ChatState {
         if !self.enabled() || !chat::question_is_sendable(&question) || self.busy() {
             return;
         }
+        if self.key_gate() != Gate::Ready {
+            return;
+        }
         match self.permission_of(&workspace) {
-            Permission::Granted => {}
-            Permission::Missing => {
+            Gate::Ready => {}
+            Gate::Missing => {
                 // Nothing is sent: the question stays in the composer, and the card asks for the permission.
                 self.awaiting.set(Some(workspace));
                 return;
             }
-            Permission::Loading | Permission::Failed => return,
+            Gate::Loading | Gate::Failed => return,
         }
         self.awaiting.set(None);
         let question = question.trim().to_string();
@@ -352,6 +363,7 @@ pub fn thread(state: ChatState) -> impl IntoView {
     view! {
         <section class="thread" aria-label="Conversa" data-testid="chat">
             {move || state.status.with(switch_view)}
+            {move || empty_state(state)}
             <For
                 each=move || state.turns.get()
                 key=|turn| turn.id
@@ -497,7 +509,7 @@ pub fn composer(state: ChatState) -> impl IntoView {
                         <span class="dot dot--off" aria-hidden="true"></span>
                         <span class="pill__name mono">{move || state.model_label()}</span>
                     </button>
-                    <span class="composer__hint">{move || hint_words(state.enabled(), state.shared.current.get().map(|path| state.permission_of(&path)))}</span>
+                    <span class="composer__hint">{move || hint_words(state.enabled(), state.key_gate(), state.shared.current.get().map(|path| state.permission_of(&path)))}</span>
                     {move || {
                         if busy.get() {
                             view! {
@@ -570,10 +582,10 @@ fn stop_icon() -> impl IntoView {
     }
 }
 
-/// What the chat knows of a project's permission to receive questions.
+/// What the chat knows of a precondition of a send: ready, missing, still being read, or not readable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Permission {
-    Granted,
+enum Gate {
+    Ready,
     Missing,
     Loading,
     Failed,
@@ -589,7 +601,7 @@ pub fn consent_card(state: ChatState) -> impl IntoView {
         if path != asked {
             return ().into_any();
         }
-        let granted = state.permission_of(&path) == Permission::Granted;
+        let granted = state.permission_of(&path) == Gate::Ready;
         let busy = state.consent_busy.get();
         let error = state.consent_error.get();
         let heading = match sidebar::current_name(state.shared) {
@@ -649,15 +661,23 @@ pub fn consent_card(state: ChatState) -> impl IntoView {
     }
 }
 
-/// The line under the composer: what the chat needs before it can send to the current project.
-fn hint_words(enabled: bool, permission: Option<Permission>) -> &'static str {
+/// The line under the composer: what the chat needs before it can send.
+fn hint_words(enabled: bool, key: Gate, permission: Option<Gate>) -> &'static str {
+    const READY: &str = "Enter envia · Shift+Enter quebra linha";
+    if !enabled {
+        return READY;
+    }
+    match key {
+        Gate::Missing => return "Adicione uma chave em Ajustes para perguntar.",
+        Gate::Loading => return "Verificando a chave…",
+        Gate::Failed => return "Não foi possível verificar a chave.",
+        Gate::Ready => {}
+    }
     match permission {
-        Some(Permission::Missing) if enabled => {
-            "Este projeto ainda não tem permissão. Enter pede a permissão."
-        }
-        Some(Permission::Loading) if enabled => "Verificando a permissão deste projeto…",
-        Some(Permission::Failed) if enabled => "Não foi possível ler a permissão deste projeto.",
-        _ => "Enter envia · Shift+Enter quebra linha",
+        Some(Gate::Missing) => "Este projeto ainda não tem permissão. Enter pede a permissão.",
+        Some(Gate::Loading) => "Verificando a permissão deste projeto…",
+        Some(Gate::Failed) => "Não foi possível ler a permissão deste projeto.",
+        _ => READY,
     }
 }
 
@@ -665,6 +685,116 @@ fn shield_icon() -> impl IntoView {
     view! {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" />
+        </svg>
+    }
+}
+
+/// What the conversation shows before its first question: the step that is missing first, or the project's own start.
+fn empty_state(state: ChatState) -> AnyView {
+    if state.turns.with(|turns| !turns.is_empty()) {
+        return ().into_any();
+    }
+    if state.shared.current.with(Option::is_none) {
+        return no_project_view().into_any();
+    }
+    match state.key_gate() {
+        Gate::Missing => no_key_view(state.shared).into_any(),
+        _ => suggestions_view(state).into_any(),
+    }
+}
+
+/// The first question of a project, with the four suggestions. A suggestion fills the composer, and sends nothing.
+fn suggestions_view(state: ChatState) -> impl IntoView {
+    const SUGGESTIONS: [(&str, &str); 4] = [
+        ("Resumo do projeto", "O que é e como está organizado"),
+        (
+            "Onde está a lógica principal?",
+            "Encontrar arquivos e funções",
+        ),
+        ("Riscos de segurança", "Pontos para revisar primeiro"),
+        (
+            "O que mudou recentemente",
+            "Pelos arquivos do topo do projeto",
+        ),
+    ];
+    let title = match sidebar::current_name(state.shared) {
+        Some(name) => format!("O que você quer entender em {name}?"),
+        None => "O que você quer entender neste projeto?".to_string(),
+    };
+    view! {
+        <section class="empty" data-testid="empty-project">
+            <div class="empty__icon" aria-hidden="true">{search_icon()}</div>
+            <h1 class="empty__title">{title}</h1>
+            <p class="empty__lead">"Somente leitura. Nada é executado nem alterado."</p>
+            <div class="suggest">
+                {SUGGESTIONS
+                    .iter()
+                    .map(|(text, note)| {
+                        let text = *text;
+                        view! {
+                            <button type="button" on:click=move |_| state.question.set(text.to_string())>
+                                {text}
+                                <small>{*note}</small>
+                            </button>
+                        }
+                    })
+                    .collect_view()}
+            </div>
+        </section>
+    }
+}
+
+/// The step before any question: a key is needed, and Ajustes is where it is added.
+fn no_key_view(shared: Shared) -> impl IntoView {
+    view! {
+        <section class="empty" data-testid="empty-no-key">
+            <div class="empty__icon" aria-hidden="true">{key_icon()}</div>
+            <h1 class="empty__title">"Conecte um modelo para começar"</h1>
+            <p class="empty__lead">"Cole a sua chave do OpenRouter. Ela fica no cofre do sistema e nunca volta para a tela."</p>
+            <div class="actions">
+                <button class="btn btn--primary" type="button" on:click=move |_| shared.open_settings()>
+                    "Adicionar chave"
+                </button>
+            </div>
+        </section>
+    }
+}
+
+/// The step before any conversation: a project has to be chosen. Adding one is not available in this version.
+fn no_project_view() -> impl IntoView {
+    view! {
+        <section class="empty" data-testid="empty-no-project">
+            <div class="empty__icon" aria-hidden="true">{folder_icon()}</div>
+            <h1 class="empty__title">"Adicione um projeto para começar"</h1>
+            <p class="empty__lead">
+                "Adicionar projetos ainda não está disponível nesta versão. Os projetos já registrados aparecem na barra lateral."
+            </p>
+        </section>
+    }
+}
+
+fn search_icon() -> impl IntoView {
+    view! {
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+        </svg>
+    }
+}
+
+fn key_icon() -> impl IntoView {
+    view! {
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="7.5" cy="15.5" r="4.5" />
+            <path d="m10.7 12.3 9.3-9.3M17 6l3 3M14 9l3 3" />
+        </svg>
+    }
+}
+
+fn folder_icon() -> impl IntoView {
+    view! {
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
         </svg>
     }
 }

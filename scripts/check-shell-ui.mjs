@@ -171,7 +171,7 @@ const SCENARIOS = [
     name: 'chat-streams-in-order-and-saves-on-request',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true,
+    chatEnabled: true, keyConfigured: true,
     chat: { kind: 'stream-and-save', sequence: [[1, delta(' mundo')], [0, delta('Olá')], [2, DONE]] },
     expectTheme: 'light',
   },
@@ -179,7 +179,7 @@ const SCENARIOS = [
     name: 'chat-save-refused-keeps-the-answer',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true,
+    chatEnabled: true, keyConfigured: true,
     chat: { kind: 'save-refused', sequence: [[0, delta('Olá mundo')], [1, DONE]], saveFails: { code: 'unknown-conversation', message: 'A conversa não existe mais.' } },
     expectTheme: 'light',
   },
@@ -187,7 +187,7 @@ const SCENARIOS = [
     name: 'chat-cancel-keeps-the-text-and-ignores-what-follows',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true,
+    chatEnabled: true, keyConfigured: true,
     chat: { kind: 'hold', sequence: [[0, delta('parcial')], 'hold'], afterCancel: [[1, DONE]] },
     expectTheme: 'light',
   },
@@ -195,7 +195,7 @@ const SCENARIOS = [
     name: 'chat-refused-by-the-shell',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true,
+    chatEnabled: true, keyConfigured: true,
     chat: { kind: 'refused', refused: { code: 'consent-required', message: 'Este projeto ainda não tem consentimento para o OpenRouter. Nada foi enviado.' } },
     expectTheme: 'light',
   },
@@ -203,7 +203,7 @@ const SCENARIOS = [
     name: 'chat-stream-failure-saves-nothing',
     mode: 'chat',
     theme: 'light',
-    chatEnabled: true,
+    chatEnabled: true, keyConfigured: true,
     chat: { kind: 'stream-fails', sequence: [[0, delta('pa')], [1, { kind: 'failed', code: 'stream-truncated' }]] },
     expectTheme: 'light',
   },
@@ -503,17 +503,29 @@ async function chatFlow(page, scenario, check) {
   const send = page.getByTestId('chat-send')
   const answer = page.getByTestId('chat-answer')
   const save = page.getByTestId('chat-save')
+  // Before the first question, a project with a key shows its name and four suggestions.
+  if (scenario.keyConfigured) {
+    await page.getByRole('heading', { level: 1 }).filter({ hasText: 'alpha' }).waitFor({ timeout: 8000 })
+    check((await page.locator('.suggest button').count()) === 4, 'the empty conversation offers four suggestions')
+  }
   if (!scenario.chatEnabled) {
     check((await switchLine.textContent())?.trim() === SWITCH_OFF, 'the chat is off by default, and says that nothing is sent')
     check(await question.isDisabled(), 'the question box is disabled while the chat is off')
     check(await send.isDisabled(), 'the send button is disabled while the chat is off')
     check(!(await calls()).some((call) => call.command === 'provider_chat_send'), 'no question is sent while the chat is off')
+    // Without a key, the conversation asks for one, and the button for it is there.
+    await page.getByTestId('empty-no-key').waitFor({ timeout: 8000 })
+    check(await page.getByRole('button', { name: 'Adicionar chave', exact: true }).isEnabled(), 'without a key, the conversation offers to add one')
     return
   }
   check((await switchLine.textContent())?.trim() === SWITCH_ON, 'the chat says it is on, and reads only the top-level text of the project')
   // The project is the one the sidebar has chosen: there is no project control in the chat.
   const current = await page.locator('.proj[aria-current="true"] .project__name').textContent()
   check(current?.trim() === 'alpha', 'the question goes to the project that the sidebar has chosen')
+  // A suggestion fills the composer, and sends nothing.
+  await page.locator('.suggest button', { hasText: 'Resumo do projeto' }).click()
+  check((await question.inputValue()) === 'Resumo do projeto', 'a suggestion fills the composer')
+  check(!(await calls()).some((call) => call.command === 'provider_chat_send'), 'a suggestion sends nothing')
   await question.fill(CHAT_QUESTION)
   // The permission of the project is read first, and the send button waits for that reply: the hint says so until it comes.
   await page.waitForFunction(() => !document.querySelector('.composer__hint')?.textContent?.includes('Verificando'), null, { timeout: 8000 })
