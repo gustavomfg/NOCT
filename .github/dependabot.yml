@@ -12,14 +12,9 @@ updates:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
     groups:
-      runtime-maintenance:
-        dependency-type: production
-        update-types: [minor, patch]
-        exclude-patterns: [better-sqlite3]
       tooling-maintenance:
         dependency-type: development
         update-types: [minor, patch]
-        exclude-patterns: [electron]
   - package-ecosystem: github-actions
     directory: /
     schedule:
