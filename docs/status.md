@@ -764,3 +764,6 @@ Nothing is changed by this note. Before the merge, choose one:
 3. Take the `main` README, and move the migration status to another file.
 
 Only `verify:release-metadata` was run for this note. The other Electron checks were not run for it.
+
+The blockers before a merge, the checks on PR #23, and the rules for both products to coexist until the TypeScript cleanup are in
+[`rust-merge-plan.md`](rust-merge-plan.md).
