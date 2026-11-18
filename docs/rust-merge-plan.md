@@ -8,16 +8,16 @@ work that wrote this document did not create, change or merge it.
 
 ## State of the checks on PR #23
 
-These are the checks of the head `e8e5c23`, as `gh pr checks 23` reported them. Commits `ac2cfda` and `b867098`, and the
-fix `df6e006`, are not in the PR head yet.
+These are the checks of the head `f2b8240`, as `gh pr checks 23` reported them after the runs finished.
 
 | Check | Result | Cause |
 | --- | --- | --- |
 | Verify source (Node 24), Verify source (Node 24.18.0) | fail | `npm run verify:release-metadata`: `README.md` does not contain `v1.0.5`. Blocker 1. |
-| Persistence reliability (windows-latest) | fail | One test file, `tests/shellRelease.test.ts`, read the release workflow with CRLF line ends. Fixed in `df6e006`. 95 other test files passed. |
-| Shell on ubuntu-latest, macos-latest, windows-latest | pending at the last read (run 44248536330, in progress) | Not finished. |
+| Persistence reliability (windows-latest) | pass on re-run; failed on the first attempt | The first attempt failed four unrelated test files (`buildRollbackBoundary`, `checkpointService`, `databaseDurability`, `startupRecovery`) on 5 s timeouts and an `ENOTEMPTY` on a SQLite temp folder. The same commit passed on re-run. Cause not established; the files passed on `e8e5c23`. Intermittent, not fixed. |
+| Shell on macos-latest, ubuntu-latest, windows-latest | pass | Run 44250397403. |
+| Validate GitHub Actions workflows | pass | Actionlint with shellcheck, after the SC2016 fix in `f2b8240`. |
 | Package and smoke; Renderer interaction and visual regression | skipped | Skipped on this run. The reason is not recorded here. |
-| Analyze (actions, c-cpp, javascript-typescript, rust), CodeQL, Keyring round trip (three systems), Persistence reliability (macOS, Ubuntu), Row gate, cargo deny and cargo audit, Validate GitHub Actions workflows | pass | |
+| Analyze (actions, c-cpp, javascript-typescript, rust), CodeQL, Keyring round trip (three systems), Persistence reliability (macOS, Ubuntu), Row gate, cargo deny and cargo audit | pass | |
 
 ## Blockers before a merge into `main`
 
@@ -29,8 +29,10 @@ fix `df6e006`, are not in the PR head yet.
    is marked latest, so the Electron updater, which reads the release marked latest, is not affected. This is not yet exercised:
    no `rust-v*` tag has been pushed, so the feed does not exist yet, and no run has checked that GitHub serves a pre-release
    download URL the way the design assumes. See [`shell-updater.md`](shell-updater.md#release-workflow).
-3. **The checks on the head.** The Windows persistence failure is fixed in `df6e006`, and the Verify source failures are blocker 1.
-   The three Shell runs must finish green on the final head. A green run on an older head does not count.
+3. **The checks on the head.** The Verify source failures are blocker 1. The Windows persistence job failed once on `f2b8240` in
+   four unrelated files and passed on re-run; that intermittent failure has no cause yet and must be explained or removed before
+   merge. The three Shell runs pass on `f2b8240`. Every check must be green on the final head, and a green run on an older head
+   does not count.
 
 ## Not blockers for the merge, but blockers for replacing Electron
 
@@ -79,6 +81,7 @@ it does not.
 ## Not verified here
 
 - No `rust-v*` tag has been pushed, so `shell-release.yml` has not run and `updater-feed` does not exist.
-- The Shell CI runs for the final head have not finished.
+- The Shell CI runs of `f2b8240` passed on macOS, Ubuntu and Windows. Any later head needs its own runs.
+- The Windows persistence failure of `f2b8240` is not explained. Its re-run passed, which is not a fix.
 - No running window has been checked on any platform.
 - The Electron checks were run only as far as PR #23 reports them. No Electron check was run locally for this document.
