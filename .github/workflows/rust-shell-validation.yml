@@ -1,17 +1,28 @@
 name: Rust shell validation
 
-# The Rust shell and its interface, on Linux, Windows and macOS. Each system builds the workspace, runs its
-# tests, and compiles the release shell with `custom-protocol`, then checks that the built interface is in
-# the binary. No window is opened on any system. The checks that need Node, a browser or the release-line
-# bases run on Linux only: the permission drift, the output differential, the shell's Content-Security-Policy
-# and settings area in Chromium, the log redaction fixture and the IPC contract samples. It runs on pushes to
-# the migration branch only, and by dispatch once this file is on the default branch. There is no pull
-# request trigger.
+# The Rust shell and its interface. Linux runs on every push to the migration branch. Windows and macOS run only on a
+# rust-v tag, on a pull request to main, on the nightly schedule, and on a manual dispatch: the systems are chosen by the
+# `plan` job below. Each system builds the workspace, runs its tests, and compiles the release shell with
+# `custom-protocol`, then checks that the built interface is in the binary. No window is opened on any system. The
+# checks that need Node, a browser or the release-line bases run on Linux only: the permission drift, the output
+# differential, the shell's Content-Security-Policy and settings area in Chromium, the log redaction fixture and the
+# IPC contract samples.
+#
+# The release gate in shell-release.yml waits for the run of the tag itself, and passes only when all three systems
+# succeeded on it.
 
 on:
   push:
     branches:
       - migration/rust
+    tags:
+      - 'rust-v*'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Nightly, at 03:17 UTC.
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -22,8 +33,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    name: Choose the systems for this event
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      systems: ${{ steps.choose.outputs.systems }}
+    steps:
+      - name: Choose the systems
+        id: choose
+        shell: bash
+        run: |
+          # Linux runs on every event. Windows and macOS run only for a pushed rust-v tag, or for any event that is not a
+          # push: a pull request to main, the nightly schedule and a manual dispatch.
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" != refs/tags/rust-v* ]]; then
+            systems='["ubuntu-latest"]'
+          else
+            systems='["ubuntu-latest","windows-latest","macos-latest"]'
+          fi
+          echo "Systems for $GITHUB_EVENT_NAME on $GITHUB_REF: $systems"
+          echo "systems=$systems" >> "$GITHUB_OUTPUT"
+
   shell:
     name: Shell on ${{ matrix.os }}
+    needs: plan
     runs-on: ${{ matrix.os }}
     # The Cargo registry, the Cargo git cache, the target directory and the trunk binary are cached per system, keyed by
     # the toolchain and the lock files. A cold build can still take most of the time limit.
@@ -31,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON(needs.plan.outputs.systems) }}
     steps:
       - name: Check out the repository with its tags
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -177,3 +210,4 @@ jobs:
       - name: Test the launcher options and the release-line fixture copy (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: node --test scripts/run-rust-shell.test.mjs
+
