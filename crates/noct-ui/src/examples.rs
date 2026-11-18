@@ -38,12 +38,6 @@ pub struct Finding {
     pub body: &'static str,
 }
 
-/// EXAMPLE. The model shown in the sidebar.
-pub const EXAMPLE_MODEL: &str = "Ollama · local";
-
-/// EXAMPLE. The state of the key vault shown in the sidebar. The backend does not report it yet.
-pub const EXAMPLE_VAULT: &str = "Desbloqueado";
-
 /// EXAMPLE. The findings of the review mode.
 pub const EXAMPLE_FINDINGS: [Finding; 3] = [
     Finding {

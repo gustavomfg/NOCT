@@ -908,13 +908,15 @@ try {
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
         check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
-        // The call log starts again at each page load. The key status is read each time Ajustes is opened after the last
-        // load: the full scenario reloads the page and then leaves Ajustes closed, the save-failure scenario opens it
-        // twice, and the others open it once.
-        const openingsAfterLoad = scenario.full ? 0 : scenario.saveFails ? 2 : 1
+        // The call log starts again at each page load. The key status is read once when the window opens, for the sidebar
+        // card, and once more each time Ajustes is opened from closed after the last load. A press of Ajustes while they are
+        // already open is not an opening: the save-failure scenario presses it twice in a row, which is one opening. The full
+        // scenario reloads the page and then leaves Ajustes closed. A change of the key is shown from the reply of its own
+        // save, so it adds no read.
+        const openingsAfterLoad = scenario.full ? 0 : 1
         check(
-          count('provider_key_status') === openingsAfterLoad,
-          `provider_key_status is read once for each opening of Ajustes after the last load (reads: ${count('provider_key_status')}, expected: ${openingsAfterLoad})`,
+          count('provider_key_status') === 1 + openingsAfterLoad,
+          `provider_key_status is read once on load and once for each opening of Ajustes after it (reads: ${count('provider_key_status')}, expected: ${1 + openingsAfterLoad})`,
         )
       }
 

@@ -8,6 +8,7 @@ use leptos::prelude::*;
 
 use crate::ipc;
 use crate::provider::{self, ConsentStatus, KeyStatus, ModelBindingsView, ProviderView};
+use crate::sidebar::Shared;
 use crate::workspaces::WorkspacesView;
 
 /// The words the section shows for the key, by the state the shell reports.
@@ -42,17 +43,22 @@ fn saved_model_id(bindings: Option<&ModelBindingsView>) -> String {
         .unwrap_or_default()
 }
 
-pub fn provider_section(projects: ReadSignal<WorkspacesView>) -> impl IntoView {
+pub fn provider_section(shared: Shared, projects: ReadSignal<WorkspacesView>) -> impl IntoView {
     // The key. The draft is the only place the key is held, and it is emptied when a save is sent.
     let key_view = RwSignal::new(ProviderView::<KeyStatus>::Loading);
     let key_error = RwSignal::new(None::<String>);
     let key_busy = RwSignal::new(false);
     let draft = RwSignal::new(String::new());
+    // The key status is shown here and on the sidebar card, so both get every value this area holds.
+    let set_key = move |view: ProviderView<KeyStatus>| {
+        shared.key.set(view.clone());
+        key_view.set(view);
+    };
 
     let read_key = move || {
-        key_view.set(ProviderView::Loading);
+        set_key(ProviderView::Loading);
         ipc::call(provider::KEY_STATUS, move |outcome| {
-            key_view.set(provider::settle(outcome));
+            set_key(provider::settle(outcome));
         });
     };
     read_key();
@@ -68,7 +74,7 @@ pub fn provider_section(projects: ReadSignal<WorkspacesView>) -> impl IntoView {
             move |outcome| {
                 key_busy.set(false);
                 match provider::settle::<KeyStatus>(outcome) {
-                    ProviderView::Ready(status) => key_view.set(ProviderView::Ready(status)),
+                    ProviderView::Ready(status) => set_key(ProviderView::Ready(status)),
                     ProviderView::Failed(failure) => key_error.set(Some(failure.message)),
                     ProviderView::Loading => {}
                 }
@@ -82,7 +88,7 @@ pub fn provider_section(projects: ReadSignal<WorkspacesView>) -> impl IntoView {
         ipc::call(provider::KEY_REMOVE, move |outcome| {
             key_busy.set(false);
             match provider::settle::<KeyStatus>(outcome) {
-                ProviderView::Ready(status) => key_view.set(ProviderView::Ready(status)),
+                ProviderView::Ready(status) => set_key(ProviderView::Ready(status)),
                 ProviderView::Failed(failure) => key_error.set(Some(failure.message)),
                 ProviderView::Loading => {}
             }
@@ -110,6 +116,9 @@ pub fn provider_section(projects: ReadSignal<WorkspacesView>) -> impl IntoView {
                     let view = provider::settle::<Option<ModelBindingsView>>(outcome);
                     if let ProviderView::Ready(bindings) = &view {
                         model_draft.set(saved_model_id(bindings.as_ref()));
+                    }
+                    if shared.current.get_untracked().as_deref() == Some(asked.as_str()) {
+                        shared.bindings.set(Some(view.clone()));
                     }
                     model_view.set(Some(view));
                 }
@@ -172,6 +181,11 @@ pub fn provider_section(projects: ReadSignal<WorkspacesView>) -> impl IntoView {
                 match provider::settle::<ModelBindingsView>(outcome) {
                     ProviderView::Ready(bindings) => {
                         model_draft.set(saved_model_id(Some(&bindings)));
+                        if shared.current.get_untracked().as_deref() == Some(path.as_str()) {
+                            shared
+                                .bindings
+                                .set(Some(ProviderView::Ready(Some(bindings.clone()))));
+                        }
                         model_view.set(Some(ProviderView::Ready(Some(bindings))));
                     }
                     ProviderView::Failed(failure) => model_error.set(Some(failure.message)),

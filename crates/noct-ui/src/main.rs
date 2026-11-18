@@ -9,6 +9,7 @@ mod ipc;
 mod provider;
 mod provider_panel;
 mod settings;
+mod sidebar;
 mod theme;
 mod workspaces;
 

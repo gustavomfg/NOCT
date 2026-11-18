@@ -1,18 +1,19 @@
-//! The window: the sidebar, the three modes, the settings (Ajustes) and the fixed question box, laid out as in
-//! docs/New_Design/mockup-vidro-painel.html. The sidebar's projects come from `workspaces_list`
-//! (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The findings, the model and the vault
-//! are EXAMPLE data (`examples.rs`). The build and document modes are not available yet: they say so and offer no
+//! The window: the sidebar (`sidebar.rs`), the three modes, the settings (Ajustes) and the question box, laid out as in
+//! docs/New_Design/mockup-v2.html. The sidebar's projects come from `workspaces_list` (`workspaces.rs`) and the settings
+//! from `settings_get` (`settings.rs`). The review findings are EXAMPLE data (`examples.rs`), until the conversation
+//! replaces them. The build and document modes are not available yet: they say so and offer no
 //! control for the work, so nothing in this window runs a command or writes a file.
 
 use leptos::prelude::*;
-use noct_core::contracts::Workspace;
 
 use crate::chat_panel;
 use crate::dom;
-use crate::examples::{EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_VAULT};
+use crate::examples::EXAMPLE_FINDINGS;
 use crate::ipc;
+use crate::provider::ProviderView;
 use crate::provider_panel;
 use crate::settings::{self, SettingsView};
+use crate::sidebar::{self, Shared};
 use crate::theme::Theme;
 use crate::workspaces::{self, WorkspacesView};
 
@@ -35,7 +36,14 @@ pub fn App() -> impl IntoView {
     let (theme_error, set_theme_error) = signal(None::<String>);
 
     let (mode, set_mode) = signal(Mode::Review);
-    let (settings_open, set_settings_open) = signal(false);
+    let shared = Shared {
+        current: RwSignal::new(None),
+        projects: RwSignal::new(WorkspacesView::Loading),
+        settings_open: RwSignal::new(false),
+        key: RwSignal::new(ProviderView::Loading),
+        bindings: RwSignal::new(None),
+    };
+    let settings_open = shared.settings_open;
 
     let (settings_view, set_settings_view) = signal(SettingsView::Loading);
     let read_settings = move || {
@@ -75,14 +83,13 @@ pub fn App() -> impl IntoView {
         });
     };
 
-    let (workspaces_view, set_workspaces_view) = signal(WorkspacesView::Loading);
     let read_workspaces = move || {
-        set_workspaces_view.set(WorkspacesView::Loading);
+        shared.projects.set(WorkspacesView::Loading);
         ipc::call_with(
             workspaces::COMMAND,
             &workspaces::first_page_payload(),
             move |outcome| {
-                set_workspaces_view.set(workspaces::settle(outcome));
+                shared.projects.set(workspaces::settle(outcome));
             },
         );
     };
@@ -114,7 +121,7 @@ pub fn App() -> impl IntoView {
     let pressed = move |target: Mode| (!settings_open.get() && mode.get() == target).to_string();
     let open_mode = move |chosen: Mode| {
         set_mode.set(chosen);
-        set_settings_open.set(false);
+        shared.close_settings();
     };
 
     view! {
@@ -144,31 +151,7 @@ pub fn App() -> impl IntoView {
                         }
                     })
                 }}
-                <nav class="nav" aria-label="Projetos">
-                    <div class="nav__label">"Projetos"</div>
-                    {move || projects_view(workspaces_view.get(), read_workspaces)}
-                </nav>
-                <div class="spacer"></div>
-                <div class="sidebar__bottom">
-                    <div class="status">
-                        <div class="status__label">"Modelo"</div>
-                        <div class="status__value">{EXAMPLE_MODEL}</div>
-                        <div class="status__note">"Exemplo"</div>
-                    </div>
-                    <div class="status">
-                        <div class="status__label">"Cofre de chaves"</div>
-                        <div class="status__value">{EXAMPLE_VAULT}</div>
-                        <div class="status__note">"Exemplo: ainda não lido do backend"</div>
-                    </div>
-                    <button
-                        type="button"
-                        class="nav__item nav__item--muted row"
-                        aria-current=move || settings_open.get().then_some("page")
-                        on:click=move |_| set_settings_open.set(true)
-                    >
-                        "Ajustes"
-                    </button>
-                </div>
+                {sidebar::sidebar(shared, read_workspaces)}
             </aside>
 
             <div class="content">
@@ -205,10 +188,10 @@ pub fn App() -> impl IntoView {
                     <div class="stack">
                         {move || {
                             if settings_open.get() {
-                                settings_panel(settings_view, saving, save_error, save_setting, read_settings, workspaces_view).into_any()
+                                settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared).into_any()
                             } else {
                                 match mode.get() {
-                                    Mode::Review => review_panel(chat, workspaces_view).into_any(),
+                                    Mode::Review => review_panel(chat, shared.projects.read_only()).into_any(),
                                     Mode::Build => unavailable_panel(
                                         "Construir",
                                         "Cada comando espera a sua aprovação. Toda alteração pode ser revertida.",
@@ -227,64 +210,6 @@ pub fn App() -> impl IntoView {
 
             </div>
         </div>
-    }
-}
-
-/// The sidebar's project list, or the state of its read: loading, nothing registered yet, the shell's error with
-/// a way to try again, or the list itself.
-fn projects_view(view: WorkspacesView, retry: impl Fn() + Copy + Send + Sync + 'static) -> AnyView {
-    match view {
-        WorkspacesView::Loading => view! {
-            <p class="note project__state" role="status" data-testid="projects-loading">
-                "Carregando projetos…"
-            </p>
-        }
-        .into_any(),
-        WorkspacesView::Failed(failure) => view! {
-            <div class="status error-card" role="alert" data-testid="projects-error">
-                <p>{failure.message}</p>
-                <button class="btn" type="button" on:click=move |_| retry()>
-                    "Tentar novamente"
-                </button>
-            </div>
-        }
-        .into_any(),
-        WorkspacesView::Ready(page) if page.items.is_empty() => view! {
-            <p class="note project__state" data-testid="projects-empty">
-                "Nenhum projeto registrado ainda."
-            </p>
-        }
-        .into_any(),
-        WorkspacesView::Ready(page) => {
-            let more = page.has_more.then(|| {
-                view! {
-                    <p class="note project__state" role="status" data-testid="projects-more">
-                        {workspaces::MORE_NOTE}
-                    </p>
-                }
-            });
-            view! {
-                <ul class="projects" data-testid="projects">
-                    {page.items.iter().map(project_item).collect_view()}
-                </ul>
-                {more}
-            }
-            .into_any()
-        }
-    }
-}
-
-/// One project: its name, a tag when it is a favourite, a note when it cannot be used as it is, and its folder.
-fn project_item(workspace: &Workspace) -> impl IntoView {
-    let favorite = workspace.favorite.then_some("Favorito");
-    let note = workspaces::note(workspace);
-    view! {
-        <li class="project row">
-            <span class="project__name">{workspace.name.clone()}</span>
-            {favorite.map(|label| view! { <span class="project__tag">{label}</span> })}
-            {note.map(|text| view! { <span class="project__note">{text}</span> })}
-            <span class="path project__path">{workspace.path.clone()}</span>
-        </li>
     }
 }
 
@@ -344,7 +269,7 @@ fn settings_panel(
     save_error: ReadSignal<Option<String>>,
     save: impl Fn(String) + Copy + Send + Sync + 'static,
     retry: impl Fn() + Copy + Send + Sync + 'static,
-    projects: ReadSignal<WorkspacesView>,
+    shared: Shared,
 ) -> impl IntoView {
     let ready = move || matches!(settings_view.get(), SettingsView::Ready(_));
     let saved = move || match settings_view.get() {
@@ -496,7 +421,7 @@ fn settings_panel(
                 }}
             </section>
             <p class="note">"O tema muda pelo botão da barra lateral, que o troca e o salva."</p>
-            {provider_panel::provider_section(projects)}
+            {provider_panel::provider_section(shared, shared.projects.read_only())}
         </div>
     }
 }
