@@ -30,20 +30,27 @@ function jobs(text: string): Map<string, string> {
 
 const job = jobs(workflow)
 
+/** The tag patterns of the Electron workflows, as written in their `tags:` lists. Negated patterns are left out. */
+function electronTagPatterns(): string[] {
+  return ['stable-release.yml', 'package-validation.yml'].flatMap((file) => {
+    const text = fs.readFileSync(path.join(process.cwd(), '.github/workflows', file), 'utf8')
+    return [...text.matchAll(/^\s+- '([^']+)'$/gm)].map((match) => match[1]).filter((pattern) => !pattern.startsWith('!'))
+  })
+}
+
+/** Whether a tag pattern of a workflow, a glob with `*`, matches a tag name. */
+function matchesGlob(pattern: string, name: string): boolean {
+  return new RegExp(`^${pattern.replace(/\*/g, '.*')}$`).test(name)
+}
+
 describe('shell release workflow', () => {
   it('starts only on a rust-v* tag push, and no Electron workflow runs on that tag', () => {
     const triggers = workflow.slice(workflow.indexOf('\non:\n') + 1, workflow.indexOf('\npermissions:'))
 
     expect(triggers).toBe("on:\n  push:\n    tags:\n      - 'rust-v*'\n")
-    // The Electron release and validation workflows match their tags by glob. A shell tag must match none of them,
-    // or both workflows would run, and two releases could claim one tag.
-    for (const file of ['stable-release.yml', 'package-validation.yml']) {
-      const text = fs.readFileSync(path.join(process.cwd(), '.github/workflows', file), 'utf8')
-      const patterns = [...text.matchAll(/^\s+- '([^']+)'$/gm)].map((match) => match[1]).filter((p) => !p.startsWith('!'))
-      for (const pattern of patterns) {
-        const glob = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`)
-        expect(glob.test('rust-v1.0.5'), `${file} tag pattern ${pattern}`).toBe(false)
-      }
+    // A shell tag must match no Electron tag pattern, or both workflows would run and two releases could claim one tag.
+    for (const pattern of electronTagPatterns()) {
+      expect(matchesGlob(pattern, 'rust-v1.0.5'), `Electron tag pattern ${pattern}`).toBe(false)
     }
   })
 
@@ -134,5 +141,58 @@ describe('shell release workflow', () => {
     for (const [name, block] of job) {
       if (name !== 'publish') expect(block, `${name} must not publish`).not.toContain('gh release create')
     }
+  })
+
+  it('serves the updater from the updater-feed channel that the configuration names, and no Electron tag matches it', () => {
+    const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'crates/noct-app/tauri.conf.json'), 'utf8'))
+    const feed = 'updater-feed'
+    expect(config.plugins.updater.endpoints).toEqual([
+      `https://github.com/gustavomfg/NOCT/releases/download/${feed}/latest.json`,
+    ])
+    expect(workflow).toContain(`FEED_TAG: ${feed}`)
+    for (const pattern of electronTagPatterns()) {
+      expect(matchesGlob(pattern, feed), `Electron tag pattern ${pattern}`).toBe(false)
+    }
+    expect(matchesGlob('rust-v*', feed)).toBe(false)
+  })
+
+  it('publishes every shell release as a pre-release that is never the latest, and never with a latest mark', () => {
+    const publish = job.get('publish') ?? ''
+    // Two creations at most: the release of the tag, and the feed the first time it is made. Each command runs to the
+    // blank line that ends its step.
+    const commands = publish.split('gh release create').slice(1).map((part) => part.split(/\n\s*\n/)[0] ?? '')
+    expect(commands).toHaveLength(2)
+    for (const command of commands) {
+      expect(command).toContain('--prerelease')
+      expect(command).toContain('--latest=false')
+    }
+    expect(workflow).not.toMatch(/--latest(?!=false)/)
+    expect(workflow).not.toMatch(/gh release edit/)
+    expect(workflow).not.toMatch(/make_latest|make-latest/)
+  })
+
+  it('checks at run time that the shell release is a pre-release and that the latest release is another one', () => {
+    const publish = job.get('publish') ?? ''
+    expect(publish).toContain('--json isPrerelease')
+    expect(publish).toContain('repos/$GITHUB_REPOSITORY/releases/latest')
+  })
+
+  it('attaches the signed artifacts to the shell release, but the manifest only to the feed', () => {
+    const publish = job.get('publish') ?? ''
+    expect(publish).toContain("find release-output -type f ! -name latest.json")
+    expect(publish).toContain('gh release upload "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --clobber')
+    expect(publish).not.toMatch(/gh release create "\$RELEASE_TAG" release-output\/\*/)
+  })
+
+  it('never moves the feed back to an older version, and checks that the feed serves the signed manifest', () => {
+    const publish = job.get('publish') ?? ''
+    expect(publish).toContain('refusing to move it back')
+    expect(publish).toContain('--pattern latest.json --dir "$RUNNER_TEMP/feed" --clobber')
+    expect(publish).toContain('cmp "$RUNNER_TEMP/published/latest.json" release-output/latest.json')
+  })
+
+  it('runs the publication one at a time, because the feed is shared by every shell release', () => {
+    expect(job.get('publish')).toContain('group: shell-updater-feed')
+    expect(job.get('publish')).toMatch(/group: shell-updater-feed\n {6}cancel-in-progress: false/)
   })
 })

@@ -2,8 +2,9 @@ name: Release · shell
 
 # The Rust shell's release. It is written and not yet run: the only trigger is a `rust-v*` tag, and no step of this change
 # pushes one. A `rust-v` tag starts no Electron workflow, because stable-release.yml and package-validation.yml match
-# `v` tags only. docs/shell-updater.md lists what must be settled before the first tag. The signing secrets are read
-# only by the `sign` job, from the `release` environment.
+# `v` tags only. Each shell release is a pre-release that is never the latest. The updater reads the manifest of the
+# `updater-feed` pre-release, which this workflow moves to the new release. docs/shell-updater.md lists what must be
+# settled before the first tag. The signing secrets are read only by the `sign` job, from the `release` environment.
 
 on:
   push:
@@ -268,6 +269,10 @@ jobs:
     needs: sign
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The updater feed is one release that every shell release updates, so two publications never run at once.
+    concurrency:
+      group: shell-updater-feed
+      cancel-in-progress: false
     permissions:
       contents: write
       id-token: write
@@ -276,6 +281,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ github.ref_name }}
       RELEASE_SHA: ${{ github.sha }}
+      FEED_TAG: updater-feed
     steps:
       - name: Check out the tagged commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -308,14 +314,49 @@ jobs:
         with:
           subject-path: 'release-output/*'
 
-      - name: Publish the release from the exact tag
+      - name: Publish the release from the exact tag as a pre-release, never as the latest
+        # The Electron application reads the release marked latest, so a shell release must not take that mark. The
+        # manifest is not attached here: it goes to the updater feed, below.
         shell: bash
         run: |
-          gh release create "$RELEASE_TAG" release-output/* --verify-tag \
+          mapfile -t artifacts < <(find release-output -type f ! -name latest.json)
+          test "${#artifacts[@]}" -gt 0
+          gh release create "$RELEASE_TAG" "${artifacts[@]}" --verify-tag --prerelease --latest=false \
             --notes-file "docs/releases/$RELEASE_TAG.md" --title "NOCT Shell $RELEASE_TAG"
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" != "$RELEASE_TAG" || {
+            echo 'The shell release was marked latest; the Electron updater reads that release.' >&2
+            exit 1
+          }
 
-      - name: Verify the published manifest is the one that was signed
+      - name: Move the updater feed to this release
+        # The feed is the pre-release `updater-feed`, whose only asset is latest.json. It is created once and then
+        # replaced. It never moves back to an older version: an installed copy would refuse that version, and the feed
+        # would hide a newer release.
         shell: bash
         run: |
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$RUNNER_TEMP/published"
+          version="$(node -p "require('./crates/noct-app/tauri.conf.json').version")"
+          if gh release view "$FEED_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release download "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$RUNNER_TEMP/feed" --clobber
+            node -e '
+              const parts = (text) => text.split(".").map(Number)
+              const next = parts(process.argv[1])
+              const current = require(process.argv[2]).version
+              const order = [0, 1, 2].map((index) => next[index] - parts(current)[index]).find((difference) => difference !== 0) ?? 0
+              if (order < 0) {
+                console.error(`The feed holds ${current}, newer than ${process.argv[1]}; refusing to move it back.`)
+                process.exit(1)
+              }
+            ' "$version" "$RUNNER_TEMP/feed/latest.json"
+            gh release upload "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$FEED_TAG" release-output/latest.json --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" \
+              --prerelease --latest=false --title "Updater feed" \
+              --notes "The manifest the NOCT shell's updater reads. It names the newest shell release; each shell release is a pre-release."
+          fi
+
+      - name: Verify the feed serves the manifest that was signed
+        shell: bash
+        run: |
+          gh release download "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$RUNNER_TEMP/published" --clobber
           cmp "$RUNNER_TEMP/published/latest.json" release-output/latest.json

@@ -238,7 +238,7 @@ WKWebView, are not verified.
 
 The shell carries the official updater plugin, `tauri-plugin-updater`, pinned at 2.14.1 in `Cargo.toml`. Its
 configuration is `plugins.updater` in `crates/noct-app/tauri.conf.json`: the public key of the release, the one HTTPS
-endpoint of the latest release, and `requireSignedVersion`. `crates/noct-app/src/updater.rs` registers the plugin only
+endpoint of the `updater-feed` channel, and `requireSignedVersion`. `crates/noct-app/src/updater.rs` registers the plugin only
 when that section is complete and safe, and the shipped section is.
 
 Registering the plugin makes no request: its setup only stores the configuration. Nothing calls its `check`,

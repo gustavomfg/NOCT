@@ -20,8 +20,10 @@ const CONFIG: &str = include_str!("../tauri.conf.json");
 /// docs/shell-updater.md.
 const UPDATER_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwNTAzQjYyNEQ4N0Q2NDYKUldSRzFvZE5ZanRRUU54c3A1UHRkUG1yNE5nL3Q5cm9IMHJONjBIVVRZRGZDNVZXMVNaRFJxQncK";
 
+/// The one endpoint: the manifest of the `updater-feed` channel, a pre-release that the release workflow updates. It is
+/// not the release marked "latest", which the Electron application reads, and no shell release is ever marked latest.
 const RELEASE_ENDPOINT: &str =
-    "https://github.com/gustavomfg/NOCT/releases/latest/download/latest.json";
+    "https://github.com/gustavomfg/NOCT/releases/download/updater-feed/latest.json";
 
 fn config() -> Value {
     serde_json::from_str(CONFIG).expect("tauri.conf.json is JSON")
@@ -49,15 +51,21 @@ fn the_committed_public_key_file_is_the_configured_key() {
     assert_eq!(file.trim_end(), UPDATER_PUBKEY);
 }
 
+/// The endpoint is the `updater-feed` channel and nothing else: HTTPS, under this repository's download path, and
+/// never the "latest" release, which the Electron application reads and which a shell release must not take.
 #[test]
-fn the_updater_reads_one_https_endpoint_of_the_release() {
+fn the_updater_reads_one_https_endpoint_of_the_updater_feed_channel() {
     let config = config();
 
     assert_eq!(
         updater(&config)["endpoints"],
         serde_json::json!([RELEASE_ENDPOINT])
     );
-    assert!(RELEASE_ENDPOINT.starts_with("https://"));
+    assert_eq!(
+        RELEASE_ENDPOINT,
+        "https://github.com/gustavomfg/NOCT/releases/download/updater-feed/latest.json"
+    );
+    assert!(!RELEASE_ENDPOINT.contains("/releases/latest"));
 }
 
 /// The updater accepts an update only when its signature names the version the manifest announces. Without this
