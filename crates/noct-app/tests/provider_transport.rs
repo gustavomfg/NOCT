@@ -4,7 +4,7 @@
 mod common;
 
 use std::io::Write;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -340,20 +340,25 @@ fn a_rate_limit_and_a_server_error_map_to_their_fixed_codes() {
 }
 
 #[test]
-fn a_connection_that_cannot_be_made_is_a_transport_failure_that_holds_no_key() {
-    let port = {
-        let probe = TcpListener::bind("127.0.0.1:0").unwrap();
-        probe.local_addr().unwrap().port()
-    };
+fn a_connection_closed_before_any_reply_is_a_transport_failure_that_holds_no_key() {
+    // The server owns its port for the whole test and closes each connection without a reply. A port that was freed
+    // on purpose is not used: another test of this binary can bind it in the meantime, and then the connection is
+    // answered by that test, not refused. The failure asserted is the same one: a transport failure, with no key.
+    let server = serve(|_, _| {});
     let target = verify_target(
-        &local_approval(port),
+        &local_approval(server.port),
         &Resolve(|| panic!("an IP literal is not resolved")),
-        &local_url(port),
+        &local_url(server.port),
         ProviderSource::Local,
     )
     .unwrap();
     let (_, outcome) = chat(&target, &limits());
-    let failure = outcome.expect_err("nothing listens on the port");
+    let failure = outcome.expect_err("the server closes without a reply");
     assert_eq!(failure, ChatFailure::Transport);
     assert!(!format!("{failure:?}").contains(KEY));
+    assert_eq!(
+        server.connections(),
+        1,
+        "the request reached the server once"
+    );
 }
