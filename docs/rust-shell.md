@@ -323,3 +323,15 @@ These are recorded in code and in the ADR as well. The workspace folder rules fo
 - To enable it, the owner fills `pubkey` and `endpoints` in a reviewed change marked `[security-review]`. The code that
   checks for and installs an update is not written yet, and it needs its own review.
 
+## Build provenance (dry run)
+
+- `.github/workflows/build-provenance-dry-run.yml` attests one small subject file, written by the job from the commit and the
+  run. It runs on a push to `migration/rust` that changes the workflow, and on demand. It publishes nothing: no release, no
+  asset, no package, no branch change.
+- The only action it uses is `actions/attest-build-provenance`, pinned to the commit of `v4.2.2`
+  (`4d101475d8b20a2381f78447822ac1eab6504dd8`). No other action, no repository secret. The attestation is signed with the
+  OpenID Connect token of the job, which needs `id-token: write` and `attestations: write`, and no stored credential.
+- The attestation is recorded in GitHub's attestation store and in the public Sigstore transparency log, as the action does.
+  The subject holds only the commit SHA and the run id, which are public for this repository.
+- The Electron release workflows are not changed. A real release would attest its built files, which needs its own review.
+

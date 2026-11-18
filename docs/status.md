@@ -21,7 +21,7 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
 | P7: UI slices | `1103543` (`Construir` and `Documentar` not yet available), editable Ajustes (this change) | `1103543` | Shell and row gate on `1103543`: success on Ubuntu, Windows and macOS; row gate success. | Real window. Chromium is the approximation the check uses. |
 | P8: updater | `tauri-plugin-updater` 2.14.1 pinned, configured empty, registered only when complete and safe (this change) | | | |
-| P9: release dry run | stopped in round 1 | | | |
+| P9: release dry run | `build-provenance-dry-run.yml`, one pinned action, a subject file from the run (this change) | | | |
 | P10: documents | `85f4cb4`, `5748b33`, `f1f5b5f`, `4a62c3c` | `4a62c3c` | Shell and row gate on `4a62c3c`: success on Ubuntu, Windows and macOS; row gate success. | The phase table is not revised beyond ADR decision 4, the counts and the command list. |
 
 ### CI by system (finished runs only)
@@ -328,6 +328,22 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   `-D warnings` for `wasm32-unknown-unknown` passed; the workspace has fmt, clippy `-D warnings`, and 578 tests passed, 0
   failed, 19 ignored.
 - Not verified: a real window. Chromium is an approximation of the webview.
+
+### P9 detail: build provenance dry run
+
+- New workflow `.github/workflows/build-provenance-dry-run.yml`. It writes `dry-run/subject.txt` (the commit and the run id),
+  prints its digest, and attests it with `actions/attest-build-provenance` pinned to `4d101475d8b20a2381f78447822ac1eab6504dd8`
+  (`v4.2.2`, the latest stable release, which is the commit its tag points to).
+- No repository secret, and no `actions/checkout`: the subject is made by the job, so the action is the only one used. The job
+  permissions are `contents: read`, `id-token: write` and `attestations: write`, the minimum the attestation needs.
+- Triggers: a push to `migration/rust` that changes the workflow file, and `workflow_dispatch`. Not `main`, not pull requests.
+- The Electron release workflows are not changed.
+- Checks: the YAML parses; the triggers, the permissions and the single `uses` line were read back with a parser; the pinned
+  reference is a 40-character commit that the API returned.
+- Not verified yet at this point: the run itself and the verification of the attestation. The verification is run after the run
+  finishes, with `gh attestation verify` on the same subject content.
+- Decision for the owner: the attestation records the commit and the run in the public transparency log. This is what the
+  action does, and the subject holds only public values. Confirm this is acceptable for the dry run.
 
 ### P8 detail: updater (prepared, not configured)
 
