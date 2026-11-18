@@ -1,6 +1,7 @@
 //! Model bindings per workspace. Port of `WorkspaceModelBindingRepository.ts`.
 
 use noct_core::ai::bindings::WorkspaceModelBindings;
+use noct_core::ai::model::ModelReference;
 use noct_core::validation::text;
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -58,6 +59,36 @@ impl<'a> ModelBindings<'a> {
             params![bindings.workspace_id, json, iso_now()?],
         )?;
         Ok(bindings)
+    }
+
+    /// Stores the default model and keeps every other field of the row. The row is read, its default is replaced, and
+    /// the whole row is written again, all in one transaction: either all of it is stored or none is. `None` clears the
+    /// default only. A missing row starts with no other field set.
+    pub fn set_default_model(
+        &self,
+        workspace_id: &str,
+        default: Option<ModelReference>,
+    ) -> Result<WorkspaceModelBindings> {
+        let workspace_id = workspace_text(workspace_id)?;
+        let default = default
+            .map(ModelReference::validated)
+            .transpose()
+            .map_err(contract_error)?;
+        let transaction = self.conn.unchecked_transaction()?;
+        let current = self
+            .get(&workspace_id)?
+            .unwrap_or_else(|| WorkspaceModelBindings {
+                workspace_id: workspace_id.clone(),
+                default_binding: None,
+                embedding_binding: None,
+                remote_embedding_allowed: None,
+            });
+        let saved = self.set(WorkspaceModelBindings {
+            default_binding: default,
+            ..current
+        })?;
+        transaction.commit()?;
+        Ok(saved)
     }
 
     pub fn delete(&self, workspace_id: &str) -> Result<bool> {
