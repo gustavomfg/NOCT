@@ -267,7 +267,7 @@ function installMock(config) {
 // The provider section of Ajustes. The key field is write-only: it is a password field, it is emptied when the key is
 // sent, and the key is in no part of the page afterwards. The consent is asked for one project at a time, and says
 // what may be sent before it is confirmed.
-async function providerFlow(page, scenario, check, result) {
+async function providerFlow(page, scenario, check) {
   const input = page.getByLabel('Chave do OpenRouter', { exact: true })
   const save = page.getByRole('button', { name: 'Salvar chave', exact: true })
   const calls = () => page.evaluate(() => window.__noctCalls ?? [])
@@ -383,7 +383,7 @@ try {
       await page.goto(`http://127.0.0.1:${server.address().port}/`)
       // The states of the settings read are shown in Ajustes, so it is opened first.
       await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
-      if (scenario.provider) await providerFlow(page, scenario, check, result)
+      if (scenario.provider) await providerFlow(page, scenario, check)
       const values = page.getByTestId('settings-values')
       const themeButton = page.getByRole('button', { name: /^Usar tema (escuro|claro)$/ })
       const html = page.locator('html')
