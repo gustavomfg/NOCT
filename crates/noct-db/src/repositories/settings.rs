@@ -32,6 +32,19 @@ impl<'a> Settings<'a> {
         Ok(settings)
     }
 
+    /// The value of one key, including a key the settings read hides. Only main-process code calls it, with a key
+    /// it owns, so the interface never reaches it through this method.
+    pub fn value(&self, key: &str) -> Result<Option<String>> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE key = ?1")?;
+        let mut rows = statement.query(params![key])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get::<_, String>(0)?)),
+            None => Ok(None),
+        }
+    }
+
     pub fn set(&self, values: &BTreeMap<String, String>) -> Result<()> {
         transaction::run(self.conn, |conn| {
             let mut statement = conn.prepare(

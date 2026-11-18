@@ -46,6 +46,41 @@ fn settings_apply_defaults_and_hide_runtime_keys() {
     assert!(settings.keys().all(|key| !key.starts_with("maintenance.")));
 }
 
+/// `value` reads one key the settings read hides. A key that is not saved reads as absent, and the hidden key is the one
+/// the shell keeps the provider key reference under.
+#[test]
+fn settings_value_reads_a_hidden_key_that_the_settings_read_does_not_return() {
+    let db = open("settings-value");
+    let settings = Settings::new(db.connection());
+    assert_eq!(
+        settings
+            .value("maintenance.secret.openrouter.reference")
+            .unwrap(),
+        None
+    );
+
+    settings
+        .set(&BTreeMap::from([(
+            "maintenance.secret.openrouter.reference".to_string(),
+            "00000000-0000-4000-8000-000000000001".to_string(),
+        )]))
+        .unwrap();
+
+    assert_eq!(
+        settings
+            .value("maintenance.secret.openrouter.reference")
+            .unwrap()
+            .as_deref(),
+        Some("00000000-0000-4000-8000-000000000001")
+    );
+    assert!(
+        !settings
+            .get()
+            .unwrap()
+            .contains_key("maintenance.secret.openrouter.reference")
+    );
+}
+
 #[test]
 fn settings_round_trip_and_fall_back_on_unknown_values() {
     let db = open("settings-round-trip");
