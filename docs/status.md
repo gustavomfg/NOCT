@@ -1255,6 +1255,27 @@ Validation at this commit: `cargo fmt --all -- --check` clean, `cargo clippy --w
 formatting-only change to the disk test file came after the workspace run; that file was then rerun (18 passed) and clippy of
 `noct-app` was rerun clean.
 
+## Real window: three blockers reported by the owner (2026-11-18)
+
+The owner saved an OpenRouter key in the real window and could not choose a model, type in the chat, or choose a project.
+Diagnosis, run with `node scripts/run-rust-shell.mjs dev --data-dir /tmp/noct-bug` and read in the code:
+
+| Symptom | Cause |
+| --- | --- |
+| No project to choose | No command saved a project. `Workspaces::touch` was only reached through `conversations_create`, which needs a saved project. A new data folder has 0 rows in `workspaces` (read with `sqlite3` from `/tmp/noct-bug/nocturne.db`), and the "+" of the sidebar was `disabled` on purpose. |
+| Model field disabled | The default model is saved per project: `provider_panel.rs` disabled the field while `shared.current` was `None`, which is always the case with no project. |
+| Cannot type in the chat | The text box had `prop:disabled=!state.enabled()`, and `PROVIDER_CHAT_ENABLED` was `false`, so `provider_chat_status` always said off. With no project the empty state also hid the suggestions. |
+
+No ACL or IPC error was involved: every command the window called was granted. `--from-fixture v1.0.2` could not be used:
+the launcher refuses it since the TypeScript side was removed (`scripts/run-rust-shell.test.mjs` checks the refusal).
+
+Fix: `workspace_add` opens the system folder picker from the shell (`tauri-plugin-dialog` 2.8.3, called only from Rust; the
+window has no dialog permission), checks the folder (absolute, exists, is a folder, readable, outside the blocked roots, not
+saved yet) and saves it authorized. The window opens on the project chosen last (kept per viewer), or the first one. The chat
+switch is a setting (`providerChatEnabled`, on by default) with `provider_chat_set_enabled`. The text box accepts text
+whenever there is a project, and a line over it names what is missing (project, chat off, key, model, permission) with the
+button that resolves it.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

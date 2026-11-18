@@ -175,6 +175,44 @@ pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec
         .collect()
 }
 
+/// Saves a folder the person chose as a project. The path must be absolute, an existing folder that can be read, outside
+/// the blocked roots, and not saved already. The checks run before the write, under the store lock the caller holds, so
+/// nothing is written when one fails. The project is saved as opened now and authorized, since the person chose it.
+pub fn workspace_add(
+    store: &Store,
+    blocked: &[PathBuf],
+    folder: &std::path::Path,
+) -> Result<Workspace, CommandError> {
+    if !folder.is_absolute() {
+        return Err(CommandError::InvalidInput);
+    }
+    let path = folder.to_str().ok_or(CommandError::WorkspaceRefused(
+        "O caminho desta pasta não pode ser lido pelo NOCT.",
+    ))?;
+    let inspection = workspace_scope::inspect(path, blocked);
+    if inspection.availability != noct_core::contracts::WorkspaceAvailability::Available {
+        return Err(CommandError::WorkspaceRefused(
+            inspection
+                .message
+                .unwrap_or("Não foi possível validar a pasta do projeto."),
+        ));
+    }
+    if workspace_rows(store)?.iter().any(|row| row.path == path) {
+        return Err(CommandError::WorkspaceExists);
+    }
+    store
+        .workspaces()
+        .touch(path)
+        .map_err(|_| CommandError::Persistence)?;
+    let row = workspace_rows(store)?
+        .into_iter()
+        .find(|row| row.path == path)
+        .ok_or(CommandError::Persistence)?;
+    workspaces_from_rows(vec![row], blocked)
+        .pop()
+        .ok_or(CommandError::Persistence)
+}
+
 /// Checks that a saved project may take a write: its folder is available and outside the blocked roots, and its row is
 /// authorized. Each refusal is `UnknownWorkspace`, and nothing is written.
 pub fn authorized_workspace(

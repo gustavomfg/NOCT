@@ -18,8 +18,8 @@ use noct_app::bootstrap::{self, Persistence};
 use noct_app::credentials::OPENROUTER_REFERENCE;
 use noct_app::error::CommandError;
 use noct_app::provider_chat::{
-    ChatControl, ChatEvent, ChatRequest, ChatRun, PROVIDER_CHAT_ENABLED, body, prepare,
-    project_context, run_chat, status,
+    ChatControl, ChatEvent, ChatRequest, ChatRun, PROVIDER_CHAT_DEFAULT, body, is_enabled, prepare,
+    project_context, run_chat, set_enabled, status,
 };
 use noct_app::{consent, services};
 use noct_core::ai::ProviderSource;
@@ -33,8 +33,8 @@ use noct_secrets::SecretString;
 const MODEL: &str = "openai/gpt-4o:free";
 const KEY_REFERENCE: &str = "00000000-0000-4000-8000-000000000001";
 
-// The switch ships off. Turning it on fails the build until this line is changed on purpose, which is the owner review.
-const _: () = assert!(!PROVIDER_CHAT_ENABLED, "the chat ships switched off");
+// The switch ships on, after the owner review with a real key. Ajustes can turn it off.
+const _: () = assert!(PROVIDER_CHAT_DEFAULT, "the chat ships switched on");
 
 fn fixture(name: &str) -> (Scratch, Persistence) {
     let scratch = Scratch::new(name);
@@ -122,9 +122,18 @@ fn ready(scratch: &Scratch, persistence: &Persistence) -> String {
 }
 
 #[test]
-fn the_switch_is_off_in_this_version_and_refuses_before_any_check_of_the_project() {
-    assert!(!status().enabled);
+fn the_switch_is_on_by_default_keeps_the_choice_and_refuses_before_any_check_when_off() {
     let (scratch, persistence) = fixture("chat-switch");
+    {
+        let guard = persistence.store.lock().expect("the store is not poisoned");
+        assert!(
+            status(&guard).expect("read").enabled,
+            "a new store has the chat on"
+        );
+        assert!(!set_enabled(&guard, false).expect("written").enabled);
+        assert!(!is_enabled(&guard).expect("read"), "the choice is kept");
+        assert!(set_enabled(&guard, true).expect("written").enabled);
+    }
     let workspace = ready(&scratch, &persistence);
 
     assert_eq!(

@@ -35,6 +35,8 @@ pub const FILE_CHANGE_PROPOSE: &str = "file_change_propose";
 pub const FILE_CHANGE_APPROVE: &str = "file_change_approve";
 pub const FILE_CHANGE_REJECT: &str = "file_change_reject";
 pub const FILE_CHANGE_UNDO: &str = "file_change_undo";
+pub const WORKSPACE_ADD: &str = "workspace_add";
+pub const PROVIDER_CHAT_SET_ENABLED: &str = "provider_chat_set_enabled";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -70,4 +72,6 @@ pub const ALL: &[&str] = &[
     FILE_CHANGE_APPROVE,
     FILE_CHANGE_REJECT,
     FILE_CHANGE_UNDO,
+    WORKSPACE_ADD,
+    PROVIDER_CHAT_SET_ENABLED,
 ];

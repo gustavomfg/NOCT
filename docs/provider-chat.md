@@ -1,17 +1,18 @@
-# Chat com o provedor (beta 1): interruptor desligado
+# Chat com o provedor (beta 1)
 
-Este documento descreve o chat da seção **Revisar** que pergunta sobre um projeto ao OpenRouter. Nesta versão o chat
-**fica desligado**: nenhum arquivo é lido para envio e nenhuma conexão com o provedor é feita.
+Este documento descreve o chat da seção **Revisar** que pergunta sobre um projeto ao OpenRouter. O chat vem **ligado**
+desde que o dono testou a chave na janela real (2026-11-18), e pode ser desligado em **Ajustes**.
 
 ## Estado
 
-- Interruptor: `PROVIDER_CHAT_ENABLED = false` em `crates/noct-app/src/provider_chat.rs`.
-- Com o interruptor desligado, `provider_chat_send` recusa com `chat-disabled` antes de olhar o projeto.
-- A interface mostra "O chat com o provedor está desligado nesta versão. Nada é enviado.", e a caixa de pergunta e o
-  botão **Perguntar** ficam desabilitados.
-- Ligar o chat exige revisão do dono do produto. Enquanto ela não acontecer, o teste de compilação
-  `const _: () = assert!(!PROVIDER_CHAT_ENABLED, ...)` em `crates/noct-app/tests/provider_chat_flow.rs` impede o build com o
-  interruptor ligado. Trocar o valor sem alterar esse teste não compila; a mudança fica visível na revisão.
+- Padrão: `PROVIDER_CHAT_DEFAULT = true` em `crates/noct-app/src/provider_chat.rs`. A escolha da pessoa fica na chave
+  `providerChatEnabled` da tabela `settings` (`"true"` ou `"false"`); sem ela, vale o padrão.
+- `provider_chat_status` lê o interruptor; `provider_chat_set_enabled` (`{ enabled }`) troca e responde com o valor salvo.
+- Com o interruptor desligado, `provider_chat_send` recusa com `chat-disabled` antes de olhar o projeto, e a linha sobre a
+  caixa de pergunta diz "O chat está desligado. Nada é enviado." com o botão **Ligar**.
+- A caixa de pergunta aceita texto sempre que há um projeto. O envio só fica disponível com chave, modelo e chat ligado; a
+  linha sobre a caixa diz o que falta (chave, modelo, permissão) e oferece o botão que resolve.
+- A asserção de compilação em `crates/noct-app/tests/provider_chat_flow.rs` agora fixa o padrão ligado.
 
 ## O que uma pergunta envia
 
@@ -82,8 +83,6 @@ de ordem (a interface reordena pelo índice). Cancelar mantém o texto já receb
 **Não verificado:** uma chamada real ao OpenRouter. Todos os testes usam servidor de loopback. Também não foi verificado no
 Windows nem no macOS.
 
-## O que falta para ligar
+## O que ainda falta verificar
 
-1. Revisão do dono do produto sobre o envio ao provedor e sobre o texto de consentimento.
-2. Trocar `PROVIDER_CHAT_ENABLED` e ajustar a asserção de compilação em `provider_chat_flow.rs`.
-3. Verificar uma chamada real com uma chave de teste, em cada sistema suportado.
+1. Uma chamada real com chave de teste em Windows e macOS (o dono testou a chave no Linux).

@@ -31,8 +31,43 @@ use crate::error::CommandError;
 use crate::provider_transport::{Limits, stream_chat, verify_target};
 use crate::{consent, services};
 
-/// The switch of the provider chat. It stays `false` until the owner has reviewed the beta; see `docs/provider-chat.md`.
-pub const PROVIDER_CHAT_ENABLED: bool = false;
+/// The switch of the provider chat when the person has not changed it: on. The owner reviewed the beta with a real key;
+/// Ajustes can turn it off, and the choice is kept under [`CHAT_ENABLED_KEY`]. See `docs/provider-chat.md`.
+pub const PROVIDER_CHAT_DEFAULT: bool = true;
+
+/// The settings key of the switch. Its value is `"true"` or `"false"`; any other value, or none, is the default.
+pub const CHAT_ENABLED_KEY: &str = "providerChatEnabled";
+
+/// Whether the chat is on, as the person left it.
+pub fn is_enabled(store: &Store) -> Result<bool, CommandError> {
+    let saved = store
+        .settings()
+        .value(CHAT_ENABLED_KEY)
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(match saved.as_deref() {
+        Some("true") => true,
+        Some("false") => false,
+        _ => PROVIDER_CHAT_DEFAULT,
+    })
+}
+
+/// Turns the chat on or off, and returns the switch as it is stored afterwards.
+pub fn set_enabled(store: &Store, enabled: bool) -> Result<ChatStatus, CommandError> {
+    let mut values = std::collections::BTreeMap::new();
+    values.insert(CHAT_ENABLED_KEY.to_string(), enabled.to_string());
+    store
+        .settings()
+        .set(&values)
+        .map_err(|_| CommandError::Persistence)?;
+    status(store)
+}
+
+/// The request that turns the chat on or off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ChatSwitchRequest {
+    pub enabled: bool,
+}
 
 /// The built-in endpoint of the chat. A question is never sent to another host.
 pub const OPENROUTER_CHAT_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
@@ -56,7 +91,7 @@ pub struct Prepared {
 }
 
 /// Runs the checks of a question, in order, and reads nothing from the project. `enabled` is the switch: the command
-/// passes `PROVIDER_CHAT_ENABLED`, and the tests pass `true` to reach the checks after it.
+/// passes [`is_enabled`], and the tests pass the value they check.
 pub fn prepare(
     store: &Store,
     blocked: &[PathBuf],
@@ -305,8 +340,8 @@ pub struct ChatStatus {
     pub enabled: bool,
 }
 
-pub fn status() -> ChatStatus {
-    ChatStatus {
-        enabled: PROVIDER_CHAT_ENABLED,
-    }
+pub fn status(store: &Store) -> Result<ChatStatus, CommandError> {
+    Ok(ChatStatus {
+        enabled: is_enabled(store)?,
+    })
 }

@@ -57,6 +57,11 @@ pub enum CommandError {
     TooManyOpenChanges,
     /// The file of a change could not be written or removed. The journal is set back, so nothing is recorded as done.
     ChangeWrite,
+    /// The folder chosen as a project cannot be one: the message says why (a broad or system folder, not a folder,
+    /// missing, or not readable). Nothing is saved.
+    WorkspaceRefused(&'static str),
+    /// The folder chosen as a project is already saved. Nothing is saved again.
+    WorkspaceExists,
 }
 
 impl CommandError {
@@ -86,6 +91,8 @@ impl CommandError {
             Self::InvalidChangeTransition => "invalid-change-transition",
             Self::TooManyOpenChanges => "too-many-open-changes",
             Self::ChangeWrite => "change-write",
+            Self::WorkspaceRefused(_) => "workspace-refused",
+            Self::WorkspaceExists => "workspace-exists",
         }
     }
 
@@ -137,6 +144,8 @@ impl CommandError {
             Self::ChangeWrite => {
                 "Não foi possível escrever o arquivo do projeto. Nada foi alterado."
             }
+            Self::WorkspaceRefused(message) => message,
+            Self::WorkspaceExists => "Este projeto já está na lista.",
         }
     }
 }

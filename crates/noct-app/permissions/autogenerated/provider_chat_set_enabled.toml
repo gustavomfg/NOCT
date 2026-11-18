@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-chat-set-enabled"
+description = "Enables the provider_chat_set_enabled command without any pre-configured scope."
+commands.allow = ["provider_chat_set_enabled"]
+
+[[permission]]
+identifier = "deny-provider-chat-set-enabled"
+description = "Denies the provider_chat_set_enabled command without any pre-configured scope."
+commands.deny = ["provider_chat_set_enabled"]

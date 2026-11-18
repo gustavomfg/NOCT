@@ -80,7 +80,9 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "file_change_propose",
             "file_change_approve",
             "file_change_reject",
-            "file_change_undo"
+            "file_change_undo",
+            "workspace_add",
+            "provider_chat_set_enabled"
         ]
     );
 }

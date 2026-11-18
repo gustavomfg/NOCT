@@ -60,6 +60,8 @@ pub fn command_handler<R: Runtime>()
         commands::file_change_approve,
         commands::file_change_reject,
         commands::file_change_undo,
+        commands::workspace_add,
+        commands::provider_chat_set_enabled,
     ]
 }
 
@@ -74,6 +76,7 @@ pub fn context<R: Runtime>() -> tauri::Context<R> {
 pub fn run() {
     let context = context();
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(command_handler())
         .setup(|app| {
             let default = app.path().app_data_dir()?;

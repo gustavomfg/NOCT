@@ -11,6 +11,7 @@ use noct_core::ai::bindings::{
 use noct_core::ai::consent::{ProjectConsentRequest, ProjectConsentStatus};
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
+use noct_core::contracts::Workspace;
 use noct_core::contracts::{Conversation, Message};
 use noct_core::file_change::{FileChange, FileChangeProposal};
 use noct_core::ipc::ReplyRequest;
@@ -24,8 +25,9 @@ use noct_core::ipc::suggestions::{SuggestionCreation, SuggestionStatusRequest};
 use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, WorkspacePageRequest};
 use noct_db::store::Store;
 use noct_secrets::ProviderCredentialVault;
-use tauri::State;
 use tauri::ipc::Channel;
+use tauri::{Runtime, State, WebviewWindow};
+use tauri_plugin_dialog::DialogExt;
 
 use crate::bootstrap::Persistence;
 use crate::consent;
@@ -34,8 +36,8 @@ use crate::error::CommandError;
 use crate::file_changes;
 use crate::logging::measured;
 use crate::provider_chat::{
-    self, ChatControl, ChatEvent, ChatRequest, ChatRun, ChatStatus, OPENROUTER_CHAT_URL,
-    PROVIDER_CHAT_ENABLED,
+    self, ChatControl, ChatEvent, ChatRequest, ChatRun, ChatStatus, ChatSwitchRequest,
+    OPENROUTER_CHAT_URL,
 };
 use crate::provider_transport::{Limits, SystemResolver};
 use crate::services;
@@ -310,10 +312,61 @@ pub async fn models_set_default_model(
     .await
 }
 
-/// Whether the provider chat is switched on in this version. It is off until the owner has reviewed the beta.
+/// Whether the provider chat is on. It is on unless the person turned it off in Ajustes.
 #[tauri::command]
-pub fn provider_chat_status() -> ChatStatus {
-    provider_chat::status()
+pub async fn provider_chat_status(
+    state: State<'_, Persistence>,
+) -> Result<ChatStatus, CommandError> {
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        provider_chat::status(&guard)
+    })
+    .await
+}
+
+/// Turns the provider chat on or off. The argument is `{ enabled }`; the reply is the switch as it is stored.
+#[tauri::command]
+pub async fn provider_chat_set_enabled(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<ChatStatus, CommandError> {
+    let request: ChatSwitchRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        provider_chat::set_enabled(&guard, request.enabled)
+    })
+    .await
+}
+
+/// Adds a project: the system folder picker opens over the window, and the folder the person chooses is checked and
+/// saved. The window sends no path: the shell asks the person, so only a folder chosen in the picker is saved. A closed
+/// picker replies with nothing, and saves nothing.
+#[tauri::command]
+pub async fn workspace_add<R: Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, Persistence>,
+) -> Result<Option<Workspace>, CommandError> {
+    let picker = window
+        .dialog()
+        .file()
+        .set_title("Escolha a pasta do projeto")
+        .set_parent(&window);
+    let chosen = blocking(move || Ok(picker.blocking_pick_folder())).await?;
+    let Some(chosen) = chosen else {
+        return Ok(None);
+    };
+    let folder = chosen
+        .into_path()
+        .map_err(|_| CommandError::WorkspaceRefused("Escolha uma pasta local."))?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        services::workspace_add(&guard, &default_blocked_roots(), &folder).map(Some)
+    })
+    .await
 }
 
 /// Starts a question about the project. The argument is `{ input: { workspace, question }, onEvent }`, where `onEvent`
@@ -335,12 +388,8 @@ pub async fn provider_chat_send(
     let directory = state.data_directory.clone();
     let prepared = blocking(move || {
         let guard = lock(&store)?;
-        provider_chat::prepare(
-            &guard,
-            &default_blocked_roots(),
-            request,
-            PROVIDER_CHAT_ENABLED,
-        )
+        let enabled = provider_chat::is_enabled(&guard)?;
+        provider_chat::prepare(&guard, &default_blocked_roots(), request, enabled)
     })
     .await?;
     let key_reference = prepared.key_reference.clone();

@@ -1880,3 +1880,58 @@ fn artifact_delete_removes_one_artifact_of_the_conversation_and_leaves_the_file_
     );
     assert!(matches!(missing, Err(CommandError::UnknownConversation)));
 }
+
+#[test]
+fn a_chosen_folder_is_saved_as_an_authorized_project_once() {
+    let scratch = Scratch::new("add");
+    let project = scratch.path().join("meu-projeto");
+    std::fs::create_dir(&project).expect("the folder is created");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+
+    let added = services::workspace_add(&store, &[], &project).expect("the folder is saved");
+    assert_eq!(added.path, project.to_string_lossy());
+    assert_eq!(added.name, "meu-projeto");
+    assert!(added.authorized);
+    assert_eq!(added.availability, WorkspaceAvailability::Available);
+
+    assert_eq!(
+        services::workspace_add(&store, &[], &project),
+        Err(CommandError::WorkspaceExists),
+        "a folder that is saved already is not saved again"
+    );
+    assert_eq!(services::workspace_rows(&store).expect("rows").len(), 1);
+}
+
+#[test]
+fn a_folder_that_cannot_be_a_project_is_refused_and_nothing_is_saved() {
+    let scratch = Scratch::new("add-refused");
+    let persistence = bootstrap::open(&scratch.path().join("data")).expect("the shell opens");
+    let store = persistence.store.lock().expect("not poisoned");
+    let file = scratch.path().join("arquivo.txt");
+    std::fs::write(&file, "texto").expect("the file is written");
+    let blocked = scratch.path().join("bloqueada");
+    std::fs::create_dir(&blocked).expect("the folder is created");
+
+    assert_eq!(
+        services::workspace_add(&store, &[], std::path::Path::new("relativa/pasta")),
+        Err(CommandError::InvalidInput),
+        "a relative path is refused"
+    );
+    assert_eq!(
+        services::workspace_add(&store, &[], &scratch.path().join("nao-existe")),
+        Err(CommandError::WorkspaceRefused(NOT_FOUND))
+    );
+    assert_eq!(
+        services::workspace_add(&store, &[], &file),
+        Err(CommandError::WorkspaceRefused(NOT_A_FOLDER))
+    );
+    assert!(matches!(
+        services::workspace_add(&store, std::slice::from_ref(&blocked), &blocked),
+        Err(CommandError::WorkspaceRefused(_))
+    ));
+    assert!(
+        services::workspace_rows(&store).expect("rows").is_empty(),
+        "no refused folder is saved"
+    );
+}

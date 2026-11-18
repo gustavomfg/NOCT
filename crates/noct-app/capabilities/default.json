@@ -37,6 +37,8 @@
     "allow-file-change-propose",
     "allow-file-change-approve",
     "allow-file-change-reject",
-    "allow-file-change-undo"
+    "allow-file-change-undo",
+    "allow-workspace-add",
+    "allow-provider-chat-set-enabled"
   ]
 }

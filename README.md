@@ -100,9 +100,9 @@ What the code does on this branch:
   question, to `https://openrouter.ai/api/v1/chat/completions`, and shows the answer as it streams in. The transport allows
   HTTPS only, follows no redirect, checks every resolved address before it connects, and caps the size and the time. Save
   keeps the answer in a conversation.
-- **The chat is switched off in this version.** `PROVIDER_CHAT_ENABLED` is `false` in `crates/noct-app/src/provider_chat.rs`.
-  While it is off, a question is refused before any file is read and before any connection is made. The owner turns it on
-  after testing it.
+- **The chat is on by default** since the owner tested a real key (2026-11-18). Ajustes can turn it off; the choice is kept in
+  the `providerChatEnabled` setting. While it is off, a question is refused before any file is read and before any
+  connection is made.
 - **What is tested.** The chain from the question to the saved answer runs in the test suite against a local fake server
   (`crates/noct-app/tests/provider_chat_flow.rs` and `provider_transport.rs`). No test calls OpenRouter, and no run used a
   real key. The interface checks run in Chromium with a mocked shell, with the switch off.
