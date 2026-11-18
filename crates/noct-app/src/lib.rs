@@ -12,6 +12,7 @@ pub mod credentials;
 pub mod error;
 pub mod logging;
 pub mod navigation;
+pub mod provider_transport;
 pub mod services;
 pub mod updater;
 pub mod window;

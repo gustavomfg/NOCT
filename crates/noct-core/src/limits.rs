@@ -114,6 +114,9 @@ pub mod provider_network {
     pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
     /// The longest a whole request may take, in milliseconds, counting the reply.
     pub const REQUEST_TIMEOUT_MS: u64 = 120_000;
+    /// The longest silence between two reads of the reply, in milliseconds. It bounds a stalled stream, so a dead
+    /// connection never waits for the whole request timeout.
+    pub const STALL_TIMEOUT_MS: u64 = 30_000;
     /// The most bytes of a reply that the shell reads, so that a reply cannot grow without limit.
     pub const MAXIMUM_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 }

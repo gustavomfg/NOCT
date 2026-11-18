@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use crate::limits::provider_chat::MAXIMUM_MODEL_CHARACTERS;
 use crate::validation::ContractError;
 
+use super::network::EndpointError;
 use super::sse::SseError;
 
 /// The roles the beta 1 request uses.
@@ -45,6 +46,8 @@ pub enum StreamEvent {
 /// adapter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatFailure {
+    /// The network policy refused the call. The code is the policy's own.
+    Endpoint(EndpointError),
     Malformed,
     Truncated,
     TooLarge,
@@ -62,6 +65,7 @@ impl ChatFailure {
     /// The stable code of the failure.
     pub fn code(self) -> &'static str {
         match self {
+            Self::Endpoint(error) => error.code(),
             Self::Malformed => "stream-malformed",
             Self::Truncated => "stream-truncated",
             Self::TooLarge => "response-too-large",

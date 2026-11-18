@@ -199,7 +199,17 @@ pub fn check_endpoint(
     endpoint: &Endpoint,
     source: ProviderSource,
 ) -> Result<&'static Approval, EndpointError> {
-    let approval = BUILTIN_APPROVALS
+    check_endpoint_in(BUILTIN_APPROVALS, endpoint, source)
+}
+
+/// The same check against an approval list the caller gives. The app passes `BUILTIN_APPROVALS`; the transport tests
+/// pass a loopback approval for a local fake server. The rules are the same whatever list is given.
+pub fn check_endpoint_in<'a>(
+    approvals: &'a [Approval],
+    endpoint: &Endpoint,
+    source: ProviderSource,
+) -> Result<&'a Approval, EndpointError> {
+    let approval = approvals
         .iter()
         .find(|approval| approval.host == endpoint.host && approval.port == endpoint.port)
         .ok_or(EndpointError::HostNotApproved)?;
