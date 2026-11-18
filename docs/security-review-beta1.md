@@ -333,5 +333,50 @@ Two consequences the code must handle:
 
 ## Status of this document
 
-This section is updated at the end of the batch with the commit that closes each finding and with the transport decisions
-made after the policy was written. The findings above are the state at the time the document was first published.
+The findings and decisions above are the state at the time the document was first published. This section records what
+the continuation of beta 1 changed, with the commit of each change. The mission report is in `docs/status.md`.
+
+### Findings
+
+| Finding | State | Commit | Test or evidence |
+| --- | --- | --- | --- |
+| F1. Consent for an unauthorized project | Closed | `fa86fef` | `consent_is_refused_for_a_saved_project_that_is_not_authorized` (`tests/commands_acl.rs`) |
+| F2. Orphan secrets after a crash (D9) | Closed | `3c74b97` | `an_orphan_left_by_a_stopped_save_is_removed_by_the_next_save`, `removing_a_key_also_removes_its_leftovers`, `a_failed_cleanup_does_not_fail_the_save` (`tests/credentials.rs`) |
+| F3. Race between two saves | Closed | `628e799` | `two_key_saves_at_the_same_time_run_one_after_the_other` (`tests/credentials.rs`); the lock was removed in a mutation check and the test failed |
+| F4. `.pem` divergence | Open, a bug of the TypeScript side. Not fixed here. The Rust port keeps the stricter rule. | `c68771e` (record) | Recorded only; see the note below |
+| F5. No HTTP client | Closed | `89b81bc` (dependency), `5907f25` (transport), `f1a386e` (strict SSE and protocol) | 19 transport tests against a loopback server (`tests/provider_transport.rs`) |
+
+**F4, for the TypeScript side.** The TypeScript code accepts a `.pem` value that the Rust port refuses. This is a bug of the
+TypeScript side: the stricter rule of the Rust port is the one that applies, and the TypeScript code was not changed in
+this continuation, as the mission requires.
+
+### Decisions taken in the continuation (D10 to D17)
+
+- **D10.** `models_set_bindings` keeps its full-row replace, because the TypeScript side depends on it. The new commands
+  `models_bindings_get` and `models_set_default_model` are separate and write only the default, in one transaction that
+  keeps the embedding binding (`saving_the_default_model_keeps_the_other_bindings_of_the_row`).
+- **D11.** The model identifier is checked in the core before a project is read: its size, its characters and its
+  `vendor/name` shape. `:free` is a filter and a suggestion in the interface only. Beta 1 uses a text field.
+- **D12.** The transport uses no system proxy (`no_proxy`), because the updater enables a system proxy for the whole
+  workspace. Redirects are refused. The host is pinned to the addresses the policy approved. Connect, read and total timeouts
+  apply, with a 30 s limit for a stalled stream and a 64 KiB limit for each event. An environment-based proxy test is not
+  written: edition 2024 makes `set_var` unsafe, and the setting is a builder call.
+- **D13.** The chat stays off: `PROVIDER_CHAT_ENABLED = false`. A compile-time assertion in
+  `tests/provider_chat_flow.rs` fails the build when the switch is turned on, until that line is changed on purpose. See
+  `docs/provider-chat.md`.
+- **D14.** The beta 1 context is the text files at the top level of the project that `context::select` accepts: UTF-8,
+  32 KiB per file and 128 KiB in total. Subfolders and symbolic links are not read.
+- **D15.** Saving an answer stores only its text, through `ai_save_assistant`, in a conversation of the project. The
+  conversation is created on the first save and reused for that project. The question is not stored by this path.
+- **D16.** The stub composer at the bottom of the window ("the questions are not answered in this slice") was replaced by
+  the chat section in Revisar, and its styles were removed. The owner should check the design of that area.
+- **D17.** A channel's callback is kept for the life of the page, one small closure per question. The shell can send the end
+  of a channel after the last answer event, so the callback cannot be dropped at that point.
+
+### Stops, not done
+
+- **GET /models (the provider's model list).** Not implemented. It is a provider network call in the production flow, which
+  needs owner review first. The model field is a text field in beta 1.
+- **The chat in production.** Not enabled. It needs the owner's review of what is sent and of the consent text, and a real
+  call with a test key on each system.
+- **Windows and macOS.** Not verified in a window. Nothing in this continuation was run on those systems by hand.
