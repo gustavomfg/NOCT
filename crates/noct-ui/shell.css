@@ -81,8 +81,8 @@
   --sev-mid: #F5C26B;
   --sev-low: #A0A0AB;
   --user-bubble: rgba(155, 156, 255, 0.16);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.22);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
 
   --bg-a: #0E0E18;
   --bg-b: #15101F;
@@ -519,7 +519,7 @@ button {
 .seg[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .main {
@@ -1408,6 +1408,29 @@ button {
   background: linear-gradient(160deg, var(--card-a), var(--card-b));
   -webkit-backdrop-filter: blur(22px) saturate(1.5);
   backdrop-filter: blur(22px) saturate(1.5);
+}
+
+/* Translucent panes take the light edge of the prototype and a soft shadow, never the solid theme shadow, which reads as
+   a dark smudge through the glass. */
+[data-glass="on"] .card {
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+[data-glass="on"] .list,
+[data-glass="on"] .need {
+  box-shadow: inset 0 1px 0 var(--pane-hi);
+}
+
+[data-glass="on"] .suggest button {
+  box-shadow: none;
+}
+
+[data-glass="on"] .composer {
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+[data-glass="on"] .composer:focus-within {
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.12), 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 [data-glass="on"] .msg-user {
