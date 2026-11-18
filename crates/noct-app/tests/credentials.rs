@@ -25,6 +25,7 @@ enum Fault {
     Create,
     Has,
     Delete,
+    Prune,
 }
 
 /// A vault held in memory. It counts the writes and can refuse one kind of operation, so the tests can check what
@@ -52,6 +53,13 @@ impl FakeVault {
 
     fn holds_nothing(&self) -> bool {
         self.secrets.borrow().is_empty()
+    }
+
+    /// Writes a secret that no reference names, as a save that stopped after its secret write leaves it.
+    fn plant(&self, reference: &str, secret: &str) {
+        self.secrets
+            .borrow_mut()
+            .insert(reference.to_string(), secret.to_string());
     }
 
     /// Removes the secret without going through the service, as if the operating system store had lost it.
@@ -98,6 +106,16 @@ impl KeyVault for FakeVault {
         }
         Ok(self.secrets.borrow_mut().remove(reference).is_some())
     }
+
+    fn prune(&self, allowed: &[&str]) -> Result<usize, VaultError> {
+        if self.failing(Fault::Prune) {
+            return Err(VaultError::WriteFailed);
+        }
+        let mut secrets = self.secrets.borrow_mut();
+        let before = secrets.len();
+        secrets.retain(|reference, _| allowed.contains(&reference.as_str()));
+        Ok(before - secrets.len())
+    }
 }
 
 /// A vault whose secret write announces that it started and then holds for a while. It records when the write ends, so a
@@ -127,6 +145,10 @@ impl KeyVault for SlowVault<'_> {
 
     fn delete(&self, reference: &str) -> Result<bool, VaultError> {
         self.inner.delete(reference)
+    }
+
+    fn prune(&self, allowed: &[&str]) -> Result<usize, VaultError> {
+        self.inner.prune(allowed)
     }
 }
 
@@ -399,6 +421,69 @@ fn two_key_saves_at_the_same_time_run_one_after_the_other() {
     assert!(
         !second_opened_early.load(Ordering::SeqCst),
         "the second save opened its vault while the first one still held it"
+    );
+}
+
+/// A reference no setting names, as a save leaves when it stops after its secret write.
+const ORPHAN: &str = "00000000-0000-4000-8000-0000000000ff";
+
+/// The leftover of a stopped save is removed by the next save, and the key the settings name stays.
+#[test]
+fn an_orphan_left_by_a_stopped_save_is_removed_by_the_next_save() {
+    let (_scratch, persistence) = fixture("credentials-orphan");
+    let vault = FakeVault::default();
+    vault.plant(ORPHAN, "orphan-secret-value");
+
+    credentials::save(&persistence.store, || Ok(&vault), input(KEY)).expect("the key is saved");
+
+    let reference = saved_reference(&persistence);
+    assert_eq!(vault.secret_under(ORPHAN), None, "the leftover is removed");
+    assert_eq!(
+        vault.secret_under(&reference).as_deref(),
+        Some(KEY),
+        "the saved key stays"
+    );
+}
+
+/// Removing a key also clears the leftovers, so nothing is left in the vault once the key is gone.
+#[test]
+fn removing_a_key_also_removes_its_leftovers() {
+    let (_scratch, persistence) = fixture("credentials-remove-orphan");
+    let vault = FakeVault::default();
+    credentials::save(&persistence.store, || Ok(&vault), input(KEY)).expect("the key is saved");
+    vault.plant(ORPHAN, "orphan-secret-value");
+
+    credentials::remove(
+        &persistence.store,
+        || Ok(&vault),
+        ProviderKeyProvider::OpenRouter,
+    )
+    .expect("the key is removed");
+
+    assert!(
+        vault.holds_nothing(),
+        "the key and the leftover are both gone"
+    );
+}
+
+/// A cleanup that fails does not fail the save: the key is saved and configured, and the leftover waits for a later call.
+#[test]
+fn a_failed_cleanup_does_not_fail_the_save() {
+    let (_scratch, persistence) = fixture("credentials-prune-fails");
+    let vault = FakeVault::default();
+    vault.plant(ORPHAN, "orphan-secret-value");
+    vault.fail(Fault::Prune);
+
+    let status =
+        credentials::save(&persistence.store, || Ok(&vault), input(KEY)).expect("the key is saved");
+
+    assert!(status.configured);
+    let reference = saved_reference(&persistence);
+    assert_eq!(vault.secret_under(&reference).as_deref(), Some(KEY));
+    assert_eq!(
+        vault.secret_under(ORPHAN).as_deref(),
+        Some("orphan-secret-value"),
+        "the leftover waits for the next call"
     );
 }
 

@@ -43,6 +43,8 @@ pub trait KeyVault {
     fn replace(&self, reference: &str, secret: &SecretString) -> Result<(), VaultError>;
     fn has(&self, reference: &str) -> Result<bool, VaultError>;
     fn delete(&self, reference: &str) -> Result<bool, VaultError>;
+    /// Removes every secret that is not in `allowed`, and returns how many went.
+    fn prune(&self, allowed: &[&str]) -> Result<usize, VaultError>;
 }
 
 impl KeyVault for ProviderCredentialVault {
@@ -61,6 +63,10 @@ impl KeyVault for ProviderCredentialVault {
     fn delete(&self, reference: &str) -> Result<bool, VaultError> {
         ProviderCredentialVault::delete(self, reference)
     }
+
+    fn prune(&self, allowed: &[&str]) -> Result<usize, VaultError> {
+        ProviderCredentialVault::prune(self, allowed)
+    }
 }
 
 impl<T: KeyVault + ?Sized> KeyVault for &T {
@@ -78,6 +84,10 @@ impl<T: KeyVault + ?Sized> KeyVault for &T {
 
     fn delete(&self, reference: &str) -> Result<bool, VaultError> {
         (**self).delete(reference)
+    }
+
+    fn prune(&self, allowed: &[&str]) -> Result<usize, VaultError> {
+        (**self).prune(allowed)
     }
 }
 
@@ -138,6 +148,7 @@ where
             write_reference(store, &created.to_string())?;
         }
     }
+    prune_leftovers(store, &vault);
     Ok(ProviderKeyStatus {
         provider,
         configured: true,
@@ -158,13 +169,28 @@ where
 {
     let _operation = key_operations();
     if let Some(current) = reference(store)? {
-        open()?.delete(&current).map_err(map_vault)?;
+        let vault = open()?;
+        vault.delete(&current).map_err(map_vault)?;
         write_reference(store, "")?;
+        prune_leftovers(store, &vault);
     }
     Ok(ProviderKeyStatus {
         provider,
         configured: false,
     })
+}
+
+/// Removes the secrets that no saved reference names. Such a secret is the leftover of a save that stopped before its
+/// reference was written. The vault removes every secret not passed, so each provider's reference must be passed here;
+/// the OpenRouter key is the only one in beta 1. If the reference cannot be read, nothing is removed: an unreadable
+/// setting must never be taken for "no key". A failed cleanup is not reported, because the save or removal already
+/// succeeded; the leftover waits for the next call.
+fn prune_leftovers<V: KeyVault>(store: &Mutex<Store>, vault: &V) {
+    let Ok(current) = reference(store) else {
+        return;
+    };
+    let live: Vec<&str> = current.iter().map(String::as_str).collect();
+    let _ = vault.prune(&live);
 }
 
 /// The saved reference of the OpenRouter key, if one is saved.
