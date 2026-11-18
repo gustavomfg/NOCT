@@ -1,8 +1,9 @@
 //! The updater of the shell, `tauri-plugin-updater`. The plugin is registered only when `plugins.updater` in
 //! `tauri.conf.json` is complete and safe: a public key, at least one https endpoint, the signed-version check on, and
-//! none of the flags that accept what an updater must refuse. The shipped section is empty, so the shell registers no
-//! updater, makes no update request and reads no update feed until the owner fills it in. The signing keys belong to
-//! the owner. Nothing in this module creates or reads one.
+//! none of the flags that accept what an updater must refuse. The shipped section is complete (the release's public key
+//! and its endpoint), so the plugin is registered at start. Registering it makes no request, and nothing in the shell
+//! calls its check, download or install commands: the window is granted no updater permission. The private signing key
+//! is not in this repository, and nothing in this module creates or reads one.
 
 use serde_json::Value;
 use tauri::{Builder, Runtime};
@@ -34,8 +35,8 @@ pub enum Refusal {
     UnsignedVersion,
 }
 
-/// Whether the updater is registered for a section: `Ok(false)` for an absent section or the placeholder, `Ok(true)`
-/// for a complete and safe section, and a refusal for anything else.
+/// Whether the updater is registered for a section: `Ok(false)` for an absent section or one with neither a key nor an
+/// endpoint, `Ok(true)` for a complete and safe section, and a refusal for anything else.
 pub fn decide(section: Option<&Value>) -> Result<bool, Refusal> {
     let Some(section) = section else {
         return Ok(false);
@@ -115,8 +116,14 @@ mod tests {
     }
 
     #[test]
-    fn the_shipped_section_is_the_placeholder_and_registers_nothing() {
-        assert_eq!(decide(Some(&shipped())), Ok(false));
+    fn the_shipped_section_is_complete_and_registers_the_updater() {
+        assert_eq!(decide(Some(&shipped())), Ok(true));
+    }
+
+    #[test]
+    fn a_section_with_neither_key_nor_endpoint_registers_nothing() {
+        let empty = json!({ "pubkey": "", "endpoints": [], "requireSignedVersion": true });
+        assert_eq!(decide(Some(&empty)), Ok(false));
     }
 
     #[test]

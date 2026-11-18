@@ -20,8 +20,8 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
-      "endpoints": [],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwNTAzQjYyNEQ4N0Q2NDYKUldSRzFvZE5ZanRRUU54c3A1UHRkUG1yNE5nL3Q5cm9IMHJONjBIVVRZRGZDNVZXMVNaRFJxQncK",
+      "endpoints": ["https://github.com/gustavomfg/NOCT/releases/latest/download/latest.json"],
       "requireSignedVersion": true
     }
   }

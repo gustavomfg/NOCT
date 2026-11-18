@@ -234,6 +234,19 @@ is cut, and at 600 px it fits. At 720 px the content pane is 430 px wide. The qu
 is a Chromium measurement. Whether the window manager enforces the minimum, and the layout in WebKitGTK, WebView2 and
 WKWebView, are not verified.
 
+## Updater
+
+The shell carries the official updater plugin, `tauri-plugin-updater`, pinned at 2.14.1 in `Cargo.toml`. Its
+configuration is `plugins.updater` in `crates/noct-app/tauri.conf.json`: the public key of the release, the one HTTPS
+endpoint of the latest release, and `requireSignedVersion`. `crates/noct-app/src/updater.rs` registers the plugin only
+when that section is complete and safe, and the shipped section is.
+
+Registering the plugin makes no request: its setup only stores the configuration. Nothing calls its `check`,
+`download` or `install` commands, and the main window is granted no updater permission, so the window cannot call them
+either. `crates/noct-app/tests/updater_config.rs` locks the configuration, and `crates/noct-app/tests/capabilities.rs`
+locks the window's permissions. The key, what remains before an update can be installed, and the release workflow are
+in [docs/shell-updater.md](shell-updater.md).
+
 ## Gaps in CI
 
 The workflow `.github/workflows/rust-shell-validation.yml` runs on pushes to `migration/rust`. Its `shell` job is a
