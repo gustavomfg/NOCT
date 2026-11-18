@@ -616,48 +616,9 @@ button {
   padding: 0 14px;
 }
 
-.composer-wrap {
-  padding: 8px 32px 28px;
-}
-
-.composer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 6px 6px 6px 18px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.composer__input {
-  flex: 1;
-  min-width: 0;
-  height: 40px;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-}
-
-.composer__send {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.composer-wrap .note {
-  max-width: 720px;
-  margin: 6px auto 0;
-  padding: 0 6px;
+.chat-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* The glass layer. Solid colours above are the fallback; these rules paint the panes over the gradient. */
@@ -710,8 +671,7 @@ button {
   position: relative;
 }
 
-[data-glass="on"] .card,
-[data-glass="on"] .composer {
+[data-glass="on"] .card {
   border-color: var(--pane-edge);
   background: linear-gradient(160deg, var(--card-a), var(--card-b));
   box-shadow: inset 0 1px 0 var(--pane-hi), 0 6px 18px rgba(0, 0, 0, 0.06);
@@ -721,16 +681,11 @@ button {
   box-shadow: inset 0 1px 0 var(--pane-hi), 0 14px 32px rgba(0, 0, 0, 0.12);
 }
 
-[data-glass="on"] .composer {
-  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.10);
-}
-
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   [data-glass="on"] .sidebar,
   [data-glass="on"] .segmented,
   [data-glass="on"] .status,
-  [data-glass="on"] .card,
-  [data-glass="on"] .composer {
+  [data-glass="on"] .card {
     -webkit-backdrop-filter: blur(22px) saturate(1.5);
     backdrop-filter: blur(22px) saturate(1.5);
   }
@@ -781,8 +736,7 @@ button {
     display: none;
   }
 
-  [data-glass="on"] .card,
-  [data-glass="on"] .composer {
+  [data-glass="on"] .card {
     border-color: var(--line);
     background: var(--surface);
     -webkit-backdrop-filter: none;

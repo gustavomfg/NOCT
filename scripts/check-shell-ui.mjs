@@ -15,7 +15,10 @@
 // shorter list; a page outside the shell says so; the theme follows the saved setting or the system, and the
 // sidebar button changes it for the session; the modes and Ajustes keep their state (aria-pressed, aria-current); Construir and Documentar say they are not
 // available yet and offer no approval, revert or confirmation control;
-// the question box keeps its label and reports that it does not answer yet; the layout fits the window's minimum
+// the chat of Revisar is off by default: its switch says so, and the question box and the send button are disabled,
+// so nothing is sent; with the switch on (a mocked shell), the answer streams in order even when its events arrive out of
+// order, a cancel keeps the text so far and ignores what follows it, a save keeps the answer in a conversation of the
+// project only when the person asks, and each failure says that nothing was saved; the layout fits the window's minimum
 // size (read from crates/noct-app/src/window.rs) and 1440x920 without horizontal scroll, with the modes and the
 // project names inside their panes; a card keeps its box under the pointer; the focus is visible; the glass layer
 // can be switched off; the reduced-motion and reduced-transparency preferences are honoured where the browser
@@ -68,10 +71,22 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
 const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
+// The chat's commands. The question and the save are the only writes of the chat, and each is a command the person started.
+const CHAT_COMMANDS = ['provider_chat_send', 'provider_chat_cancel', 'conversations_create', 'ai_save_assistant']
+// The words the chat shows, copied from crates/noct-ui/src/chat.rs. The check compares them, so a change there is seen here.
+const SWITCH_OFF = 'O chat com o provedor está desligado nesta versão. Nada é enviado.'
+const SWITCH_ON = 'O chat está ligado. Ele só lê os arquivos de texto do topo do projeto.'
+const COMPLETE = 'Resposta completa. Você pode salvá-la na conversa.'
+const CANCELLED = 'Cancelado. A resposta parcial não é salva.'
+const STREAM_TRUNCATED = 'A resposta foi interrompida antes do fim. Nada foi salvo.'
+const CHAT_PROJECT = '/work/alpha'
+const CHAT_QUESTION = 'Qual é o estado do projeto?'
+const delta = (text) => ({ kind: 'delta', text })
+const DONE = { kind: 'done' }
 const MODEL_REFUSED = { code: 'invalid-input', message: 'O NOCT recusou o identificador do modelo.' }
 const SECURE_STORAGE_ERROR = {
   code: 'secure-storage-unavailable',
@@ -83,7 +98,7 @@ const TEST_KEY = 'sk-or-v1-check-only-0123456789'
 const CONSENT_PAYLOAD = /^\{"input":\{"workspace":"\/work\/[a-z]+"\}\}$/
 const EXAMPLE_NAMES = ['frx', 'ovra']
 // The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
-const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}' }
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}' }
 
 // What the shell returns for `workspaces_list`, as the items of its page: one project of each kind the sidebar shows.
 const PROJECTS = [
@@ -151,6 +166,47 @@ const SCENARIOS = [
   { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, expectTheme: 'light' },
   { name: 'provider-key-save-refused', mode: 'ready', theme: 'light', keyFails: SECURE_STORAGE_ERROR, provider: true, expectTheme: 'light' },
   { name: 'provider-reply-outside-the-contract', mode: 'invalid', theme: 'light', provider: true, expectTheme: 'light' },
+  { name: 'chat-off-by-default', mode: 'chat', theme: 'light', chatEnabled: false, expectTheme: 'light' },
+  {
+    name: 'chat-streams-in-order-and-saves-on-request',
+    mode: 'chat',
+    theme: 'light',
+    chatEnabled: true,
+    chat: { kind: 'stream-and-save', sequence: [[1, delta(' mundo')], [0, delta('Olá')], [2, DONE]] },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-save-refused-keeps-the-answer',
+    mode: 'chat',
+    theme: 'light',
+    chatEnabled: true,
+    chat: { kind: 'save-refused', sequence: [[0, delta('Olá mundo')], [1, DONE]], saveFails: { code: 'unknown-conversation', message: 'A conversa não existe mais.' } },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-cancel-keeps-the-text-and-ignores-what-follows',
+    mode: 'chat',
+    theme: 'light',
+    chatEnabled: true,
+    chat: { kind: 'hold', sequence: [[0, delta('parcial')], 'hold'], afterCancel: [[1, DONE]] },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-refused-by-the-shell',
+    mode: 'chat',
+    theme: 'light',
+    chatEnabled: true,
+    chat: { kind: 'refused', refused: { code: 'consent-required', message: 'Este projeto ainda não tem consentimento para o OpenRouter. Nada foi enviado.' } },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-stream-failure-saves-nothing',
+    mode: 'chat',
+    theme: 'light',
+    chatEnabled: true,
+    chat: { kind: 'stream-fails', sequence: [[0, delta('pa')], [1, { kind: 'failed', code: 'stream-truncated' }]] },
+    expectTheme: 'light',
+  },
 ]
 
 const TYPES = {
@@ -222,6 +278,11 @@ function installMock(config) {
       return { workspace, provider: 'openrouter', granted: providerState.granted[workspace] }
     }
     if (command === 'models_bindings_get') return providerState.models[payload.input.workspace] ?? null
+    if (command === 'provider_chat_status') return { enabled: config.scenario.chatEnabled === true }
+    if (command === 'conversations_create') return { id: 'conv-1', title: 'alpha', workspace: payload.input, createdAt: '2026-01-03T00:00:00.000Z' }
+    if (command === 'ai_save_assistant') {
+      return { id: 'msg-1', conversationId: payload.input.conversationId, role: 'assistant', content: payload.input.content, createdAt: '2026-01-03T00:00:00.000Z' }
+    }
     if (command === 'models_set_default_model') {
       const { workspace, modelId } = payload.input
       const next = { workspaceId: workspace, ...providerState.models[workspace] }
@@ -239,7 +300,42 @@ function installMock(config) {
       ? { items: [{ path: '/work/x', name: 'x', favorite: false, authorized: true, availability: 'online', createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-02T00:00:00.000Z' }], hasMore: false, nextCursor: null }
       : { approvalPolicy: 'always' }
 
+  // The callback registry of the shell. A channel is registered here, and the shell calls it with `{ message, index }`
+  // for each event and `{ end, index }` when the call is over. The scenario says which events go out, in which order.
+  const callbacks = {}
+  let callbackCount = 0
+  const chatRun = { channel: null, pending: [], end: 0 }
+  const emitUntilHold = () => {
+    while (chatRun.pending.length > 0 && chatRun.pending[0] !== 'hold') {
+      const next = chatRun.pending.shift()
+      window.__TAURI_INTERNALS__.runCallback(chatRun.channel, { message: next.frame, index: next.index })
+    }
+    if (chatRun.pending.length === 0) window.__TAURI_INTERNALS__.runCallback(chatRun.channel, { end: true, index: chatRun.end })
+  }
+  const startChat = (payload) => {
+    const chat = config.scenario.chat
+    if (chat.refused) return Promise.reject(chat.refused)
+    chatRun.channel = Number(payload.onEvent.slice('__CHANNEL__:'.length))
+    chatRun.pending = chat.sequence.map((item) => (item === 'hold' ? 'hold' : { index: item[0], frame: item[1] }))
+    chatRun.end = chat.sequence.filter((item) => item !== 'hold').length
+    return new Promise((resolve) => setTimeout(() => { resolve(null); emitUntilHold() }, 0))
+  }
+  const cancelChat = () => {
+    // A stale event after the cancel is sent on purpose: the page must ignore it.
+    chatRun.pending = (config.scenario.chat?.afterCancel ?? []).map((item) => ({ index: item[0], frame: item[1] }))
+    emitUntilHold()
+    return Promise.resolve(null)
+  }
+
   window.__TAURI_INTERNALS__ = {
+    transformCallback(callback) {
+      callbackCount += 1
+      callbacks[callbackCount] = callback
+      return callbackCount
+    },
+    runCallback(id, data) {
+      callbacks[id]?.(data)
+    },
     invoke(command, payload) {
       window.__noctCalls.push({ command, payload })
       const attempt = (window.__noctAttempts[command] = (window.__noctAttempts[command] ?? 0) + 1)
@@ -247,6 +343,9 @@ function installMock(config) {
       // A save the scenario refuses gets the shell's own error, as a refused read does.
       if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
       if (command === 'provider_key_save' && config.scenario.keyFails) return Promise.reject(config.scenario.keyFails)
+      if (command === 'provider_chat_send') return startChat(payload)
+      if (command === 'provider_chat_cancel') return cancelChat()
+      if (command === 'ai_save_assistant' && config.scenario.chat?.saveFails) return Promise.reject(config.scenario.chat.saveFails)
       // The shell refuses an identifier with no vendor, as the core does.
       if (command === 'models_set_default_model' && typeof payload.input.modelId === 'string' && !payload.input.modelId.includes('/')) {
         return Promise.reject(config.modelRefused)
@@ -255,6 +354,7 @@ function installMock(config) {
         const answer = () => {
           switch (mode) {
             case 'ready':
+            case 'chat':
               resolve(replyOf(command, payload))
               break
             case 'empty':
@@ -390,6 +490,95 @@ async function providerFlow(page, scenario, check) {
   )
 }
 
+// The chat of Revisar. With the switch off it says so, and the question box and the send button are disabled, so nothing
+// is sent. With the switch on, the question goes with its project and its text only; the answer streams in order; a cancel
+// keeps the text so far and ignores what follows; a save keeps the answer in a conversation of the project, and only when
+// the person asks; each failure says what happened and that nothing was saved.
+async function chatFlow(page, scenario, check) {
+  await page.getByRole('button', { name: 'Revisar', exact: true }).click()
+  const calls = () => page.evaluate(() => window.__noctCalls ?? [])
+  const switchLine = page.getByTestId('chat-switch')
+  await switchLine.waitFor({ timeout: 8000 })
+  const question = page.locator('#chat-question')
+  const send = page.getByRole('button', { name: 'Perguntar', exact: true })
+  const answer = page.getByTestId('chat-answer')
+  const save = page.getByTestId('chat-save')
+  if (!scenario.chatEnabled) {
+    check((await switchLine.textContent())?.trim() === SWITCH_OFF, 'the chat is off by default, and says that nothing is sent')
+    check(await question.isDisabled(), 'the question box is disabled while the chat is off')
+    check(await send.isDisabled(), 'the send button is disabled while the chat is off')
+    check(!(await calls()).some((call) => call.command === 'provider_chat_send'), 'no question is sent while the chat is off')
+    return
+  }
+  check((await switchLine.textContent())?.trim() === SWITCH_ON, 'the chat says it is on, and reads only the top-level text of the project')
+  await page.locator('#chat-project').selectOption(CHAT_PROJECT)
+  await question.fill(CHAT_QUESTION)
+  check(await send.isEnabled(), 'the send button is enabled once a project and a question are chosen')
+  await send.click()
+  await page.waitForFunction(() => (window.__noctCalls ?? []).some((call) => call.command === 'provider_chat_send'))
+  const sent = (await calls()).find((call) => call.command === 'provider_chat_send')
+  check(
+    sent?.payload.input.workspace === CHAT_PROJECT && sent.payload.input.question === CHAT_QUESTION,
+    'the question names its project and its text, and nothing else',
+  )
+  check(/^__CHANNEL__:\d+$/.test(sent?.payload.onEvent ?? ''), 'the answer comes on a channel')
+  check(!JSON.stringify(sent?.payload ?? {}).includes('sk-or'), 'no key is in the question')
+
+  const { chat } = scenario
+  if (chat.kind === 'refused') {
+    const alert = page.getByTestId('chat-error')
+    await alert.waitFor({ timeout: 8000 })
+    check((await alert.textContent())?.trim() === chat.refused.message, 'a refusal of the shell is shown with its message')
+    check((await page.getByTestId('chat-answer').count()) === 0, 'no answer area is shown for a refused question')
+    check(!(await save.isEnabled()), 'nothing can be saved after a refusal')
+    return
+  }
+  if (chat.kind === 'stream-fails') {
+    const alert = page.getByTestId('chat-error')
+    await alert.waitFor({ timeout: 8000 })
+    check((await alert.textContent())?.trim() === STREAM_TRUNCATED, 'an answer that breaks says so, and that nothing was saved')
+    check((await answer.textContent())?.trim() === 'pa', 'the text that arrived stays on screen')
+    check(!(await save.isEnabled()), 'a broken answer cannot be saved')
+    return
+  }
+  if (chat.kind === 'hold') {
+    const cancel = page.getByTestId('chat-cancel')
+    await cancel.waitFor({ timeout: 8000 })
+    await page.waitForFunction(() => document.querySelector('[data-testid="chat-answer"]')?.textContent === 'parcial')
+    await cancel.click()
+    await page.getByTestId('chat-status').getByText(CANCELLED, { exact: true }).waitFor({ timeout: 8000 })
+    await page.waitForTimeout(200)
+    check((await answer.textContent())?.trim() === 'parcial', 'a cancel keeps the text so far, and nothing after it')
+    check(!(await save.isEnabled()), 'a cancelled answer cannot be saved')
+    check((await page.getByTestId('chat-cancel').count()) === 0, 'the cancel control goes once the answer has stopped')
+    check((await calls()).some((call) => call.command === 'provider_chat_cancel'), 'the cancel reaches the shell')
+    return
+  }
+
+  await page.getByTestId('chat-status').getByText(COMPLETE, { exact: true }).waitFor({ timeout: 8000 })
+  check((await answer.textContent())?.trim() === 'Olá mundo', 'the answer reads in order, whatever the order its events arrive in')
+  check(await save.isEnabled(), 'a complete answer can be saved')
+  await save.click()
+  if (chat.kind === 'save-refused') {
+    const alert = page.getByTestId('chat-save-error')
+    await alert.waitFor({ timeout: 8000 })
+    check((await alert.textContent())?.trim() === chat.saveFails.message, 'a save that the shell refuses says so')
+    check((await page.getByTestId('chat-saved').count()) === 0, 'a refused save is not shown as saved')
+    check(await save.isEnabled(), 'a refused save can be tried again')
+    return
+  }
+  await page.getByTestId('chat-saved').waitFor({ timeout: 8000 })
+  const log = await calls()
+  const created = log.find((call) => call.command === 'conversations_create')
+  check(created?.payload.input === CHAT_PROJECT, 'the conversation is created in the project of the answer')
+  const saved = log.find((call) => call.command === 'ai_save_assistant')
+  check(
+    saved?.payload.input.conversationId === 'conv-1' && saved.payload.input.content === 'Olá mundo',
+    'the answer is saved in that conversation, and nothing else is written',
+  )
+  check(!(await save.isEnabled()), 'a saved answer is saved once')
+}
+
 const browser = await chromium.launch()
 const server = await serve()
 const results = []
@@ -429,6 +618,7 @@ try {
       // The states of the settings read are shown in Ajustes, so it is opened first.
       await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
       if (scenario.provider) await providerFlow(page, scenario, check)
+      if (scenario.mode === 'chat') await chatFlow(page, scenario, check)
       const values = page.getByTestId('settings-values')
       const themeButton = page.getByRole('button', { name: /^Usar tema (escuro|claro)$/ })
       const html = page.locator('html')
@@ -606,13 +796,8 @@ try {
         await page.getByRole('button', { name: 'Revisar', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Revisão', level: 1 }).isVisible(), 'a mode leaves Ajustes')
 
-        // The question box has a label, and says it does not answer yet.
-        await page.getByLabel('Pergunte sobre o projeto').fill('Quem sou eu?')
-        await page.getByLabel('Pergunte sobre o projeto').press('Enter')
-        check(
-          (await page.getByTestId('ask-note').textContent())?.includes('Perguntas ainda não são respondidas'),
-          'the question box says it does not answer yet',
-        )
+        // The chat is off by default: its switch says so, and nothing can be sent.
+        await chatFlow(page, { ...scenario, chatEnabled: false }, check)
 
         // A card keeps its box under the pointer: the hover changes the shadow only.
         const card = page.locator('.card').first()
@@ -640,7 +825,7 @@ try {
         check(outline.style === 'solid' && outline.width === '2px', 'the focused control has a visible outline')
 
         // Layout: the window fits its minimum size and 1440x920 without horizontal scroll. The modes stay inside the
-        // content pane, the project names inside the sidebar, and the question box on screen.
+        // content pane, the project names inside the sidebar, and the question box inside the window's width.
         for (const size of SIZES) {
           await page.setViewportSize(size)
           const fit = await page.evaluate(() => {
@@ -650,8 +835,8 @@ try {
             const sidebar = box('.sidebar')
             return {
               horizontal: document.documentElement.scrollWidth <= window.innerWidth,
-              composerBottom: box('.composer').bottom,
-              innerHeight: window.innerHeight,
+              questionRight: box('#chat-question').right,
+              innerWidth: window.innerWidth,
               sidebar: sidebar.width,
               modesInside: modes.left >= content.left && modes.right <= content.right,
               projectsInside: [...document.querySelectorAll('.project')].every((item) => item.getBoundingClientRect().right <= sidebar.right),
@@ -659,7 +844,7 @@ try {
           })
           const label = `${size.width}x${size.height}`
           check(fit.horizontal, `no horizontal scroll at ${label}`)
-          check(fit.composerBottom <= fit.innerHeight, `the question box is on screen at ${label}`)
+          check(fit.questionRight <= fit.innerWidth, `the question box fits the window width at ${label}`)
           check(fit.sidebar >= 199 && fit.sidebar <= 249, `the sidebar keeps 200-248px at ${label}`)
           check(fit.modesInside, `the modes fit the content pane at ${label}`)
           check(fit.projectsInside, `the project names fit the sidebar at ${label}`)
@@ -694,10 +879,10 @@ try {
         const count = (command) => calls.filter((call) => call.command === command).length
         check(calls.length >= 2, 'the interface calls the shell for settings and projects')
         check(
-          calls.every((call) => [...READ_COMMANDS, 'settings_set', ...PROVIDER_WRITES].includes(call.command)),
-          'only the read commands, the setting saves and the provider writes are called',
+          calls.every((call) => [...READ_COMMANDS, 'settings_set', ...PROVIDER_WRITES, ...CHAT_COMMANDS].includes(call.command)),
+          'only the read commands, the setting saves, the provider writes and the chat commands are called',
         )
-        const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set'].includes(call.command))
+        const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set', ...CHAT_COMMANDS].includes(call.command))
         check(
           reads.every((call) =>
             ['provider_consent_status', 'models_bindings_get'].includes(call.command)

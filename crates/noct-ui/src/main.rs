@@ -1,6 +1,8 @@
 //! NOCT interface entry point. Trunk compiles this crate to WebAssembly.
 
 mod app;
+mod chat;
+mod chat_panel;
 mod dom;
 mod examples;
 mod ipc;

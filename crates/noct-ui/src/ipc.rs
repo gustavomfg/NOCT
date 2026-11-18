@@ -6,6 +6,7 @@
 //! caller checks that text against the contracts of `noct-core` (see `settings.rs`).
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use wasm_bindgen::closure::Closure;
@@ -84,6 +85,10 @@ extern "C" {
     #[wasm_bindgen(catch, js_namespace = ["window", "__TAURI_INTERNALS__"])]
     fn invoke(command: &str, payload: &JsValue) -> Result<JsPromise, JsValue>;
 
+    /// The shell's registry of callbacks. It returns the identifier the shell uses to call back into the page.
+    #[wasm_bindgen(catch, js_namespace = ["window", "__TAURI_INTERNALS__"], js_name = transformCallback)]
+    fn transform_callback(callback: &JsValue, once: bool) -> Result<JsValue, JsValue>;
+
     /// A JavaScript promise.
     pub type JsPromise;
 
@@ -127,6 +132,74 @@ pub fn call_with(command: &str, payload: &str, done: impl FnOnce(Outcome) + 'sta
             promise.then(&on_resolved, &on_rejected);
         }
         Err(_) => finish(&done, Outcome::Unavailable),
+    }
+}
+
+/// One frame of a channel, as the shell sends it: a message with its position. The end of a channel has no message.
+#[derive(serde::Deserialize)]
+struct Frame {
+    index: u64,
+    #[serde(default)]
+    message: Option<serde_json::Value>,
+}
+
+/// The messages of one channel. They are held until their turn, so they are handed on in the order the shell sent them.
+#[derive(Default)]
+struct Ordering {
+    next: u64,
+    held: BTreeMap<u64, String>,
+}
+
+/// One channel of the page: its order, and the caller that takes each message.
+struct Stream {
+    ordering: RefCell<Ordering>,
+    on_message: RefCell<Box<dyn FnMut(String)>>,
+}
+
+/// Registers `on_message` as a channel of the shell, and returns the value a command takes for it: `__CHANNEL__:<id>`.
+/// Each message reaches `on_message` as JSON text, in the order the shell sent it, even when frames arrive out of order.
+/// The end of the channel is not handed on; the caller ends when its own last event arrives.
+///
+/// The callback stays registered for the life of the page. The shell can still send the end of a channel after the last
+/// message, so the callback is never dropped while the page runs. Each question adds one small callback.
+pub fn channel(on_message: impl FnMut(String) + 'static) -> Option<String> {
+    let stream = Rc::new(Stream {
+        ordering: RefCell::new(Ordering::default()),
+        on_message: RefCell::new(Box::new(on_message)),
+    });
+    let callback = Closure::<dyn FnMut(JsValue)>::new(move |frame: JsValue| {
+        deliver(&stream, &frame);
+    });
+    let id = transform_callback(callback.as_ref(), false)
+        .ok()?
+        .as_f64()?;
+    callback.forget();
+    Some(format!("__CHANNEL__:{}", id as u64))
+}
+
+fn deliver(stream: &Stream, frame: &JsValue) {
+    let Ok(frame) = serde_json::from_str::<Frame>(&text_of(frame)) else {
+        return;
+    };
+    let ready = {
+        let mut ordering = stream.ordering.borrow_mut();
+        if let Some(message) = frame.message {
+            ordering.held.insert(frame.index, message.to_string());
+        }
+        let mut ready = Vec::new();
+        loop {
+            let next = ordering.next;
+            let Some(message) = ordering.held.remove(&next) else {
+                break;
+            };
+            ready.push(message);
+            ordering.next += 1;
+        }
+        ready
+    };
+    let mut on_message = stream.on_message.borrow_mut();
+    for message in ready {
+        on_message(message);
     }
 }
 

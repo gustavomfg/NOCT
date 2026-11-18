@@ -7,6 +7,7 @@
 use leptos::prelude::*;
 use noct_core::contracts::Workspace;
 
+use crate::chat_panel;
 use crate::dom;
 use crate::examples::{EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_VAULT};
 use crate::ipc;
@@ -35,7 +36,6 @@ pub fn App() -> impl IntoView {
 
     let (mode, set_mode) = signal(Mode::Review);
     let (settings_open, set_settings_open) = signal(false);
-    let (asked, set_asked) = signal(false);
 
     let (settings_view, set_settings_view) = signal(SettingsView::Loading);
     let read_settings = move || {
@@ -51,6 +51,10 @@ pub fn App() -> impl IntoView {
         });
     };
     read_settings();
+
+    // The chat switch is read once. Until the shell answers, the chat section says it is loading.
+    let chat = chat_panel::ChatState::new();
+    chat.read_status();
 
     // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
     // shell replied with. A refused save says so, and its controls go back to the settings the shell holds.
@@ -204,7 +208,7 @@ pub fn App() -> impl IntoView {
                                 settings_panel(settings_view, saving, save_error, save_setting, read_settings, workspaces_view).into_any()
                             } else {
                                 match mode.get() {
-                                    Mode::Review => review_panel().into_any(),
+                                    Mode::Review => review_panel(chat, workspaces_view).into_any(),
                                     Mode::Build => unavailable_panel(
                                         "Construir",
                                         "Cada comando espera a sua aprovação. Toda alteração pode ser revertida.",
@@ -221,36 +225,6 @@ pub fn App() -> impl IntoView {
                     </div>
                 </main>
 
-                <div class="composer-wrap">
-                    <form
-                        class="composer"
-                        on:submit=move |event| {
-                            event.prevent_default();
-                            set_asked.set(true);
-                        }
-                    >
-                        <label for="ask" class="sr-only">"Pergunte sobre o projeto"</label>
-                        <input
-                            id="ask"
-                            class="composer__input"
-                            type="text"
-                            autocomplete="off"
-                            placeholder="Pergunte sobre o projeto"
-                        />
-                        <button class="composer__send" type="submit" aria-label="Enviar">
-                            {arrow_icon()}
-                        </button>
-                    </form>
-                    <p class="note" aria-live="polite" data-testid="ask-note">
-                        {move || {
-                            if asked.get() {
-                                "Perguntas ainda não são respondidas nesta fatia."
-                            } else {
-                                ""
-                            }
-                        }}
-                    </p>
-                </div>
             </div>
         </div>
     }
@@ -315,7 +289,10 @@ fn project_item(workspace: &Workspace) -> impl IntoView {
 }
 
 /// The review mode: read-only findings, each with its severity, its file and its description. EXAMPLE.
-fn review_panel() -> impl IntoView {
+fn review_panel(
+    chat: chat_panel::ChatState,
+    projects: ReadSignal<WorkspacesView>,
+) -> impl IntoView {
     view! {
         <div class="stack">
             <p class="example-banner">"Dados de exemplo: nada é executado nem gravado nesta tela."</p>
@@ -338,6 +315,7 @@ fn review_panel() -> impl IntoView {
                     }
                 })
                 .collect_view()}
+            {chat_panel::chat_section(chat, projects)}
         </div>
     }
 }
@@ -536,14 +514,6 @@ fn sun_icon() -> impl IntoView {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-        </svg>
-    }
-}
-
-fn arrow_icon() -> impl IntoView {
-    view! {
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 19V5M5 12l7-7 7 7" />
         </svg>
     }
 }
