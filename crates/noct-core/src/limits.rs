@@ -118,6 +118,15 @@ pub mod provider_network {
     pub const MAXIMUM_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 }
 
+/// Limits of the project context sent with a provider call. The caps are the restrictive values of beta 1: a file larger
+/// than one cap is never sent, and the total never passes the budget.
+pub mod provider_context {
+    /// The most bytes of project files one provider call may carry.
+    pub const MAXIMUM_CONTEXT_BYTES: u64 = 128 * 1024;
+    /// The most bytes of one project file the context may carry.
+    pub const MAXIMUM_FILE_BYTES: u64 = 32 * 1024;
+}
+
 /// Limits of a provider key typed in the settings. The key is sent as an HTTP header, so only visible ASCII is
 /// accepted; the bounds are the ones the shell enforces before it stores anything.
 pub mod provider_key {

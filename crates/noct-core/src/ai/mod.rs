@@ -2,6 +2,7 @@
 //! `shared/ai`.
 
 pub mod bindings;
+pub mod context;
 pub mod model;
 pub mod network;
 pub mod provider_configuration;
