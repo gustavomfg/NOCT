@@ -274,7 +274,7 @@ if (uncovered.length) {
 }
 const unvalidated = invokable.filter((row) => row.validation === 'UNVERIFIED')
 
-const cell = (text) => String(text).replace(/\|/g, '\\|')
+const cell = (text) => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 const count = (predicate) => rows.filter(predicate).length
 
 const out = []
