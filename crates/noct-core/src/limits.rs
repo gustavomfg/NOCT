@@ -134,6 +134,19 @@ pub mod provider_key {
     pub const MAXIMUM_KEY_CHARACTERS: u64 = 512;
 }
 
+/// Limits of the chat with a provider. The stream is read line by line, so one line and one event have their own cap, and
+/// the answer kept in memory has a cap too.
+pub mod provider_chat {
+    /// The most bytes of one line of the stream, and of the data of one event.
+    pub const MAXIMUM_EVENT_BYTES: usize = 64 * 1024;
+    /// The most characters of an answer the shell keeps.
+    pub const MAXIMUM_ANSWER_CHARACTERS: usize = 64 * 1024;
+    /// The most characters of a question.
+    pub const MAXIMUM_QUESTION_CHARACTERS: usize = 8_000;
+    /// The most characters of a model identifier, such as `vendor/name:free`.
+    pub const MAXIMUM_MODEL_CHARACTERS: usize = 128;
+}
+
 /// Limits of model descriptors. Port of `MODEL_LIMITS` in `shared/ai/model.ts`.
 pub mod model {
     pub const IDENTIFIER_CHARACTERS: u64 = 512;
