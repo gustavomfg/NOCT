@@ -719,3 +719,48 @@ open. Round-1 open item (f), `workspace.remove` without an authorization check, 
 
 Project removal with change sets (decision 2). Then the `workspace_remove` confirmation in the UI, once the outcome of that removal
 is known.
+
+## Changes after the round 2 report
+
+The round 2 report describes the updater as prepared, with an empty key and no endpoint. These commits fill it in, under
+`[security-review]`:
+
+- `9426e68`: `plugins.updater` gets the release public key (key id `40503B624D87D646`) and the one HTTPS endpoint of the
+  latest release. The configuration is complete, so `crates/noct-app/src/updater.rs` registers `tauri-plugin-updater`
+  2.14.1 at start. Registering it makes no request. No code calls the plugin's check, download or install commands, and
+  the main window has no updater permission.
+- `47eb3f7`: the release workflow, `.github/workflows/shell-release.yml`, is triggered by `rust-v*` tags, which no Electron
+  workflow matches. Its gate checks the shell CI of the tagged commit, not `main`. The attestation action is at the pin the
+  build provenance dry run verified. Nothing has run it.
+- `6fd041e`: `docs/noct-updater.key.pub`, the public key file, is committed. `updater_config.rs` fails if it differs from
+  the configuration.
+
+Not verified after these commits: no window was opened, so the plugin's registration has not been seen in a running
+shell; the release workflow, its `release` environment and its secrets have not run; the endpoint
+`releases/latest/download/latest.json` shares the "latest" release with the Electron application, which is a blocker
+before the first tag (see [docs/shell-updater.md](shell-updater.md), Release workflow).
+
+## Pending: merge of `migration/rust` into `main`
+
+`main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
+commits that `main` does not have, and `main` has the two merge commits that `migration/rust` does not have. Neither merge changed
+`README.md`, so `main` keeps the product README and this branch keeps its own.
+
+**Blocker for a pull request from this branch into `main`:** `npm run verify:release-metadata` fails on this branch:
+
+```text
+Error: README.md diverge da fonte canônica; valor esperado: v1.0.5
+```
+
+The check requires `README.md` to contain the version. The branch README is the migration's own document, which starts with
+`# NOCT: state of the Rust migration`, and it does not contain `v1.0.5`. The README of `main` contains it. The check runs in
+`package-validation.yml` on pull requests into `main`, and in `stable-release.yml` for `v` tags.
+
+Nothing is changed by this note. Before the merge, choose one:
+
+1. Keep the product README on `main`, and move the branch README to a document under `docs/` (for example
+   `docs/rust-migration.md`). The check stays as it is. This is the smallest change.
+2. Keep the branch README and change the check, so that it does not read the product's README.
+3. Take the `main` README, and move the migration status to another file.
+
+Only `verify:release-metadata` was run for this note. The other Electron checks were not run for it.
