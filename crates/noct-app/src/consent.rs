@@ -81,11 +81,13 @@ fn write(
     })
 }
 
+/// The project must be saved and authorized. A restored project is unauthorized until it is chosen again, and consent is
+/// not recorded for it: the same rule `services` applies to a conversation. Each refusal is `UnknownWorkspace`.
 fn ensure_saved(store: &Store, workspace: &str) -> Result<(), CommandError> {
-    let saved = services::workspace_rows(store)?
+    let authorized = services::workspace_rows(store)?
         .iter()
-        .any(|row| row.path == workspace);
-    if saved {
+        .any(|row| row.path == workspace && row.authorized);
+    if authorized {
         Ok(())
     } else {
         Err(CommandError::UnknownWorkspace)

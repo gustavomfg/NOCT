@@ -1285,6 +1285,70 @@ fn the_consent_commands_follow_a_saved_project_and_stay_out_of_the_settings_read
     }
 }
 
+/// A project that is saved but not authorized, as a restored one is, cannot consent or read its consent. The refusal is
+/// the same `unknown-workspace` as for a project that is not saved, and it lasts until the project is authorized again.
+#[test]
+fn consent_is_refused_for_a_saved_project_that_is_not_authorized() {
+    let scratch = Scratch::new("consent-unauthorized");
+    let app = app_with_commands(&scratch);
+    let main = window(&app, "main");
+    let project = "/synthetic/restored-consent-project";
+
+    {
+        let persistence = app.state::<Persistence>();
+        let store = persistence.store.lock().expect("the store is not poisoned");
+        store
+            .workspaces()
+            .touch(project)
+            .expect("the project is saved");
+        store
+            .connection()
+            .execute(
+                "UPDATE workspaces SET authorized = 0 WHERE path = ?1",
+                [project],
+            )
+            .expect("the project is marked as restored");
+    }
+
+    let call = |command: &str| {
+        get_ipc_response(
+            &main,
+            request(&main, command, json!({ "input": { "workspace": project } })),
+        )
+    };
+    for command in [
+        "provider_consent_status",
+        "provider_consent_grant",
+        "provider_consent_revoke",
+    ] {
+        assert_eq!(
+            error_of(call(command))["code"],
+            "unknown-workspace",
+            "{command} refuses a project that is not authorized"
+        );
+    }
+
+    {
+        let persistence = app.state::<Persistence>();
+        persistence
+            .store
+            .lock()
+            .expect("the store is not poisoned")
+            .connection()
+            .execute(
+                "UPDATE workspaces SET authorized = 1 WHERE path = ?1",
+                [project],
+            )
+            .expect("the project is authorized again");
+    }
+
+    assert_eq!(
+        ok_json(call("provider_consent_status")),
+        json!({ "workspace": project, "provider": "openrouter", "granted": false }),
+        "once authorized, the project answers as before, with no consent recorded"
+    );
+}
+
 /// The provider key commands are not granted to a window outside the capability.
 #[test]
 fn the_provider_key_commands_are_refused_to_another_window() {
