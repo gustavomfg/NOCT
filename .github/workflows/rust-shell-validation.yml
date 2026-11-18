@@ -25,7 +25,8 @@ jobs:
   shell:
     name: Shell on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Each run builds without a cache, so a cold Windows or macOS build can take most of this time.
+    # The Cargo registry, the Cargo git cache, the target directory and the trunk binary are cached per system, keyed by
+    # the toolchain and the lock files. A cold build can still take most of the time limit.
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -39,6 +40,22 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
+
+      - name: Restore the Cargo, target and trunk caches
+        # The official cache action, pinned by commit. The key names the system, the toolchain and the locks; a run
+        # that finds no exact key restores the newest cache of the same system and toolchain, and then saves its own.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/trunk
+            ~/.cargo/bin/trunk.exe
+            target
+          key: shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            shell-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install the Linux packages that Tauri needs
         if: matrix.os == 'ubuntu-latest'
@@ -80,8 +97,14 @@ jobs:
           test "$(rustc --version | cut -d' ' -f2)" = "$pinned"
 
       - name: Install trunk at a pinned version
+        # A cached binary is used only when it reports the pinned version, by the rule of scripts/run-rust-shell.mjs.
         shell: bash
-        run: cargo install --locked trunk@0.22.1
+        run: |
+          current="$(trunk --version 2>/dev/null || true)"
+          if [[ "$current" != *0.22.1 ]]; then
+            cargo install --locked trunk@0.22.1
+          fi
+          [[ "$(trunk --version)" == *0.22.1 ]]
 
       - name: Build the interface with trunk
         shell: bash
