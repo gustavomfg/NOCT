@@ -1207,6 +1207,54 @@ Not in this round: the assistant producing proposals (the chat returns text only
 the same fields), the interface that approves each proposal, and hunk-level review (`editHunk`, which the owner had placed in
 beta 2; see `docs/rust-edit-hunk-design.md`).
 
+#### Report of item 3 (backend)
+
+Built: the approval path of a change to a project file, without interface and without the assistant's proposals.
+
+- `noct-core::file_change`: the path rules (relative, no `..`, no link-like names, no sensitive names), the states of a change
+  (pending, applied, rejected, undone), and the journal's limits.
+- `noct-app::file_changes`: the disk checks and the write. Every write goes through `write_atomic_file`.
+- Commands `file_changes_list`, `file_change_propose`, `file_change_approve`, `file_change_reject` and `file_change_undo`,
+  granted to the `main` window only.
+
+Tests: 14 rule tests in `crates/noct-core/tests/file_change.rs` and 18 disk tests in `crates/noct-app/tests/file_changes.rs`.
+They cover: nothing is written before approval; traversal and absolute paths refused; sensitive names refused; a folder or file
+that is a symbolic link is refused, also when it is swapped in after the proposal; a conflict on approve and on undo keeps the
+other edit; reject writes nothing; undo restores the text or removes the created file; the journal survives a restart; a damaged
+journal is refused and not overwritten; the open limit; the text and size limits; the journal is mode 0600; an approved write
+keeps the mode of the file. The symbolic link tests run on Unix only.
+
+Decisions taken here (small, reversible):
+
+- The base of a change must be UTF-8 text. A binary file is refused. The design said bytes; text is the smaller honest scope.
+- Limits: 32 KiB per file (the chat's per-file cap), 50 open changes across all projects, 50 closed changes kept.
+- The journal is `file-changes.json` in the data folder, mode 0600. It is not a SQLite table, so no migration was added.
+- A new file needs an existing folder. Folders are not created.
+- Reject touches no file, so it does not require the project to be authorized.
+- Approve marks the change applied in the journal before it writes, and sets it back to pending if the write fails.
+- A sensitive word anywhere in a name (`credential`, `secret`, `private-key`, `private_key`) refuses the path. The rule is broad on purpose.
+
+Not done in this round:
+
+- No interface panel for the changes. The commands exist and are tested; nothing in the app calls them yet.
+- The assistant does not produce proposals. The chat still answers with text only. The format of a proposal from the assistant is
+  a decision for the owner: it changes what the chat is asked to return, and the chat is still switched off.
+- No review by hunk (`editHunk`, item 5).
+
+Known limits, stated:
+
+- Between the check and the rename, another program that writes the same file is not excluded. The window is one comparison
+  and one rename.
+- Without `O_NOFOLLOW`, a link swapped in between the check and the open is not excluded. The check runs on each name.
+- A crash after the journal is saved as applied and before the write leaves the change marked applied with the file unchanged.
+  Undo then refuses, because the file does not hold the content. Recovery is manual.
+- Not run on Windows or macOS.
+
+Validation at this commit: `cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+`cargo test --workspace --no-fail-fast` exit 0, `trunk build --release` exit 0, `scripts/check-shell-ui.mjs` exit 0. A
+formatting-only change to the disk test file came after the workspace run; that file was then rerun (18 passed) and clippy of
+`noct-app` was rerun clean.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

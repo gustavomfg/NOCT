@@ -34,6 +34,7 @@ aplicativo registra planos, aprovações e resultados de validação (`AGENTS.md
 O que este branch ainda não faz:
 
 - chama um provedor de IA só pelo chat, e o chat está desligado nesta versão (seção 3);
+- não grava arquivo de projeto pela interface: aprovar, rejeitar e desfazer uma alteração de arquivo existem só como comandos (seção 3);
 - não mostra conversas na interface;
 - não produz instalador nem pacote assinado;
 - nenhuma janela foi conferida no Windows nem no macOS (seção 6).
@@ -52,7 +53,7 @@ A tabela de fases da [ADR 0001](docs/adr/0001-rust-migration.md) é a referênci
   portados.
 - **Fase 5, IA:** em parte. O cofre de credenciais, o transporte do OpenRouter e o chat estão prontos, e o chat está
   desligado. Outros adaptadores de provedores e o laço de ferramentas não foram portados.
-- **Fase 6, IPC e shell:** em parte. 28 comandos, liberados só para a janela `main`.
+- **Fase 6, IPC e shell:** em parte. 33 comandos, liberados só para a janela `main`.
 - **Fase 7, interface:** em parte. A área de configurações, a lista de projetos na barra lateral, a camada de vidro e os
   temas. Conferida no Chromium com um shell simulado. Não conferida em janela real.
 - **Fase 8, atualizações e empacotamento:** não iniciada no lado Rust. Bloqueada (seção 4).
@@ -108,7 +109,7 @@ O que o código faz neste branch:
   (`crates/noct-app/tests/provider_chat_flow.rs` e `provider_transport.rs`). Nenhum teste chama o OpenRouter, e nenhuma
   execução usou uma chave real. As checagens da interface rodam no Chromium com um shell simulado, com o interruptor desligado.
 
-Não feito: a lista de modelos do provedor, outros provedores e a gravação de alterações propostas pelo assistente.
+Não feito: a lista de modelos do provedor, outros provedores, a interface que aprova alterações de arquivos e as alterações que o assistente propõe.
 O estado de cada item está em [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" e nas seções depois dela.
 
 ## 4. Verificação
@@ -205,7 +206,7 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 - **Política do webview.** `withGlobalTauri` é `false`. A Content-Security-Policy é
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   O Chromium a confere (`scripts/check-shell-csp.mjs`). Nenhum webview a aplica ainda em execução real.
-- **Comandos.** 28 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
+- **Comandos.** 33 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
   da aplicação. `crates/noct-app/capabilities/default.json` os libera só para a janela `main`. Os testes com o runtime de mock
   do Tauri recusam um comando não liberado e um pedido de uma segunda janela.
 - **Navegação.** A janela principal aceita navegação só para a interface empacotada, e para o servidor de desenvolvimento

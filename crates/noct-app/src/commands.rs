@@ -12,6 +12,7 @@ use noct_core::ai::consent::{ProjectConsentRequest, ProjectConsentStatus};
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
 use noct_core::contracts::{Conversation, Message};
+use noct_core::file_change::{FileChange, FileChangeProposal};
 use noct_core::ipc::ReplyRequest;
 use noct_core::ipc::ai::SaveAssistantRequest;
 use noct_core::ipc::brain::{
@@ -30,6 +31,7 @@ use crate::bootstrap::Persistence;
 use crate::consent;
 use crate::credentials;
 use crate::error::CommandError;
+use crate::file_changes;
 use crate::logging::measured;
 use crate::provider_chat::{
     self, ChatControl, ChatEvent, ChatRequest, ChatRun, ChatStatus, OPENROUTER_CHAT_URL,
@@ -552,5 +554,72 @@ where
     match tauri::async_runtime::spawn_blocking(work).await {
         Ok(result) => result,
         Err(_) => Err(CommandError::Internal),
+    }
+}
+
+/// Lists the proposed changes of a project, in the order they were proposed. The argument is the project path.
+#[tauri::command]
+pub async fn file_changes_list(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<Vec<FileChange>, CommandError> {
+    let workspace = match input {
+        serde_json::Value::String(text) => text,
+        _ => return Err(CommandError::InvalidInput),
+    };
+    let persistence = state.inner().clone();
+    blocking(move || file_changes::list(&persistence, &default_blocked_roots(), &workspace)).await
+}
+
+/// Proposes a change to one text file of a project. The argument is `{ workspace, path, content }`. Nothing is written
+/// until the change is approved.
+#[tauri::command]
+pub async fn file_change_propose(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<FileChange, CommandError> {
+    let proposal: FileChangeProposal =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let persistence = state.inner().clone();
+    blocking(move || file_changes::propose(&persistence, &default_blocked_roots(), proposal)).await
+}
+
+/// Approves a pending change, which writes its content into the project. The argument is the change id.
+#[tauri::command]
+pub async fn file_change_approve(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<FileChange, CommandError> {
+    let id = change_id(input)?;
+    let persistence = state.inner().clone();
+    blocking(move || file_changes::approve(&persistence, &default_blocked_roots(), &id)).await
+}
+
+/// Rejects a pending change. Nothing in the project is touched. The argument is the change id.
+#[tauri::command]
+pub async fn file_change_reject(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<FileChange, CommandError> {
+    let id = change_id(input)?;
+    let persistence = state.inner().clone();
+    blocking(move || file_changes::reject(&persistence, &id)).await
+}
+
+/// Undoes an applied change, if the file still holds what the change wrote. The argument is the change id.
+#[tauri::command]
+pub async fn file_change_undo(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<FileChange, CommandError> {
+    let id = change_id(input)?;
+    let persistence = state.inner().clone();
+    blocking(move || file_changes::undo(&persistence, &default_blocked_roots(), &id)).await
+}
+
+fn change_id(input: serde_json::Value) -> Result<String, CommandError> {
+    match input {
+        serde_json::Value::String(text) if !text.is_empty() => Ok(text),
+        _ => Err(CommandError::InvalidInput),
     }
 }

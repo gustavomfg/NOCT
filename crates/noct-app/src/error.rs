@@ -43,6 +43,20 @@ pub enum CommandError {
     KeyNotConfigured,
     /// A question is already running. The new one is not started.
     ChatBusy,
+    /// The path of a change is outside the project, a symbolic link, or a sensitive name. Nothing is written.
+    PathNotAllowed,
+    /// The file of a change is not a regular text file, is too large, or cannot be read as text. Nothing is written.
+    FileNotEditable,
+    /// The file changed after the change was proposed, or after it was applied. Nothing is written.
+    ChangeConflict,
+    /// The request names a change that is not in the journal.
+    UnknownChange,
+    /// The change is not in a status that allows the request. Nothing is written.
+    InvalidChangeTransition,
+    /// The journal already holds the most changes that may be open. Nothing is proposed.
+    TooManyOpenChanges,
+    /// The file of a change could not be written or removed. The journal is set back, so nothing is recorded as done.
+    ChangeWrite,
 }
 
 impl CommandError {
@@ -65,6 +79,13 @@ impl CommandError {
             Self::ModelNotSet => "model-not-set",
             Self::KeyNotConfigured => "key-not-configured",
             Self::ChatBusy => "chat-busy",
+            Self::PathNotAllowed => "path-not-allowed",
+            Self::FileNotEditable => "file-not-editable",
+            Self::ChangeConflict => "change-conflict",
+            Self::UnknownChange => "unknown-change",
+            Self::InvalidChangeTransition => "invalid-change-transition",
+            Self::TooManyOpenChanges => "too-many-open-changes",
+            Self::ChangeWrite => "change-write",
         }
     }
 
@@ -99,6 +120,23 @@ impl CommandError {
                 "Salve uma chave do OpenRouter antes de perguntar. Nada foi enviado."
             }
             Self::ChatBusy => "Já existe uma pergunta em andamento.",
+            Self::PathNotAllowed => {
+                "Este caminho não pode ser alterado pelo NOCT. Nada foi escrito."
+            }
+            Self::FileNotEditable => {
+                "Este arquivo não pode ser alterado pelo NOCT: não é texto, é grande demais ou não é um arquivo comum. Nada foi escrito."
+            }
+            Self::ChangeConflict => "O arquivo mudou desde a proposta. Nada foi escrito.",
+            Self::UnknownChange => "Alteração não encontrada.",
+            Self::InvalidChangeTransition => {
+                "Esta alteração não pode receber essa ação agora. Nada foi escrito."
+            }
+            Self::TooManyOpenChanges => {
+                "Há alterações demais em aberto. Aprove, rejeite ou desfaça uma antes de propor outra."
+            }
+            Self::ChangeWrite => {
+                "Não foi possível escrever o arquivo do projeto. Nada foi alterado."
+            }
         }
     }
 }

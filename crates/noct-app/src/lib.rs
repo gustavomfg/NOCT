@@ -10,6 +10,7 @@ pub mod commands;
 pub mod consent;
 pub mod credentials;
 pub mod error;
+pub mod file_changes;
 pub mod logging;
 pub mod navigation;
 pub mod provider_chat;
@@ -54,6 +55,11 @@ pub fn command_handler<R: Runtime>()
         commands::provider_chat_status,
         commands::provider_chat_send,
         commands::provider_chat_cancel,
+        commands::file_changes_list,
+        commands::file_change_propose,
+        commands::file_change_approve,
+        commands::file_change_reject,
+        commands::file_change_undo,
     ]
 }
 

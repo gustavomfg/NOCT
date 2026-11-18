@@ -158,3 +158,16 @@ pub mod model {
     pub const VERSION_CHARACTERS: u64 = 200;
     pub const PRICING_EFFECTIVE_AT_CHARACTERS: u64 = 100;
 }
+
+/// Limits of a proposed change to a project file. A change keeps the whole text of the file before and after it, so both
+/// are capped, and the journal that keeps the changes is capped too.
+pub mod file_change {
+    /// The most bytes of a file a change reads as its base, or writes as its content.
+    pub const MAXIMUM_FILE_BYTES: u64 = 32 * 1024;
+    /// The most bytes of the relative path of a change.
+    pub const MAXIMUM_PATH_BYTES: usize = 512;
+    /// The most changes that may be pending or applied at one time, across all projects.
+    pub const MAXIMUM_OPEN_CHANGES: usize = 50;
+    /// The most closed changes (rejected or undone) the journal keeps; the oldest are dropped first.
+    pub const MAXIMUM_CLOSED_CHANGES: usize = 50;
+}

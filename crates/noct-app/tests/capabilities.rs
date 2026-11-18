@@ -75,7 +75,12 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "provider_consent_revoke",
             "provider_chat_status",
             "provider_chat_send",
-            "provider_chat_cancel"
+            "provider_chat_cancel",
+            "file_changes_list",
+            "file_change_propose",
+            "file_change_approve",
+            "file_change_reject",
+            "file_change_undo"
         ]
     );
 }

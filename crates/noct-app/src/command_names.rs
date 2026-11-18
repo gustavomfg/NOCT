@@ -30,6 +30,11 @@ pub const PROVIDER_CONSENT_REVOKE: &str = "provider_consent_revoke";
 pub const PROVIDER_CHAT_STATUS: &str = "provider_chat_status";
 pub const PROVIDER_CHAT_SEND: &str = "provider_chat_send";
 pub const PROVIDER_CHAT_CANCEL: &str = "provider_chat_cancel";
+pub const FILE_CHANGES_LIST: &str = "file_changes_list";
+pub const FILE_CHANGE_PROPOSE: &str = "file_change_propose";
+pub const FILE_CHANGE_APPROVE: &str = "file_change_approve";
+pub const FILE_CHANGE_REJECT: &str = "file_change_reject";
+pub const FILE_CHANGE_UNDO: &str = "file_change_undo";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -60,4 +65,9 @@ pub const ALL: &[&str] = &[
     PROVIDER_CHAT_STATUS,
     PROVIDER_CHAT_SEND,
     PROVIDER_CHAT_CANCEL,
+    FILE_CHANGES_LIST,
+    FILE_CHANGE_PROPOSE,
+    FILE_CHANGE_APPROVE,
+    FILE_CHANGE_REJECT,
+    FILE_CHANGE_UNDO,
 ];

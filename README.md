@@ -34,6 +34,7 @@ plans, approvals and validation results (`AGENTS.md`, "Product identity").
 What this branch does not do yet:
 
 - it calls an AI provider only from the chat, and the chat is switched off in this version (section 3);
+- it writes no project file from the interface: approving, rejecting and undoing a file change exist as commands only (section 3);
 - it does not show conversations in the interface;
 - it produces no installer or signed package;
 - no window has been checked on Windows or on macOS (section 6).
@@ -52,7 +53,7 @@ The phase table of [ADR 0001](docs/adr/0001-rust-migration.md) is the authority.
   not ported.
 - **Phase 5, AI:** partly done. The credential vault, the OpenRouter transport and the chat are done, and the chat is switched
   off. Other provider adapters and the tool loop are not ported.
-- **Phase 6, IPC and shell:** partly done. 28 commands, granted only to the `main` window.
+- **Phase 6, IPC and shell:** partly done. 33 commands, granted only to the `main` window.
 - **Phase 7, UI:** partly done. The settings area, the project list in the sidebar, the glass layer and the themes.
   Checked in Chromium with a mocked shell. Not checked in a real window.
 - **Phase 8, updates and packaging:** not started on the Rust side. Blocked (section 4).
@@ -106,7 +107,7 @@ What the code does on this branch:
   (`crates/noct-app/tests/provider_chat_flow.rs` and `provider_transport.rs`). No test calls OpenRouter, and no run used a
   real key. The interface checks run in Chromium with a mocked shell, with the switch off.
 
-Not done: a list of the provider's models, other providers, and the writing of changes proposed by the assistant.
+Not done: a list of the provider's models, other providers, the interface that approves file changes, and the changes the assistant proposes.
 The status of each item is in [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" and the sections after it.
 
 ## 4. Verification
@@ -203,7 +204,7 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 - **Webview policy.** `withGlobalTauri` is `false`. The Content-Security-Policy is
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   Chromium checks it (`scripts/check-shell-csp.mjs`). No webview has enforced it yet.
-- **Commands.** 28 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
+- **Commands.** 33 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
   application manifest. `crates/noct-app/capabilities/default.json` grants them to the `main` window only. Tests with Tauri's
   mock runtime refuse a command that is not granted and a request from a second window.
 - **Navigation.** The main window accepts navigation only to the packaged interface, and to the development server in

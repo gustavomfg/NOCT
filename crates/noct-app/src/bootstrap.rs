@@ -25,12 +25,15 @@ pub const DATA_DIRECTORY_VARIABLE: &str = "NOCT_DATA_DIR";
 
 /// The open persistence of the shell. The store is shared by the commands, and the gate is the sink the
 /// store writes its diagnostics to. The observer measures the commands and warns through the same gate.
+#[derive(Clone)]
 pub struct Persistence {
     pub store: Arc<Mutex<Store>>,
     pub diagnostics: Arc<DiagnosticGate>,
     pub observer: Arc<dyn OperationObserver>,
     /// The folder of the database, the file log and the provider key vault. Never sent to the interface.
     pub data_directory: PathBuf,
+    /// Held while a proposed change is read or written, so two commands never race on the journal file.
+    pub journal_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Debug, Error)]
@@ -106,6 +109,7 @@ pub fn open_with_profile(
         diagnostics,
         observer,
         data_directory: directory.to_path_buf(),
+        journal_lock: Arc::new(Mutex::new(())),
     })
 }
 

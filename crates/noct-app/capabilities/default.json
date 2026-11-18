@@ -32,6 +32,11 @@
     "allow-provider-consent-revoke",
     "allow-provider-chat-status",
     "allow-provider-chat-send",
-    "allow-provider-chat-cancel"
+    "allow-provider-chat-cancel",
+    "allow-file-changes-list",
+    "allow-file-change-propose",
+    "allow-file-change-approve",
+    "allow-file-change-reject",
+    "allow-file-change-undo"
   ]
 }

@@ -16,6 +16,7 @@ time.workspace = true
 tauri.workspace = true
 tauri-plugin-updater.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 
