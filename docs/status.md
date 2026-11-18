@@ -19,9 +19,9 @@ GitHub. Only finished runs are reported. **Not verified** lists what no run cove
 | P4: database writes | `a94642c` (`workspace_set_favorite`), `35b99ac` (theme through `settings_set`), `conversations_create` (`93af490`), `brain_create` (`595bb08`), `brain_update` (`a17000d`), `brain_extract` (`9ebcbc9`), `suggestions_create` (`e383ec2`), `suggestions_status` (`2000228`), `models_set_bindings` (`cfa48ec`), `ai_save_assistant` (`e9064c4`), `conversations_delete` (`ecebef1`), `workspace_remove` (`44f2fbf`), `brain_delete` (`1028507`), `artifacts_delete` (this change) | `f1f5b5f` | `93af490`, `595bb08`, `a17000d`, `9ebcbc9`, `e383ec2`, `2000228`, `cfa48ec`, `e9064c4`, `ecebef1`, `44f2fbf` and `1028507`: Shell success on all three systems; row gate success. | No control sets a favorite yet, and no control creates a conversation, changes a memory, reads a reply, moves a suggestion, saves model bindings, saves an assistant reply, deletes a conversation, removes a project, deletes a memory, or deletes an artifact. `conversations_create` does not create the `.nocturne` workspace context. A failed write is forced in eight tests (the conversation insert, the memory insert's history entry, the update's history entry, a refused candidate in a batch, the suggestion's decision entry on a review and on a status change, the model bindings row, and the conversation row). Each delete has its own failed-write test: a refused `workspaces`, `brain_memories` or `artifacts` delete leaves the row in place. |
 | P5: observability | `b5b27ef` | `f1f5b5f` | Same run: success on all three systems; row gate success. | Warnings in a real window and log file. The favorite write is not measured: it has no catalog name. |
 | P6: native rollback, macOS and Windows | `3f0e6f3` (comment only) | `f1f5b5f` | Same run: success. No backend was ported in round 1. | Both backends were missing in round 1. See round 2. |
-| P7: UI slices | `1103543` (`Construir` and `Documentar` not yet available), editable Ajustes (this change) | `1103543` | Shell and row gate on `1103543`: success on Ubuntu, Windows and macOS; row gate success. | Real window. Chromium is the approximation the check uses. |
-| P8: updater | `tauri-plugin-updater` 2.14.1 pinned, configured empty, registered only when complete and safe (this change) | | | |
-| P9: release dry run | `build-provenance-dry-run.yml`, one pinned action, a subject file from the run (this change) | | | |
+| P7: UI slices | `1103543` (`Construir` and `Documentar` not yet available), editable Ajustes (`c6318cd`) | `c6318cd` | Shell on `c6318cd` (run `44195972611`): success on Ubuntu, Windows and macOS. Row gate (`44195972598`): success. | Real window. Chromium is the approximation the check uses. |
+| P8: updater | `004dba3`: `tauri-plugin-updater` 2.14.1 pinned, configured empty, registered only when complete and safe | `004dba3` | Shell on `004dba3` (run `44200957653`): success on Ubuntu, Windows and macOS. Row gate (`44200957805`), Rust dependency audit (`44200957489`) and Keyring round trip (`44200957630`): success. | An update request, a signature check and an install: none is made, since there is no key and no endpoint. The public updater guide does not define `requireSignedVersion`; the plugin source does (see `docs/rust-shell.md`). |
+| P9: release dry run | `bb3f357`: `build-provenance-dry-run.yml`, one action pinned by SHA, a subject file from the run | `bb3f357` | `bb3f357` (run `44205153413`): dry run success. Shell (run `44205153278`): success on Ubuntu, Windows and macOS. Row gate (`44205153290`): success. The attestation was verified with `gh attestation verify` from this session (exit 0). | No release or Electron artifact is attested. The verification ran from this session's machine, not in CI. |
 | P10: documents | `85f4cb4`, `5748b33`, `f1f5b5f`, `4a62c3c` | `4a62c3c` | Shell and row gate on `4a62c3c`: success on Ubuntu, Windows and macOS; row gate success. | The phase table is not revised beyond ADR decision 4, the counts and the command list. |
 
 ### CI by system (finished runs only)
@@ -340,8 +340,10 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 - The Electron release workflows are not changed.
 - Checks: the YAML parses; the triggers, the permissions and the single `uses` line were read back with a parser; the pinned
   reference is a 40-character commit that the API returned.
-- Not verified yet at this point: the run itself and the verification of the attestation. The verification is run after the run
-  finishes, with `gh attestation verify` on the same subject content.
+- Run `44205153413` succeeded on `bb3f357`. The attestation was verified from this session with `gh attestation verify` on the
+  same subject content: exit 0; subject `subject.txt`, digest `d023436fa74336bbee6bf8a9f88aac26a5fd9e2799b7fdebb8ddacd725a10a63`;
+  signer workflow `build-provenance-dry-run.yml` on `refs/heads/migration/rust`; commit `bb3f35765f75993bd5bb16714e2c656448e3c83f`.
+  The check ran here, not in CI. The repository is public, so the attestation is in the public transparency log.
 - Decision for the owner: the attestation records the commit and the run in the public transparency log. This is what the
   action does, and the subject holds only public values. Confirm this is acceptable for the dry run.
 
@@ -349,8 +351,10 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
 
 - Dependency: `tauri-plugin-updater` `=2.14.1` in `Cargo.toml` (`[workspace.dependencies]`), used by `noct-app` only. It is the
   latest stable 2.x; the 3.0.0 line is an alpha and was not used. It requires `tauri ^2.12`, which the workspace has at 2.12.5.
-- Lock file: 47 package entries added (the plugin and its TLS stack: `rustls`, `ring`, `rustls-webpki`, `hyper-rustls`, `zip`,
-  `tar`, `minisign-verify`, and a second `windows-sys` 0.52 used only by the plugin). No existing package changed version.
+- Lock file: 576 packages before, 623 after (47 added). The new entries are the plugin and its TLS stack: `tauri-plugin` 2.7.2,
+  `minisign-verify` 0.3.0, `ring` 0.17.14, `rustls` 0.23.46, `rustls-webpki` 0.103.17, `hyper-rustls` 0.27.10, `untrusted` 0.9.0,
+  `webpki-root-certs` 1.0.12, `zip` 9.7.0, `tar` 0.4.46 and `windows-sys` 0.52.0, which `ring` brings in (the lock had 0.45.0 and
+  0.61.2 before). `reqwest` 0.13.5 was already present. No existing package changed version.
 - Licences: `cargo deny` refused `ISC` (`ring`, `rustls-webpki`, `untrusted`) and `CDLA-Permissive-2.0` (`webpki-root-certs`).
   Both are permissive and are now allowed in `deny.toml`, with the reason in a comment. This is a policy change, so the owner
   should confirm it.
@@ -600,3 +604,118 @@ no TypeScript product change; nothing on `main`; no PR; no force push; fast-forw
   product path is not changed by this branch); (2) whether a directory flush is added on Windows after a rename or create
   (the C++ header does not flush, and the port keeps that).
 - **Stops:** none in P6. **New dependencies:** `windows-sys` 0.61.2 (approved, decision 3); no other crate was added.
+
+## Round 2 report: close of the review
+
+This section closes the second review round. It records what is validated and what is not, the decisions of this review, and
+what the next session starts with. CI results are read from GitHub runs.
+
+### CI per system, finished runs
+
+| Commit | Work | Ubuntu | Windows | macOS | Row gate | Other workflows |
+| --- | --- | --- | --- | --- | --- | --- |
+| `c6318cd` | P7, editable Ajustes | success (`Rust shell validation`, run `44195972611`) | success | success | success (`44195972598`) | none |
+| `004dba3` | P8, updater prepared | success (run `44200957653`) | success | success | success (`44200957805`) | Rust dependency audit `44200957489` success; Keyring round trip `44200957630` success |
+| `bb3f357` | P9, dry run | success (run `44205153278`) | success | success | success (`44205153290`) | Build provenance dry run `44205153413` success |
+
+The documentation commits pushed after `bb3f357` start the Rust shell validation again. Their results are not in this table,
+because this section was written before those runs finished.
+
+### Commits of this review
+
+- P4, eight commits from `e383ec2` to `8126f82` (see the P4 detail sections above).
+- P7: `1103543`, `c6318cd`. P8: `004dba3`. P9: `bb3f357`.
+- Documentation: `1e602cb` (editHunk design), `4a3fd13` (the `requireSignedVersion` citation), `02a165d` (the seven advisories),
+  and the commit that adds this section.
+
+### Status by package
+
+- **P4, database writes:** done except `changeControl.editHunk`. Blocked: no code. Its design is in
+  `docs/rust-edit-hunk-design.md`, with seven open questions.
+- **P7, UI slices:** two slices (`1103543`, `c6318cd`). Not done: the `workspace_remove` confirmation (decision 1) and the
+  conversations list.
+- **P8, updater:** prepared and not configured (`004dba3`). No update request, no feed and no key exist.
+- **P9, release dry run:** done (`bb3f357`). The attestation was verified from this session (see its row above).
+
+### Owner decisions of this review
+
+1. **`workspace_remove` keeps TypeScript parity.** The service does not check whether the project is saved or authorized. The UI
+   must confirm before removing a project, and must say what goes and what stays. What goes: model bindings, the index,
+   executions, checkpoints, brain memories and evidence. What stays: conversations, messages and artifacts. The UI is not
+   written. Its text must not promise removal for a project that has change sets until decision 2 is settled.
+2. **Project removal with change sets: first task of the next session.** `change_sets.before_checkpoint_id` and
+   `after_checkpoint_id` reference `checkpoints` with `ON DELETE RESTRICT` (`crates/noct-db/src/migrations/generated.rs`, lines 523
+   and 524). Removing a project whose checkpoints a change set references may fail. This is untested, and the TypeScript behaviour
+   is not compared. The task: a test with such a project, the same data through the TypeScript removal
+   (`electron/ipc/registerWorkspaceIpc.ts`, `electron/database/Database.ts`), and a decision on the outcome.
+3. **`changeControl.editHunk`: design first, no code.** `docs/rust-edit-hunk-design.md` covers the checkpoint reader, the diff,
+   `applyPatch`, the path scope, undo, and what the command writes: only the `change_hunks` row, never a file in the workspace.
+   Its section 13 lists the open questions (a) to (g).
+4. **Updater citation and advisories.** `requireSignedVersion` is defined in the plugin source (`tauri-plugin-updater` 2.14.1,
+   `src/config.rs`). The public updater guide (https://v2.tauri.app/plugin/updater/) does not mention it. The citation and its
+   consequence are in `docs/rust-shell.md`. The seven `cargo audit` advisories, with their kind, reason and path into the
+   workspace, are in `docs/rust-dependency-advisories.md`.
+
+Round-2 decision 6, the `strip` warning of commit `4cb423e`, has no answer recorded. It was not done in this review, and it stays
+open. Round-1 open item (f), `workspace.remove` without an authorization check, is resolved by decision 1.
+
+### Validation of this review
+
+- `004dba3` (P8), run locally before the push: `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`;
+  `cargo test --workspace --no-fail-fast` (592 passed, 0 failed, 19 ignored); `node scripts/generate-ipc-samples.mjs --check`;
+  `cargo deny check` (advisories, bans, licences and sources ok); `cargo audit` exit 0 with the seven advisories listed in
+  `docs/rust-dependency-advisories.md`. Two mutation checks on the updater: removing `allowDowngrades` from the flag list, and
+  accepting http endpoints. Each made its test fail, and the file was restored after each run.
+- `bb3f357` (P9): the YAML was parsed; the triggers, the permissions and the single `uses` line were read back with a parser;
+  the action is pinned to `4d101475d8b20a2381f78447822ac1eab6504dd8` (`v4.2.2`). The dry run succeeded in CI, and the attestation
+  was verified as recorded in the P9 row.
+- Documentation commits: `git diff --check`. No code changed, so no build or test ran for them.
+
+### Dependencies added in this review
+
+- `tauri-plugin-updater` 2.14.1, pinned in the workspace and used by `noct-app` only. The lock file went from 576 to 623 packages.
+  The new entries are listed in the P8 detail. Certificate data, `webpki-root-certs` 1.0.12, is licensed `CDLA-Permissive-2.0`.
+  No existing package changed version.
+- Licences allowed in `deny.toml`: `ISC` and `CDLA-Permissive-2.0`, with the reason in the file. The owner should confirm this.
+- GitHub Action: `actions/attest-build-provenance` v4.2.2, pinned to `4d101475d8b20a2381f78447822ac1eab6504dd8`. No other
+  action was added.
+- Earlier in round 2: `windows-sys` 0.61.2 in `noct-native` (owner-approved) and `time` in `noct-app`.
+
+### Stops
+
+- `changeControl.editHunk`: blocked. Design only, no code.
+- `workspace_remove` UI: not started. The requirement is decision 1.
+- Project removal with change sets: not tested. It is the first task of the next session.
+- No package was started after P9. P9 was already pushed when the owner's instruction to stop arrived, and it is complete.
+
+### Not verified
+
+- A real window on any system: CI opens none. The native `<select>` look in the webviews. The Ubuntu 22.04 floor. Power-loss
+  durability. The C++ differential for rollback on macOS and Windows.
+- Updater: no update request, no signature check and no install. The public key and the endpoints are empty, so none of them runs.
+  `requireSignedVersion` is set to `true` but has never been exercised against a feed.
+- Attestation: verified from this session with `gh attestation verify`, not inside CI. No release or Electron artifact is attested.
+- Project removal with change sets: untested, and not compared with TypeScript.
+- `editHunk`: no code, so nothing is verified for it.
+- Round-2 decision 6 (the `strip` warning): not explained.
+- CI of the documentation commits: not recorded here.
+
+### Dependencies on the owner
+
+1. Updater: create and keep the signing keys. Fill `pubkey` and `endpoints` in a reviewed change marked `[security-review]`. No
+   key was created here.
+2. Confirm `requireSignedVersion: true`, and its consequence for releases signed before the version was recorded (none exist yet).
+3. Confirm the two licences allowed in `deny.toml`.
+4. Decide whether `cargo audit` should fail on warnings. Today it does not.
+5. Confirm that the dry-run attestation is acceptable in the public transparency log. The repository is public, and the subject
+   holds only the commit SHA and the run id.
+6. Round-1 open decisions still standing: (a) whether the C++ product worker uses `F_FULLFSYNC` on macOS; (b) a directory flush on
+   Windows after a rename or create; (c) the `workspaces_list` tie-break, `path` as built or `id` with a migration; (d) the
+   `.nocturne` workspace context port; (e) UTC or local time for the `ai_save_assistant` title.
+7. Round-2 decision 6: the `strip` warning of commit `4cb423e`.
+8. The `editHunk` questions (a) to (g) in `docs/rust-edit-hunk-design.md`, section 13.
+
+### Next session, first task
+
+Project removal with change sets (decision 2). Then the `workspace_remove` confirmation in the UI, once the outcome of that removal
+is known.
