@@ -909,6 +909,148 @@ Run on the tree of `0df77cb`, which the later commits do not change in code.
 Decide Stop 1. Then the pinned connection (3B) and the SSE adapter with streaming (3C) can start, and the real chat switch, off by
 default, is added with the adapter.
 
+## Security review of the shell: report of the round
+
+The round covers the `[security-review]` commits after `67c2aa4`. The provider chat ships switched off
+(`PROVIDER_CHAT_ENABLED = false`). No provider network call is made by the product.
+
+### Commits of the round
+
+| Commit | Subject |
+| --- | --- |
+| `35cb93d` | docs(security): review the beta 1 commits and their tests |
+| `89b81bc` | build(deps): reqwest and rustls on ring for the provider client |
+| `bd94555` | fix(scripts): drop the unused result parameter of the provider check |
+| `f1a386e` | feat(core): strict SSE reader and OpenRouter chat protocol |
+| `5907f25` | feat(app): provider transport, pinned and capped |
+| `fa86fef` | fix(app): consent needs an authorized project |
+| `628e799` | fix(app): one provider key operation at a time |
+| `3c74b97` | fix(app): remove leftover provider secrets |
+| `bf7deaa` | feat(core): default OpenRouter model binding and its check |
+| `44c4f1b` | feat(db): set the default model without losing the other bindings |
+| `6a3aba1` | feat(app): read and set the default model of a project |
+| `994e9e9` | feat(shell): default model field in the provider settings |
+| `8a90b82` | test(app): share the loopback provider between the transport and chat tests |
+| `384fc2b` | feat(app): provider chat backend, read-only and switched off |
+| `7a802f1` | feat(shell): chat section in Revisar, off by default |
+| `32f18d6` | docs(provider): document the switched-off chat and close the review status |
+| `2ef1ec5` | fix(app): keep the transport test off a freed port |
+| `0b4c529` | ci(release): wait for the tag's shell CI and require all three systems |
+| `b49da1f` | ci(rust): run Windows and macOS on tags, pull requests and the nightly schedule |
+| `d33dfcf` | ci(rust): add the opt-in Windows persistence check |
+| `10d6cf2` | fix(release): pick the gate's shell run by commit, not by branch |
+
+Commit `0a34a65` says "five Rust provider commands". `docs/ipc-inventory.md` at that commit lists six Rust-only commands
+(line 16). The message is wrong; the history is not rewritten.
+
+### Windows transport test
+
+Runs `44359783014` (3c74b97), `44362522292` (994e9e9) and `44365881615` (32f18d6) failed on `windows-latest` in
+`a_connection_that_cannot_be_made_is_a_transport_failure_that_holds_no_key`, with `left: Timeout, right: Transport`. The
+call failed after about 1.5 s, the stall limit, and not at the connect limit. That points to a connection that was
+accepted, with no reply in time. The test released a loopback port and expected it to refuse connections. The most likely cause is that
+another test of the same binary, one of the stall tests, took the freed port. This is not confirmed on Windows.
+
+The test now holds its own server for its whole run. The server closes each connection without a reply, and the test
+asserts the same transport failure with no key. Product code is unchanged. A refused connection is no longer covered
+by this test.
+
+Run `10d6cf2` passed the Windows job, `Shell on windows-latest`, on the pull request. That shows the test passes with the
+change. It does not prove the cause.
+
+### Release gate
+
+The gate of `0b4c529` filtered by `head_branch`. `tests/shellRelease.test.ts` forbids that filter and requires
+`head_sha="$RELEASE_SHA"`. Run `44367461607` failed on it in `Verify source` and in `Persistence reliability` on three
+systems. `10d6cf2` selects the newest push run of the tagged commit by `head_sha`, waits for it, and requires the Linux,
+Windows and macOS jobs to succeed. A branch run has the Linux job alone, so it is refused. The test was not changed.
+
+Not verified: the gate has not run on a real `rust-v*` tag. No such tag exists yet.
+
+### Windows persistence check
+
+The job `windows-persistence` runs only on a manual dispatch with the input set. Run `44367522495` ran the four files
+30 times with no retry. The result was `Failed runs: 0 of 30`. The logs of cycles 1 and 30 show four files and 10 tests passing; the other
+logs were not read.
+Those are the four files alone; the recorded failure came from the full suite. The cause of the intermittent failure is
+still not established. See [`windows-persistence-flake.md`](windows-persistence-flake.md).
+
+### CI per system, last commit with code (`10d6cf2`)
+
+| Check | Event | Result |
+| --- | --- | --- |
+| Rust shell validation: Linux, Windows, macOS | pull_request (PR #23) | success, success, success (run `44372059884`) |
+| Rust shell validation: Linux | push | success (run `44372042486`, cold cache) |
+| CI · source: Validate GitHub Actions workflows (actionlint) | pull_request | success |
+| CI · source: Verify source, Node 24 and 24.18.0 (typecheck, lint, test, build) | pull_request | success |
+| CI · source: Persistence reliability, Linux, Windows, macOS | pull_request | success |
+| CI · source: Renderer interaction and visual regression | pull_request | success |
+| CI · source: Package and smoke, Linux, Windows, macOS | pull_request | success |
+| Keyring round trip, Linux, Windows, macOS | pull_request | success |
+| Rust dependency audit (cargo deny and cargo audit) | pull_request | success |
+| Row gate | push and pull_request | success |
+
+The previous head `d33dfcf` failed `CI · source` on the release gate test, as described above. The `push` run of
+`d33dfcf` was cancelled by the manual dispatch on the same ref, because the workflow's concurrency group cancels the
+run already in progress.
+
+### CI times, before and after (minutes, job duration)
+
+| Run | Event | Linux | macOS | Windows | Wall (max) | Sum | Conclusion |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `44357708861` | push, `bd94555` | 10.1 | 8.6 | 10.7 | 10.7 | 29.4 | success |
+| `44359783014` | push, `3c74b97` | 12.2 | 9.3 | 5.0 | 12.2 | 26.5 | Windows failure |
+| `44362522292` | push, `994e9e9` | 15.6 | 10.8 | 7.3 | 15.6 | 33.7 | Windows failure |
+| `44372042486` | push, `10d6cf2` (Linux only) | 24.7 | not run | not run | 24.7 | 24.7 | success |
+| `44372059884` | pull_request, `10d6cf2` | 9.6 | 9.2 | 11.6 | 11.6 | 30.4 | success |
+
+These are not a controlled comparison. The code differs between runs. The push run `44372042486` had a cold cache:
+installing trunk took 7.5 min, against 2.1 min to restore the cache in the pull request run. No performance gain is
+claimed. The push-side saving is that Windows and macOS no longer run on each push to `migration/rust`.
+
+### Decisions taken by me
+
+- **D18.** The transport test holds its own server instead of assuming a freed port refuses. The product code was not
+  changed. The refused-connection case is no longer covered by any test.
+- **D19.** A push to `migration/rust` runs the Linux shell only. Windows and macOS run on `rust-v*` tags, on pull
+  requests into `main`, on the nightly schedule, and on a manual dispatch. Consequence: push feedback for Windows and
+  macOS now comes from the pull request.
+- **D20.** The gate selects the newest push run of the tagged commit by `head_sha`, waits up to 110 minutes, and requires
+  all three systems. Its timeout is 120 minutes. The build, sign and publish jobs and their secrets are unchanged.
+- **D21.** The Windows persistence check is opt-in, by manual dispatch only. It runs 30 times with no retry, and keeps
+  each log as an artifact for 30 days.
+- **D22.** The shell workflow change is split into two commits. The intermediate commit `b49da1f` has no persistence job.
+  It was checked only by parsing its YAML, not by CI.
+- **D23.** Actionlint was not downloaded or run locally. The download was denied by the permission classifier, and no
+  other route was tried. CI's actionlint job reported success on `10d6cf2`.
+
+### Stops
+
+- `GET /models` is not implemented.
+- The chat stays off. `PROVIDER_CHAT_ENABLED` is `false`, and the compile-time guard in `provider_chat_flow.rs` still
+  fails the build if it is turned on alone.
+- No real provider call was made. Every provider test uses a loopback server.
+- No tag, release, signing or publish was started.
+- PR #23 was not edited. Its checks ran because of the pushes.
+
+### Not verified
+
+- Actionlint locally. CI's actionlint job passed.
+- The release gate on a real `rust-v*` tag, and the gate's wait on a real run.
+- The nightly schedule. It runs only from the default branch, so it starts once this workflow reaches `main`.
+- The cause of the Windows transport failure, and the cause of the intermittent persistence failure.
+- Windows and macOS windows. No window was opened.
+- A real call to OpenRouter.
+
+### Dependencies on the owner
+
+- Review of the provider chat: the switch, the consent text, and what is sent.
+- The decision on `GET /models`.
+- Manual verification on Windows and macOS.
+- Whether Windows and macOS should run on every pull request, or only on tags and nightly (D19).
+- The composer stub was replaced by the chat section (`crates/noct-ui/src/chat_panel.rs`). The design owner should check it.
+- The commit message of `0a34a65` ("five" for six commands) is left as it is.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
