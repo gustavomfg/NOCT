@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-chat-status"
+description = "Enables the provider_chat_status command without any pre-configured scope."
+commands.allow = ["provider_chat_status"]
+
+[[permission]]
+identifier = "deny-provider-chat-status"
+description = "Denies the provider_chat_status command without any pre-configured scope."
+commands.deny = ["provider_chat_status"]

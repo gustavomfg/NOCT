@@ -282,6 +282,27 @@ const count = (predicate) => rows.filter(predicate).length
 // project only.
 const RUST_ONLY = [
   {
+    command: 'provider_chat_status',
+    argument: 'none',
+    reply: '`{ enabled }`. `enabled` is `false` in this version: the chat is off until the owner reviews the beta.',
+    risk: 'read',
+    note: 'Reports the switch of the provider chat. Reads nothing from the project and calls no provider.',
+  },
+  {
+    command: 'provider_chat_send',
+    argument: '`{ input: { workspace, question }, onEvent }`, where `onEvent` is a channel of `delta`, `done` and `failed` events.',
+    reply: 'Nothing, when the call has started. Each answer event arrives on the channel.',
+    risk: 'network',
+    note: 'Read-only chat about a saved, authorized project with its consent and a default OpenRouter model. Refused while the switch is off, before any file is read. Sends the top-level text files the context rules allow, and never runs a command or writes to the project. The key is read in the main process and never leaves it.',
+  },
+  {
+    command: 'provider_chat_cancel',
+    argument: 'none',
+    reply: 'Nothing.',
+    risk: 'control',
+    note: 'Stops the question that is running. Nothing more is sent on its channel after the stop.',
+  },
+  {
     command: 'models_bindings_get',
     argument: '`{ input: { workspace } }`',
     reply: '`WorkspaceModelBindings`, or `null` when the project has none.',

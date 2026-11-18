@@ -12,6 +12,7 @@ pub mod credentials;
 pub mod error;
 pub mod logging;
 pub mod navigation;
+pub mod provider_chat;
 pub mod provider_transport;
 pub mod services;
 pub mod updater;
@@ -50,6 +51,9 @@ pub fn command_handler<R: Runtime>()
         commands::provider_consent_status,
         commands::provider_consent_grant,
         commands::provider_consent_revoke,
+        commands::provider_chat_status,
+        commands::provider_chat_send,
+        commands::provider_chat_cancel,
     ]
 }
 
@@ -72,6 +76,7 @@ pub fn run() {
                 default,
             )?;
             app.manage(bootstrap::open(&directory)?);
+            app.manage(std::sync::Arc::new(provider_chat::ChatControl::default()));
             window::create_main_window(app)?;
             Ok(())
         });

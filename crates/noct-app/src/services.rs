@@ -177,7 +177,7 @@ pub fn workspaces_from_rows(rows: Vec<WorkspaceRow>, blocked: &[PathBuf]) -> Vec
 
 /// Checks that a saved project may take a write: its folder is available and outside the blocked roots, and its row is
 /// authorized. Each refusal is `UnknownWorkspace`, and nothing is written.
-fn authorized_workspace(
+pub fn authorized_workspace(
     store: &Store,
     blocked: &[PathBuf],
     workspace: &str,

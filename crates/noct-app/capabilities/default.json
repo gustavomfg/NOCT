@@ -29,6 +29,9 @@
     "allow-provider-key-remove",
     "allow-provider-consent-status",
     "allow-provider-consent-grant",
-    "allow-provider-consent-revoke"
+    "allow-provider-consent-revoke",
+    "allow-provider-chat-status",
+    "allow-provider-chat-send",
+    "allow-provider-chat-cancel"
   ]
 }

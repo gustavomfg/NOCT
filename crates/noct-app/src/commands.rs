@@ -3,7 +3,7 @@
 //! call them is decided by `capabilities/`, not here.
 
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use noct_core::ai::bindings::{
     DefaultModelRequest, ProjectBindingsRequest, WorkspaceModelBindings,
@@ -24,12 +24,18 @@ use noct_core::ipc::workspaces::{WorkspaceFavoriteRequest, WorkspacePage, Worksp
 use noct_db::store::Store;
 use noct_secrets::ProviderCredentialVault;
 use tauri::State;
+use tauri::ipc::Channel;
 
 use crate::bootstrap::Persistence;
 use crate::consent;
 use crate::credentials;
 use crate::error::CommandError;
 use crate::logging::measured;
+use crate::provider_chat::{
+    self, ChatControl, ChatEvent, ChatRequest, ChatRun, ChatStatus, OPENROUTER_CHAT_URL,
+    PROVIDER_CHAT_ENABLED,
+};
+use crate::provider_transport::{Limits, SystemResolver};
 use crate::services;
 use crate::workspace_scope::default_blocked_roots;
 
@@ -300,6 +306,77 @@ pub async fn models_set_default_model(
         services::models_set_default(&guard, &default_blocked_roots(), request)
     })
     .await
+}
+
+/// Whether the provider chat is switched on in this version. It is off until the owner has reviewed the beta.
+#[tauri::command]
+pub fn provider_chat_status() -> ChatStatus {
+    provider_chat::status()
+}
+
+/// Starts a question about the project. The argument is `{ input: { workspace, question }, onEvent }`, where `onEvent`
+/// is the channel that carries the answer: deltas in order, then `done` or `failed`. The command replies when the call
+/// has started, or refuses before any file is read and before any connection is made. Nothing is written to the project.
+#[tauri::command]
+pub async fn provider_chat_send(
+    state: State<'_, Persistence>,
+    chat: State<'_, Arc<ChatControl>>,
+    input: serde_json::Value,
+    on_event: Channel<ChatEvent>,
+) -> Result<(), CommandError> {
+    let request: ChatRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    if chat.is_running() {
+        return Err(CommandError::ChatBusy);
+    }
+    let store = state.store.clone();
+    let directory = state.data_directory.clone();
+    let prepared = blocking(move || {
+        let guard = lock(&store)?;
+        provider_chat::prepare(
+            &guard,
+            &default_blocked_roots(),
+            request,
+            PROVIDER_CHAT_ENABLED,
+        )
+    })
+    .await?;
+    let key_reference = prepared.key_reference.clone();
+    let model_id = prepared.model_id.clone();
+    let question = prepared.question.clone();
+    let workspace = prepared.workspace.clone();
+    let (key, body) = blocking(move || {
+        let files = provider_chat::project_context(Path::new(&workspace))?;
+        let vault = open_vault(&directory)?;
+        let key = vault
+            .resolve(&key_reference)
+            .map_err(credentials::map_vault)?
+            .ok_or(CommandError::KeyNotConfigured)?;
+        Ok((key, provider_chat::body(&model_id, &question, &files)))
+    })
+    .await?;
+    let run = ChatRun {
+        approvals: noct_core::ai::network::BUILTIN_APPROVALS.to_vec(),
+        resolver: Arc::new(SystemResolver),
+        source: noct_core::ai::ProviderSource::Remote,
+        url: OPENROUTER_CHAT_URL.to_string(),
+        key,
+        body,
+        limits: Limits::beta_one(),
+    };
+    chat.start(async move {
+        provider_chat::run_chat(run, &mut |event| {
+            let _ = on_event.send(event);
+        })
+        .await;
+    })
+}
+
+/// Stops the question that is running. Nothing more is sent on its channel. Replies with nothing; a cancel with no
+/// question running is not an error.
+#[tauri::command]
+pub fn provider_chat_cancel(chat: State<'_, Arc<ChatControl>>) {
+    chat.cancel();
 }
 
 /// Stores an assistant reply with its metadata. The argument is `{ conversationId, content, metadata? }`.

@@ -13,7 +13,7 @@ The script fails if a channel has no classification, no preload entry or no hand
 ## Totals
 
 - Channels in the catalogue: 108.
-- Rust-only commands with no TypeScript channel: 8, listed under "Rust-only commands".
+- Rust-only commands with no TypeScript channel: 11, listed under "Rust-only commands".
 - Invokable from the renderer: 99. Main-to-renderer events: 9.
 - Invokable channels with a preload entry and a handler: 99 of 99.
 - Invokable channels whose input check is not found in the handler: 0.
@@ -79,6 +79,9 @@ The key commands refuse a bad request before the credential store is opened, as 
 
 | Command | Argument | Reply | Risk | Note |
 | --- | --- | --- | --- | --- |
+| `provider_chat_status` | none | `{ enabled }`. `enabled` is `false` in this version: the chat is off until the owner reviews the beta. | read | Reports the switch of the provider chat. Reads nothing from the project and calls no provider. |
+| `provider_chat_send` | `{ input: { workspace, question }, onEvent }`, where `onEvent` is a channel of `delta`, `done` and `failed` events. | Nothing, when the call has started. Each answer event arrives on the channel. | network | Read-only chat about a saved, authorized project with its consent and a default OpenRouter model. Refused while the switch is off, before any file is read. Sends the top-level text files the context rules allow, and never runs a command or writes to the project. The key is read in the main process and never leaves it. |
+| `provider_chat_cancel` | none | Nothing. | control | Stops the question that is running. Nothing more is sent on its channel after the stop. |
 | `models_bindings_get` | `{ input: { workspace } }` | `WorkspaceModelBindings`, or `null` when the project has none. | read | Reads the model bindings of a saved project that is available and authorized. The beta 1 model selector reads the default with it. |
 | `models_set_default_model` | `{ input: { workspace, modelId } }`. `modelId` must be present: a string, or `null` to clear the default. | `WorkspaceModelBindings` after the write. | database write | Sets only the OpenRouter default. The identifier is checked for its length, its characters and its `vendor/name` shape before the project is read. `:free` is not a rule. The other bindings of the row are kept, in one transaction. |
 | `provider_key_status` | none | `{ provider, configured }` | read | Says whether a key is stored. The reference that marks it is hidden from the settings read. |

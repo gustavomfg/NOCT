@@ -27,6 +27,9 @@ pub const PROVIDER_KEY_REMOVE: &str = "provider_key_remove";
 pub const PROVIDER_CONSENT_STATUS: &str = "provider_consent_status";
 pub const PROVIDER_CONSENT_GRANT: &str = "provider_consent_grant";
 pub const PROVIDER_CONSENT_REVOKE: &str = "provider_consent_revoke";
+pub const PROVIDER_CHAT_STATUS: &str = "provider_chat_status";
+pub const PROVIDER_CHAT_SEND: &str = "provider_chat_send";
+pub const PROVIDER_CHAT_CANCEL: &str = "provider_chat_cancel";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -54,4 +57,7 @@ pub const ALL: &[&str] = &[
     PROVIDER_CONSENT_STATUS,
     PROVIDER_CONSENT_GRANT,
     PROVIDER_CONSENT_REVOKE,
+    PROVIDER_CHAT_STATUS,
+    PROVIDER_CHAT_SEND,
+    PROVIDER_CHAT_CANCEL,
 ];

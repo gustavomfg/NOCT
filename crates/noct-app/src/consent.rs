@@ -29,16 +29,23 @@ pub fn status(
         .validated()
         .map_err(|_| CommandError::InvalidInput)?;
     let guard = store.lock().map_err(|_| CommandError::Internal)?;
-    ensure_saved(&guard, &request.workspace)?;
-    let stored = guard
-        .settings()
-        .value(&setting_of(&request.workspace))
-        .map_err(|_| CommandError::Persistence)?;
+    let granted = is_granted(&guard, &request.workspace)?;
     Ok(ProjectConsentStatus {
         workspace: request.workspace,
         provider: ProviderKeyProvider::OpenRouter,
-        granted: stored.as_deref() == Some(CONSENT_VERSION),
+        granted,
     })
+}
+
+/// Whether the project has consent for the current version of what is sent. The project must be saved and authorized,
+/// and each refusal is `UnknownWorkspace`.
+pub fn is_granted(store: &Store, workspace: &str) -> Result<bool, CommandError> {
+    ensure_saved(store, workspace)?;
+    let stored = store
+        .settings()
+        .value(&setting_of(workspace))
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(stored.as_deref() == Some(CONSENT_VERSION))
 }
 
 /// Records the consent of the project for the current version of what is sent.

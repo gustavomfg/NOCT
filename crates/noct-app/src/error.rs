@@ -33,6 +33,16 @@ pub enum CommandError {
     /// The request names an artifact that is not in the conversation, or was already removed. The message is the
     /// TypeScript one.
     UnknownArtifact,
+    /// The provider chat is switched off in this version. Nothing is read or sent.
+    ChatDisabled,
+    /// The project has no consent for the provider. Nothing is read or sent.
+    ConsentRequired,
+    /// The project has no default OpenRouter model. Nothing is read or sent.
+    ModelNotSet,
+    /// No OpenRouter key is saved. Nothing is read or sent.
+    KeyNotConfigured,
+    /// A question is already running. The new one is not started.
+    ChatBusy,
 }
 
 impl CommandError {
@@ -50,6 +60,11 @@ impl CommandError {
             Self::UnknownSuggestion => "unknown-suggestion",
             Self::InvalidSuggestionTransition => "invalid-suggestion-transition",
             Self::UnknownArtifact => "unknown-artifact",
+            Self::ChatDisabled => "chat-disabled",
+            Self::ConsentRequired => "consent-required",
+            Self::ModelNotSet => "model-not-set",
+            Self::KeyNotConfigured => "key-not-configured",
+            Self::ChatBusy => "chat-busy",
         }
     }
 
@@ -71,6 +86,19 @@ impl CommandError {
             Self::UnknownSuggestion => "Sugestão não pertence a esta conversa.",
             Self::InvalidSuggestionTransition => "Transição de sugestão inválida.",
             Self::UnknownArtifact => "Artefato não encontrado ou já removido.",
+            Self::ChatDisabled => {
+                "O chat com o provedor está desligado nesta versão. Nada foi enviado."
+            }
+            Self::ConsentRequired => {
+                "Este projeto ainda não tem consentimento para o OpenRouter. Nada foi enviado."
+            }
+            Self::ModelNotSet => {
+                "Escolha um modelo padrão para este projeto antes de perguntar. Nada foi enviado."
+            }
+            Self::KeyNotConfigured => {
+                "Salve uma chave do OpenRouter antes de perguntar. Nada foi enviado."
+            }
+            Self::ChatBusy => "Já existe uma pergunta em andamento.",
         }
     }
 }
