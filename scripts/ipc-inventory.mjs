@@ -68,7 +68,7 @@ const CLASS = {
   'changeControl.changes': ['read', 'P3', ''],
   'changeControl.diff': ['read', 'P3', 'The diff output must be bounded before the port.'],
   'changeControl.hunks': ['read', 'P3', ''],
-  'changeControl.editHunk': ['database write', 'P4 (blocked)', 'Stores an edited patch for one hunk. It writes no file of the project: it checks the patch against the stored checkpoint and records the result in the database. Blocked: the Rust shell has no checkpoint content reader, no change diff generator and no `applyPatch` yet, and the check cannot be left out. The status of the hunk depends on the check.'],
+  'changeControl.editHunk': ['database write', 'beta 2 (blocked)', 'Stores an edited patch for one hunk. It writes no file of the project: it checks the patch against the stored checkpoint and records the result in the database. Blocked and marked beta 2 by the owner: it enters with capture, the change diff, the checkpoint reader, the hunks and the accept and reject decisions. The Rust shell has no checkpoint content reader, no change diff generator and no `applyPatch` yet, and the check cannot be left out. The status of the hunk depends on the check.'],
   'changeControl.decideHunk': ['filesystem write', 'later', 'Accepting a hunk applies its patch to the workspace file.'],
   'changeControl.decide': ['filesystem write', 'later', 'Accepting a change applies it to the workspace.'],
   'changeControl.changed': ['event', 'event', ''],
@@ -327,8 +327,8 @@ out.push('   `changeControl.hunks`, `models.list`, `models.bindings`, `brain.pag
 out.push('   `artifacts.page`, `suggestions.list`, `suggestions.page`, `ai.rollbackStatus`, `engineeringIntelligence.report`.')
 out.push('   The rest of the P3 rows (project index files, symbols, imports, exports, stack, exclusions; change diffs;')
 out.push('   `providers.list`; `recovery.list`; `evidence.list`) follow after their bounds are set.')
-out.push('3. **P4, database writes.** Ported, except `changeControl.editHunk`, which is blocked: it needs the checkpoint content')
-out.push('   reader, the change diff and `applyPatch` in Rust first. Each delete has its own commit tagged `[review]`. Each write')
+out.push('3. **P4, database writes.** Ported, except `changeControl.editHunk`, which is blocked and marked beta 2: it enters with')
+out.push('   capture, the change diff, the checkpoint reader, the hunks and the accept and reject decisions. Each delete has its own commit tagged `[review]`. Each write')
 out.push('   tests that a failed write rolls back and that unknown fields are rejected.')
 out.push('4. **P5, observability.** `diagnostics.copy`, `diagnostics.export`, `diagnostics.rendererError`, `diagnostics.rendererStats`,')
 out.push('   and the operation observer for the commands already ported.')

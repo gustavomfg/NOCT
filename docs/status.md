@@ -477,7 +477,10 @@ The TypeScript, Vitest, CSP and browser checks were last run on the theme-save c
   2. the change diff, `ChangeDiffService.get`, which the check reads for the patch's kind and unified text;
   3. `applyPatch`, the line-based patch application (about forty lines of TypeScript, with the line-ending normalization).
 - Until those exist, the command is not registered. Porting the database update alone would store a patch that is never
-  checked. Recorded as blocked in the inventory (`P4 (blocked)`).
+  checked. Recorded as blocked in the inventory (`beta 2 (blocked)`).
+- **Decision of the owner (round after beta 1 planning):** not ported now. It enters beta 2 together with capture, the change
+  diff, the checkpoint reader, the hunks and the accept and reject decisions. The answers to questions (a) to (f) are in
+  `docs/rust-edit-hunk-design.md`, section 13. No code is written for it in this round, and nothing in it is verified.
 
 ### P5 detail (first cut)
 

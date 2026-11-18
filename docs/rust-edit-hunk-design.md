@@ -194,7 +194,23 @@ the same status and the same refusal.
 - (f) Is a reset of a hunk edit wanted at all?
 - (g) Until capture is ported, where do the Rust hunk rows come from?
 
+### Answers of the owner (recorded)
+
+- (a) Two phases with compare-and-set: the patch is validated against a snapshot, and the write happens only if the stored
+  row still has that snapshot. This is the decision, not a choice for later.
+- (b) Parity: no `beforeHash`, and no hash check for such a change, as in TypeScript. The hardening (refusing such changes)
+  is noted as a future change, not part of the port.
+- (c) `applyPatch` is ported with the current TypeScript behaviour, proven by a differential test. Any divergence from section 6
+  comes later, in its own commit.
+- (d) The patch limit counts UTF-16 units, as TypeScript does.
+- (e) `changeControl.changed` is sent together with the UI slice that shows change control, not before.
+- (f) No reset of a hunk edit.
+- (g) `editHunk` is **not ported now**. It is blocked in `docs/ipc-inventory.md` and marked **beta 2**. It enters together with
+  capture, the change diff, the checkpoint reader, the hunks and the accept and reject decisions. When the checkpoint reader
+  exists, it canonicalizes the path inside the store root, refuses symbolic links that leave the root, and checks the size
+  before it reads.
+
 ## 14. Next step
 
-No code until the owner answers (a) to (g) and the preconditions are scheduled. The first code change would be the checkpoint
-byte reader, with its own tests, in its own commit.
+The answers are recorded above. No code is written for `editHunk` in this round. The first code that touches it is the
+checkpoint byte reader, in beta 2, with its own tests and its own commit.
