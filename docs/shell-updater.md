@@ -95,6 +95,54 @@ and installing an update needs, in one reviewed change:
 
 Until step 1 is done, the window cannot reach the plugin, and the shell makes no request for an update.
 
+## Release workflow
+
+`.github/workflows/shell-release.yml` builds, signs and publishes the shell's updater artifacts. It is written and has
+not run. Its only trigger is a `rust-v*` tag, and nothing in this change pushes one. A `rust-v` tag starts no Electron
+workflow: `stable-release.yml` matches `v[0-9]*` and `package-validation.yml` matches `v*`, and
+`tests/shellRelease.test.ts` checks that neither pattern matches a shell tag.
+
+| Job | Runs on | Secrets | What it does |
+| --- | --- | --- | --- |
+| `gate` | Linux | none | Requires a stable `rust-vX.Y.Z` tag that names a commit of this repository. The version must match `crates/noct-app/tauri.conf.json` and the workspace `Cargo.toml`. The release notes `docs/releases/rust-vX.Y.Z.md` must exist. No release may exist for the tag. A successful `rust-shell-validation.yml` run for the tagged commit must exist. The gate does not look at `main`. |
+| `build` | Linux x86_64 (AppImage), Windows x86_64 (NSIS), macOS arm64 (`.app.tar.gz`) | none | `cargo tauri build --no-sign` with `createUpdaterArtifacts` for this build only. Uploads the one updater artifact of each platform, unsigned. |
+| `sign` | Linux, `release` environment | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Signs each artifact with `cargo tauri signer sign --app-version`, which binds the version into the signature. Verifies each signature with minisign against `plugins.updater.pubkey` in the configuration. Writes `latest.json` with `scripts/shell-latest-json.mjs`, which refuses a signature that names another file or version. |
+| `publish` | Linux | none | Attests the release assets with `actions/attest-build-provenance`, then creates the release from the exact tag with `--verify-tag`. Afterwards it checks that the published `latest.json` is the signed one. |
+
+Every action is pinned to a commit SHA. The attestation action is the one the build provenance dry run verified, at the
+same pin. The workflow tests (`tests/shellRelease.test.ts`) lock the trigger, the permissions, the pins, the one job
+that reads the secrets, the signing order, the tag the gate and the publish job compare, and the job that publishes.
+`tests/shellLatestJson.test.ts` covers the manifest builder, which refuses any tag that is not `rust-v` plus the version.
+
+Before the first tag, the maintainer must:
+
+1. Create the `release` environment in the repository settings, with the two secrets, and limit its deployments to
+   `rust-v*` tags. This change does not create them, and no key is generated here.
+2. Decide who holds the private key. This is still open: ADR 0001, open decision 1.
+
+Do not push a `rust-v*` tag until these blockers are resolved:
+
+- **The `latest` release is shared with the Electron application.** The shell's endpoint is
+  `releases/latest/download/latest.json`, so it reads whichever release GitHub marks as latest. The Electron updater
+  works the same way: for github.com it reads `releases/latest` for the tag, then `latest.yml` from that release
+  (`node_modules/electron-updater/out/providers/GitHubProvider.js`, `getLatestTagName`). The publish step does not pass
+  `--latest=false`, so the first shell release would take that mark. Electron users would then find no `latest.yml`,
+  and the shell would find an Electron release with no `latest.json`. Choose where the shell's manifest lives before
+  the first tag (a release of its own, another repository, or another host), and change the endpoint in the same
+  reviewed change.
+- The **updater cannot be used yet**: the window has no updater permission (see [Activation](#activation)). A release
+  can be produced now, but no shell can check for or install it until that step is done.
+- The workflow publishes the updater artifacts and `latest.json` only. Installers for users (DMG, MSI) are not
+  part of it yet.
+
+What is not verified: nothing here has run. CI has not built a shell bundle with `createUpdaterArtifacts`, so the
+artifact names, the AppImage tooling on a hosted runner, the NSIS and macOS bundles, and the minisign check of a
+Tauri signature are all unconfirmed until the first real run. A run publishes a real release, so first test the
+workflow in a copy of the repository (a fork with its own `release` environment), not in the public one. The gate's
+query for the shell CI run of the tagged commit has not run against GitHub. `actionlint` 1.7.12, the version
+`package-validation.yml` uses, was run locally on the workflows. That job runs only on pull requests, on pushes to
+`main` and on `v*` tags, so CI does not lint a push to `migration/rust`.
+
 ## Key rotation
 
 Installed copies of the shell trust only the public key compiled into them. Changing the key in the configuration
@@ -111,10 +159,11 @@ must still be held and unexposed.
    cargo tauri signer generate -w "$HOME/secure/noct-updater-next.key"
    ```
 
-   Read the new key id from the first line of the `.pub` file, and the base64 value of that file.
+   The public key is written next to it, at the same path with `.pub` appended. Read the new key id from its first
+   line, and use the base64 value of that file as the new `pubkey`.
 
 2. Open a release PR that changes `plugins.updater.pubkey` to the new value, and the table in this document to the
-   new key id and the SHA-256 of the new value. The bridge release is the first `v*` tag of that PR. The release
+   new key id and the SHA-256 of the new value. The bridge release is the first `rust-v*` tag of that PR. The release
    workflow signs it with the **old** key, which is still held in the `release` environment.
 3. The release workflow checks every signature against the key in the configuration. In the bridge release that is
    the new key, while the signature is made with the old one, so the check stops the release. This is intended, and
