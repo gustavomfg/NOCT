@@ -61,15 +61,21 @@ jobs:
       - name: Wait for the shell CI of the tag and require all three systems to pass
         shell: bash
         run: |
-          # The tag starts rust-shell-validation.yml on its own run, with the Linux, Windows and macOS jobs. The gate waits
-          # for that run to finish, and passes only when each of the three jobs succeeded on it. A run of the branch for the
-          # same commit does not count: it runs Linux alone.
+          # The release run is the newest push run of the tagged commit. The tag starts it with the Linux, Windows and macOS
+          # jobs, and the gate waits for it to finish. The gate passes only when each of the three jobs succeeded. A run of
+          # the migration branch for the same commit has the Linux job alone, so it fails the check; it is not accepted.
           deadline=$(( $(date +%s) + 6600 ))
           run_id=""
           while [ -z "$run_id" ]; do
             run_id="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/rust-shell-validation.yml/runs" \
-              -f event=push -f per_page=100 \
-              --jq "[.workflow_runs[] | select(.head_sha == \"$RELEASE_SHA\" and .head_branch == \"$RELEASE_TAG\")] | sort_by(.id) | last | .id // empty")"
+              -f event=push -f head_sha="$RELEASE_SHA" -f per_page=100 |
+              node -e '
+                const fs = require("node:fs")
+                const runs = JSON.parse(fs.readFileSync(0, "utf8")).workflow_runs
+                  .filter((run) => run.head_sha === process.env.RELEASE_SHA)
+                  .sort((a, b) => b.id - a.id)
+                if (runs[0]) console.log(runs[0].id)
+              ')"
             if [ -z "$run_id" ]; then
               [ "$(date +%s)" -lt "$deadline" ] || { echo "No shell CI run exists for $RELEASE_TAG. rust-shell-validation.yml must run on the tag." >&2; exit 1; }
               sleep 30
