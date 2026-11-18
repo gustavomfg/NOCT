@@ -8,6 +8,25 @@ import { CancellableProcessRunner } from '../electron/validation/CancellableProc
 
 const linuxOnly = process.platform === 'linux' ? it : it.skip
 
+const JS_UNSAFE_CHAR_MAP: Record<string, string> = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+}
+
+function escapeUnsafeJsChars(value: string) {
+  return value.replace(/[<>/\\\b\f\n\r\t\0\u2028\u2029]/g, (char) => JS_UNSAFE_CHAR_MAP[char] ?? char)
+}
+
 async function waitForFile(filePath: string) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (fs.existsSync(filePath)) {
@@ -70,7 +89,7 @@ describe('cancelamento de árvore de validação com processos reais', () => {
     try {
       const script = `
         const { spawn } = require('node:child_process');
-        const child = spawn(process.execPath, ['-e', ${JSON.stringify(`process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000)`)}], { stdio: ['ignore', '${stdioMode}', '${stdioMode}'] });
+        const child = spawn(process.execPath, ['-e', ${JSON.stringify(`process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${escapeUnsafeJsChars(JSON.stringify(marker))}, String(process.pid)); setInterval(() => {}, 1000)`)}], { stdio: ['ignore', '${stdioMode}', '${stdioMode}'] });
         process.on('SIGTERM', () => process.exit(0));
         setInterval(() => {}, 1000);
       `
