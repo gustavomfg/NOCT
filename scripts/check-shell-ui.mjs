@@ -68,10 +68,20 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status']
+// The provider commands that change something. The provider flow checks each one; the strict list below allows them.
+const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke']
+const SECURE_STORAGE_ERROR = {
+  code: 'secure-storage-unavailable',
+  message: 'O sistema operacional não oferece armazenamento seguro de credenciais. Nada foi salvo.',
+}
+// A key the check made up. It is not a credential; the check proves that it never reaches the page after a save.
+const TEST_KEY = 'sk-or-v1-check-only-0123456789'
+// A consent call carries the path of a project and nothing else.
+const CONSENT_PAYLOAD = /^\{"input":\{"workspace":"\/work\/[a-z]+"\}\}$/
 const EXAMPLE_NAMES = ['frx', 'ovra']
 // The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
-const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}' }
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}' }
 
 // What the shell returns for `workspaces_list`, as the items of its page: one project of each kind the sidebar shows.
 const PROJECTS = [
@@ -135,6 +145,10 @@ const SCENARIOS = [
   { name: 'projects-reply-outside-the-contract', mode: 'ready', theme: 'light', projects: 'invalid', expectTheme: 'light' },
   { name: 'projects-with-more-to-come', mode: 'ready', theme: 'light', projects: 'ready', more: true, expectTheme: 'light' },
   { name: 'theme-not-saved-says-so', mode: 'ready', theme: 'light', saveFails: true, expectTheme: 'light' },
+  { name: 'provider-key-not-configured', mode: 'ready', theme: 'light', provider: true, expectTheme: 'light' },
+  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, expectTheme: 'light' },
+  { name: 'provider-key-save-refused', mode: 'ready', theme: 'light', keyFails: SECURE_STORAGE_ERROR, provider: true, expectTheme: 'light' },
+  { name: 'provider-reply-outside-the-contract', mode: 'invalid', theme: 'light', provider: true, expectTheme: 'light' },
 ]
 
 const TYPES = {
@@ -174,6 +188,8 @@ function installMock(config) {
   const modeOf = (command) => (command === 'workspaces_list' ? config.scenario.projects : config.scenario.mode)
   // The settings the shell holds: a save changes them, and the next read or save shows the change.
   const saved = { ...config.settings }
+  // The key state and the consent of each project. The key itself is never kept, and never returned.
+  const providerState = { configured: config.scenario.keyConfigured === true, granted: {} }
   // `workspaces_list` answers with a page: the items, and whether more follow them.
   // The cursor of a page with more is the key of its last project, as the shell writes it.
   const cursorOf = (items) => {
@@ -184,6 +200,24 @@ function installMock(config) {
     if (command === 'settings_set') {
       Object.assign(saved, payload.input)
       return { ...saved }
+    }
+    if (command === 'provider_key_status') return { provider: 'openrouter', configured: providerState.configured }
+    if (command === 'provider_key_save') {
+      providerState.configured = true
+      return { provider: 'openrouter', configured: true }
+    }
+    if (command === 'provider_key_remove') {
+      providerState.configured = false
+      return { provider: 'openrouter', configured: false }
+    }
+    if (command === 'provider_consent_status') {
+      const workspace = payload.input.workspace
+      return { workspace, provider: 'openrouter', granted: providerState.granted[workspace] === true }
+    }
+    if (command === 'provider_consent_grant' || command === 'provider_consent_revoke') {
+      const workspace = payload.input.workspace
+      providerState.granted[workspace] = command === 'provider_consent_grant'
+      return { workspace, provider: 'openrouter', granted: providerState.granted[workspace] }
     }
     if (command !== 'workspaces_list') return saved
     const more = config.scenario.more === true
@@ -201,6 +235,7 @@ function installMock(config) {
       const mode = modeOf(command)
       // A save the scenario refuses gets the shell's own error, as a refused read does.
       if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
+      if (command === 'provider_key_save' && config.scenario.keyFails) return Promise.reject(config.scenario.keyFails)
       return new Promise((resolve, reject) => {
         const answer = () => {
           switch (mode) {
@@ -227,6 +262,88 @@ function installMock(config) {
       })
     },
   }
+}
+
+// The provider section of Ajustes. The key field is write-only: it is a password field, it is emptied when the key is
+// sent, and the key is in no part of the page afterwards. The consent is asked for one project at a time, and says
+// what may be sent before it is confirmed.
+async function providerFlow(page, scenario, check, result) {
+  const input = page.getByLabel('Chave do OpenRouter', { exact: true })
+  const save = page.getByRole('button', { name: 'Salvar chave', exact: true })
+  const calls = () => page.evaluate(() => window.__noctCalls ?? [])
+  await page.getByTestId('provider').waitFor({ timeout: 8000 })
+  check((await input.getAttribute('type')) === 'password', 'the key field is a password field')
+  check((await input.getAttribute('autocomplete')) === 'off', 'the key field turns off browser autocompletion')
+
+  if (scenario.mode === 'invalid') {
+    const alert = page.getByTestId('key-error')
+    await alert.waitFor({ timeout: 8000 })
+    check((await alert.textContent())?.includes('O NOCT respondeu de forma inesperada.'), 'a key reply outside the contract is an error')
+    return
+  }
+
+  const configured = scenario.keyConfigured === true
+  await page
+    .getByTestId('key-status')
+    .getByText(configured ? 'Chave configurada.' : 'Nenhuma chave configurada.', { exact: true })
+    .waitFor({ timeout: 8000 })
+
+  await input.fill(TEST_KEY)
+  check(await save.isEnabled(), 'the save button is enabled once a key is typed')
+  await save.click()
+
+  if (scenario.keyFails) {
+    const alert = page.getByTestId('key-save-error')
+    await alert.waitFor({ timeout: 8000 })
+    check((await alert.textContent())?.includes(SECURE_STORAGE_ERROR.message), 'a refused save shows the shell message')
+    check((await input.inputValue()) === '', 'the key field is emptied even when the save is refused')
+    check(!(await page.content()).includes(TEST_KEY), 'the key is in no part of the page after a refused save')
+    check((await page.getByTestId('key-status').textContent()) === 'Nenhuma chave configurada.', 'a refused save leaves the status as it was')
+    return
+  }
+
+  await page.waitForFunction(() => (window.__noctCalls ?? []).some((call) => call.command === 'provider_key_save'))
+  await page.waitForFunction(() => !document.querySelector('[data-testid="key-save-error"]'))
+  await page.getByTestId('key-status').getByText('Chave configurada.', { exact: true }).waitFor({ timeout: 8000 })
+  check((await input.inputValue()) === '', 'the key field is emptied when the key is sent')
+  check(!(await page.content()).includes(TEST_KEY), 'the key is in no attribute, text or script of the page after the save')
+  const saves = (await calls()).filter((call) => call.command === 'provider_key_save')
+  check(
+    saves.length === 1 &&
+      Object.keys(saves[0].payload).join() === 'input' &&
+      Object.keys(saves[0].payload.input).sort().join() === 'key,provider' &&
+      saves[0].payload.input.provider === 'openrouter' &&
+      saves[0].payload.input.key === TEST_KEY,
+    'the key is sent once, with its provider and nothing else',
+  )
+
+  await page.getByRole('button', { name: 'Remover chave', exact: true }).click()
+  await page.getByTestId('key-status').getByText('Nenhuma chave configurada.', { exact: true }).waitFor({ timeout: 8000 })
+
+  await page.getByLabel('Projeto', { exact: true }).selectOption('/work/alpha')
+  await page.getByTestId('consent-status').getByText('Sem consentimento.', { exact: true }).waitFor({ timeout: 8000 })
+  await page.getByRole('button', { name: 'Pedir consentimento', exact: true }).click()
+  const confirm = page.getByTestId('consent-confirm')
+  const text = (await confirm.textContent()) ?? ''
+  check(text.includes('128 KiB') && text.includes('32 KiB'), 'the consent names the budget and the per-file cap')
+  check(text.includes('nada é enviado'), 'the consent says that nothing is sent while the chat is off')
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click()
+  check(!(await confirm.isVisible()), 'cancelling leaves no consent')
+  await page.getByRole('button', { name: 'Pedir consentimento', exact: true }).click()
+  await page.getByRole('button', { name: 'Confirmar consentimento', exact: true }).click()
+  await page.getByTestId('consent-status').getByText('Consentimento concedido.', { exact: true }).waitFor({ timeout: 8000 })
+  await page.getByRole('button', { name: 'Revogar consentimento', exact: true }).click()
+  await page.getByTestId('consent-status').getByText('Sem consentimento.', { exact: true }).waitFor({ timeout: 8000 })
+
+  const consents = (await calls()).filter((call) => PROVIDER_WRITES.includes(call.command) && call.command.includes('consent'))
+  check(
+    consents.map((call) => call.command).join() === 'provider_consent_grant,provider_consent_revoke',
+    'the consent is granted once and revoked once, after its confirmation',
+  )
+  check(
+    consents.every((call) => call.payload.input.workspace === '/work/alpha'),
+    'each consent call names the chosen project',
+  )
 }
 
 const browser = await chromium.launch()
@@ -266,6 +383,7 @@ try {
       await page.goto(`http://127.0.0.1:${server.address().port}/`)
       // The states of the settings read are shown in Ajustes, so it is opened first.
       await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
+      if (scenario.provider) await providerFlow(page, scenario, check, result)
       const values = page.getByTestId('settings-values')
       const themeButton = page.getByRole('button', { name: /^Usar tema (escuro|claro)$/ })
       const html = page.locator('html')
@@ -530,11 +648,18 @@ try {
       if (scenario.mode !== 'no-runtime') {
         const count = (command) => calls.filter((call) => call.command === command).length
         check(calls.length >= 2, 'the interface calls the shell for settings and projects')
-        check(calls.every((call) => [...READ_COMMANDS, 'settings_set'].includes(call.command)), 'only the read commands and the setting saves are called')
-        const reads = calls.filter((call) => call.command !== 'settings_set')
         check(
-          reads.every((call) => JSON.stringify(call.payload) === PAYLOAD_OF[call.command]),
-          'each read is sent its own payload: settings_get none, workspaces_list the first page at the largest limit',
+          calls.every((call) => [...READ_COMMANDS, 'settings_set', ...PROVIDER_WRITES].includes(call.command)),
+          'only the read commands, the setting saves and the provider writes are called',
+        )
+        const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set'].includes(call.command))
+        check(
+          reads.every((call) =>
+            call.command === 'provider_consent_status'
+              ? CONSENT_PAYLOAD.test(JSON.stringify(call.payload))
+              : JSON.stringify(call.payload) === PAYLOAD_OF[call.command],
+          ),
+          'each read is sent its own payload: settings_get none, workspaces_list the first page at the largest limit, the key status none, a consent its project',
         )
         const saves = [...savesBeforeReload, ...calls.filter((call) => call.command === 'settings_set')]
         check(
@@ -553,6 +678,14 @@ try {
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
         check(count('workspaces_list') === (projects === 'error-then-retry' ? 2 : 1), 'workspaces_list is called once, or once more after a retry')
+        // The call log starts again at each page load. The key status is read each time Ajustes is opened after the last
+        // load: the full scenario reloads the page and then leaves Ajustes closed, the save-failure scenario opens it
+        // twice, and the others open it once.
+        const openingsAfterLoad = scenario.full ? 0 : scenario.saveFails ? 2 : 1
+        check(
+          count('provider_key_status') === openingsAfterLoad,
+          `provider_key_status is read once for each opening of Ajustes after the last load (reads: ${count('provider_key_status')}, expected: ${openingsAfterLoad})`,
+        )
       }
 
       const inline = await page.evaluate(() => document.querySelectorAll('[style], style').length)

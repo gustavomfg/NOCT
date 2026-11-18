@@ -4,6 +4,8 @@ mod app;
 mod dom;
 mod examples;
 mod ipc;
+mod provider;
+mod provider_panel;
 mod settings;
 mod theme;
 mod workspaces;

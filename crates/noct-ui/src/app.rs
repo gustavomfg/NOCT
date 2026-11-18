@@ -10,6 +10,7 @@ use noct_core::contracts::Workspace;
 use crate::dom;
 use crate::examples::{EXAMPLE_FINDINGS, EXAMPLE_MODEL, EXAMPLE_VAULT};
 use crate::ipc;
+use crate::provider_panel;
 use crate::settings::{self, SettingsView};
 use crate::theme::Theme;
 use crate::workspaces::{self, WorkspacesView};
@@ -200,7 +201,7 @@ pub fn App() -> impl IntoView {
                     <div class="stack">
                         {move || {
                             if settings_open.get() {
-                                settings_panel(settings_view, saving, save_error, save_setting, read_settings).into_any()
+                                settings_panel(settings_view, saving, save_error, save_setting, read_settings, workspaces_view).into_any()
                             } else {
                                 match mode.get() {
                                     Mode::Review => review_panel().into_any(),
@@ -365,6 +366,7 @@ fn settings_panel(
     save_error: ReadSignal<Option<String>>,
     save: impl Fn(String) + Copy + Send + Sync + 'static,
     retry: impl Fn() + Copy + Send + Sync + 'static,
+    projects: ReadSignal<WorkspacesView>,
 ) -> impl IntoView {
     let ready = move || matches!(settings_view.get(), SettingsView::Ready(_));
     let saved = move || match settings_view.get() {
@@ -516,6 +518,7 @@ fn settings_panel(
                 }}
             </section>
             <p class="note">"O tema muda pelo botão da barra lateral, que o troca e o salva."</p>
+            {provider_panel::provider_section(projects)}
         </div>
     }
 }

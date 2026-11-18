@@ -594,7 +594,8 @@ button {
   overflow-wrap: anywhere;
 }
 
-.select {
+.select,
+.field {
   min-height: 40px;
   min-width: 10rem;
   padding: 0 14px;
@@ -605,8 +606,14 @@ button {
   font: inherit;
 }
 
-.select:disabled {
+.select:disabled,
+.field:disabled {
   color: var(--muted);
+}
+
+.field {
+  width: min(100%, 28rem);
+  padding: 0 14px;
 }
 
 .composer-wrap {
