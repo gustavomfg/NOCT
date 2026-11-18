@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 // The release workflow of the Rust shell is a draft that no step of this repository runs. These checks keep its
 // security properties from changing in an edit: the trigger, the pins, who can write and who can read the signing
 // secrets, and which job publishes. They read the file as text, like the other workflow checks of the repository.
-const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/shell-release.yml'), 'utf8')
+// Windows checks a text file out with CRLF line ends, and these checks match line ends, so each file is read with LF.
+const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/shell-release.yml'), 'utf8').replace(/\r\n/g, '\n')
 
 /** The text of each job under `jobs:`, keyed by the job name. */
 function jobs(text: string): Map<string, string> {
@@ -33,7 +34,7 @@ const job = jobs(workflow)
 /** The tag patterns of the Electron workflows, as written in their `tags:` lists. Negated patterns are left out. */
 function electronTagPatterns(): string[] {
   return ['stable-release.yml', 'package-validation.yml'].flatMap((file) => {
-    const text = fs.readFileSync(path.join(process.cwd(), '.github/workflows', file), 'utf8')
+    const text = fs.readFileSync(path.join(process.cwd(), '.github/workflows', file), 'utf8').replace(/\r\n/g, '\n')
     return [...text.matchAll(/^\s+- '([^']+)'$/gm)].map((match) => match[1]).filter((pattern) => !pattern.startsWith('!'))
   })
 }
