@@ -62,6 +62,7 @@ pub fn App() -> impl IntoView {
     // The chat switch is read once. Until the shell answers, the chat section says it is loading.
     let chat = chat_panel::ChatState::new(shared);
     chat.read_status();
+    chat.watch_consent();
 
     // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
     // shell replied with. A refused save says so, and its controls go back to the settings the shell holds.
@@ -423,26 +424,13 @@ fn crumb_view(shared: Shared, mode: Mode, settings_open: bool) -> AnyView {
     if settings_open {
         return view! { <b>"Ajustes"</b> }.into_any();
     }
-    let project = current_name(shared).unwrap_or_else(|| "Nenhum projeto".to_string());
+    let project = sidebar::current_name(shared).unwrap_or_else(|| "Nenhum projeto".to_string());
     let mode_label = match mode {
         Mode::Review => "Revisar",
         Mode::Build => "Construir",
         Mode::Docs => "Documentar",
     };
     view! { <b>{project}</b> " · " {mode_label} }.into_any()
-}
-
-/// The name of the current project, once the list has arrived.
-fn current_name(shared: Shared) -> Option<String> {
-    let path = shared.current.get()?;
-    match shared.projects.get() {
-        WorkspacesView::Ready(page) => page
-            .items
-            .iter()
-            .find(|workspace| workspace.path == path)
-            .map(|workspace| workspace.name.clone()),
-        WorkspacesView::Loading | WorkspacesView::Failed(_) => None,
-    }
 }
 
 fn pencil_icon() -> impl IntoView {

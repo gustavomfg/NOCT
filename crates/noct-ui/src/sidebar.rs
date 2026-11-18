@@ -170,6 +170,19 @@ fn key_words(key: &ProviderView<KeyStatus>) -> String {
     }
 }
 
+/// The name of the current project, once the list has arrived.
+pub fn current_name(shared: Shared) -> Option<String> {
+    let path = shared.current.get()?;
+    match shared.projects.get() {
+        WorkspacesView::Ready(page) => page
+            .items
+            .iter()
+            .find(|workspace| workspace.path == path)
+            .map(|workspace| workspace.name.clone()),
+        WorkspacesView::Loading | WorkspacesView::Failed(_) => None,
+    }
+}
+
 /// The sidebar's project list, or the state of its read: loading, nothing registered yet, the shell's error with a way
 /// to try again, or the list itself. The current project is marked with `aria-current`.
 fn projects_view(shared: Shared, retry: impl Fn() + Copy + Send + Sync + 'static) -> AnyView {

@@ -13,8 +13,8 @@ use noct_core::limits::provider_chat::MAXIMUM_QUESTION_CHARACTERS;
 use crate::chat::{self, ChatStatus, CreatedConversation, Phase, Session};
 use crate::dom;
 use crate::ipc;
-use crate::provider::{self, ProviderView};
-use crate::sidebar::Shared;
+use crate::provider::{self, ConsentStatus, ProviderView};
+use crate::sidebar::{self, Shared};
 
 /// One question of the window and its answer. The session is the answer's state; the turn keeps the question as it was
 /// sent, and the note of the copy button.
@@ -41,6 +41,12 @@ pub struct ChatState {
     /// The owner of the window. The signals of each question belong to it, not to the button that sent the question: that
     /// button is drawn again when the answer starts, and a signal that belonged to it would be dropped with it.
     owner: StoredValue<Option<Owner>, LocalStorage>,
+    /// The consent of the current project, as the shell last said it, with the project it is about.
+    consent: RwSignal<Option<(String, ProviderView<ConsentStatus>)>>,
+    /// The project whose question waits for the permission card. The card shows only for the current project.
+    awaiting: RwSignal<Option<String>>,
+    consent_busy: RwSignal<bool>,
+    consent_error: RwSignal<Option<String>>,
 }
 
 impl ChatState {
@@ -55,6 +61,10 @@ impl ChatState {
             save_busy: RwSignal::new(false),
             save_error: RwSignal::new(None),
             owner: StoredValue::new_local(Owner::current()),
+            consent: RwSignal::new(None),
+            awaiting: RwSignal::new(None),
+            consent_busy: RwSignal::new(false),
+            consent_error: RwSignal::new(None),
         }
     }
 
@@ -91,9 +101,88 @@ impl ChatState {
     /// Whether the composer may send: the chat is on, a project is chosen, the question has text, and no answer is running.
     fn can_send(self) -> bool {
         self.enabled()
-            && self.shared.current.with(Option::is_some)
+            && self
+                .shared
+                .current
+                .get()
+                .is_some_and(|path| self.may_ask(&path))
             && chat::question_is_sendable(&self.question.get())
             && !self.busy()
+    }
+
+    /// Reads the permission of the current project when the project changes, and again when Ajustes close, so a permission
+    /// given there is seen here.
+    pub fn watch_consent(self) {
+        let shared = self.shared;
+        Effect::new(move |_| {
+            let path = shared.current.get();
+            let _ = shared.settings_open.get();
+            self.awaiting.set(None);
+            let Some(path) = path else {
+                self.consent.set(None);
+                return;
+            };
+            self.consent
+                .set(Some((path.clone(), ProviderView::Loading)));
+            let asked = path.clone();
+            ipc::call_with(
+                provider::CONSENT_STATUS,
+                &provider::consent_payload(&path),
+                move |outcome| {
+                    if shared.current.get_untracked().as_deref() == Some(asked.as_str()) {
+                        self.consent.set(Some((asked, provider::settle(outcome))));
+                    }
+                },
+            );
+        });
+    }
+
+    /// The permission of a project, as the shell last said it. A project whose reply has not come, or whose reply is for
+    /// another project, is loading.
+    fn permission_of(self, path: &str) -> Permission {
+        self.consent.with(|consent| match consent {
+            Some((known, ProviderView::Ready(status))) if known.as_str() == path => {
+                if status.granted {
+                    Permission::Granted
+                } else {
+                    Permission::Missing
+                }
+            }
+            Some((known, ProviderView::Failed(_))) if known.as_str() == path => Permission::Failed,
+            _ => Permission::Loading,
+        })
+    }
+
+    /// Whether a question may be sent to this project: its permission is known, granted or not, so that a missing one can
+    /// be asked for.
+    fn may_ask(self, path: &str) -> bool {
+        matches!(
+            self.permission_of(path),
+            Permission::Granted | Permission::Missing
+        )
+    }
+
+    /// Gives the permission of a project, as the card asks. The shell's reply is what the chat then holds.
+    fn grant(self, path: String) {
+        self.consent_busy.set(true);
+        self.consent_error.set(None);
+        let asked = path.clone();
+        ipc::call_with(
+            provider::CONSENT_GRANT,
+            &provider::consent_payload(&path),
+            move |outcome| {
+                self.consent_busy.set(false);
+                match provider::settle::<ConsentStatus>(outcome) {
+                    ProviderView::Ready(status) => {
+                        if self.shared.current.get_untracked().as_deref() == Some(asked.as_str()) {
+                            self.consent.set(Some((asked, ProviderView::Ready(status))));
+                        }
+                    }
+                    ProviderView::Failed(failure) => self.consent_error.set(Some(failure.message)),
+                    ProviderView::Loading => {}
+                }
+            },
+        );
     }
 
     /// Sends the question about the current project. The turn is on screen before the call, so the first event has a place
@@ -106,6 +195,16 @@ impl ChatState {
         if !self.enabled() || !chat::question_is_sendable(&question) || self.busy() {
             return;
         }
+        match self.permission_of(&workspace) {
+            Permission::Granted => {}
+            Permission::Missing => {
+                // Nothing is sent: the question stays in the composer, and the card asks for the permission.
+                self.awaiting.set(Some(workspace));
+                return;
+            }
+            Permission::Loading | Permission::Failed => return,
+        }
+        self.awaiting.set(None);
         let question = question.trim().to_string();
         let session = self.in_window(|| RwSignal::new(Session::default()));
         let copy_note = self.in_window(|| RwSignal::new(None));
@@ -258,6 +357,7 @@ pub fn thread(state: ChatState) -> impl IntoView {
                 key=|turn| turn.id
                 children=move |turn| turn_view(state, turn)
             />
+            {consent_card(state)}
             {move || {
                 state
                     .save_error
@@ -397,7 +497,7 @@ pub fn composer(state: ChatState) -> impl IntoView {
                         <span class="dot dot--off" aria-hidden="true"></span>
                         <span class="pill__name mono">{move || state.model_label()}</span>
                     </button>
-                    <span class="composer__hint">"Enter envia · Shift+Enter quebra linha"</span>
+                    <span class="composer__hint">{move || hint_words(state.enabled(), state.shared.current.get().map(|path| state.permission_of(&path)))}</span>
                     {move || {
                         if busy.get() {
                             view! {
@@ -466,6 +566,105 @@ fn stop_icon() -> impl IntoView {
     view! {
         <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor" />
+        </svg>
+    }
+}
+
+/// What the chat knows of a project's permission to receive questions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Permission {
+    Granted,
+    Missing,
+    Loading,
+    Failed,
+}
+
+/// The permission card, in the conversation. It appears when a question is sent to a project without the permission. The
+/// question stays in the composer, and nothing is sent until the person allows the project here.
+pub fn consent_card(state: ChatState) -> impl IntoView {
+    move || {
+        let (Some(path), Some(asked)) = (state.shared.current.get(), state.awaiting.get()) else {
+            return ().into_any();
+        };
+        if path != asked {
+            return ().into_any();
+        }
+        let granted = state.permission_of(&path) == Permission::Granted;
+        let busy = state.consent_busy.get();
+        let error = state.consent_error.get();
+        let heading = match sidebar::current_name(state.shared) {
+            Some(name) => format!("Enviar arquivos de {name} ao OpenRouter?"),
+            None => "Enviar arquivos do projeto ao OpenRouter?".to_string(),
+        };
+        let allow_path = path.clone();
+        view! {
+            <section class="card consent" data-testid="consent-card" aria-labelledby="consent-title">
+                <div class="consent__icon" aria-hidden="true">{shield_icon()}</div>
+                <div>
+                    <h3 id="consent-title">{heading}</h3>
+                    {if granted {
+                        view! {
+                            <p class="body" role="status" data-testid="consent-granted">
+                                "Permissão concedida neste projeto. Envie a pergunta quando quiser."
+                            </p>
+                        }
+                        .into_any()
+                    } else {
+                        view! {
+                            <p class="body">"Para responder a esta pergunta, o NOCT envia:"</p>
+                            <ul>
+                                <li>"Sua pergunta. As respostas anteriores desta janela não são enviadas."</li>
+                                <li>"Até 128 KiB de texto dos arquivos do topo do projeto, sem arquivos sensíveis, como .env, chaves e certificados."</li>
+                            </ul>
+                            <div class="actions">
+                                <button
+                                    class="btn btn--primary"
+                                    type="button"
+                                    data-testid="consent-allow"
+                                    prop:disabled=busy
+                                    on:click=move |_| state.grant(allow_path.clone())
+                                >
+                                    "Permitir neste projeto"
+                                </button>
+                                <button
+                                    class="btn btn--ghost"
+                                    type="button"
+                                    data-testid="consent-later"
+                                    prop:disabled=busy
+                                    on:click=move |_| state.awaiting.set(None)
+                                >
+                                    "Agora não"
+                                </button>
+                            </div>
+                        }
+                        .into_any()
+                    }}
+                    {error.map(|message| {
+                        view! { <p class="note" role="alert" data-testid="consent-error">{message}</p> }
+                    })}
+                </div>
+            </section>
+        }
+        .into_any()
+    }
+}
+
+/// The line under the composer: what the chat needs before it can send to the current project.
+fn hint_words(enabled: bool, permission: Option<Permission>) -> &'static str {
+    match permission {
+        Some(Permission::Missing) if enabled => {
+            "Este projeto ainda não tem permissão. Enter pede a permissão."
+        }
+        Some(Permission::Loading) if enabled => "Verificando a permissão deste projeto…",
+        Some(Permission::Failed) if enabled => "Não foi possível ler a permissão deste projeto.",
+        _ => "Enter envia · Shift+Enter quebra linha",
+    }
+}
+
+fn shield_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" />
         </svg>
     }
 }
