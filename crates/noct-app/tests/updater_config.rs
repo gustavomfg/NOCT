@@ -40,6 +40,15 @@ fn the_updater_trusts_only_the_release_key() {
     assert_eq!(updater(&config)["pubkey"], UPDATER_PUBKEY);
 }
 
+/// The public key file committed to the repository is the configured key. A rotation changes both, and this test fails
+/// when only one of them changes.
+#[test]
+fn the_committed_public_key_file_is_the_configured_key() {
+    let file = include_str!("../../../docs/noct-updater.key.pub");
+
+    assert_eq!(file.trim_end(), UPDATER_PUBKEY);
+}
+
 #[test]
 fn the_updater_reads_one_https_endpoint_of_the_release() {
     let config = config();
