@@ -68,9 +68,11 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
-const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke']
+const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model']
+// The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
+const MODEL_REFUSED = { code: 'invalid-input', message: 'O NOCT recusou o identificador do modelo.' }
 const SECURE_STORAGE_ERROR = {
   code: 'secure-storage-unavailable',
   message: 'O sistema operacional não oferece armazenamento seguro de credenciais. Nada foi salvo.',
@@ -189,7 +191,7 @@ function installMock(config) {
   // The settings the shell holds: a save changes them, and the next read or save shows the change.
   const saved = { ...config.settings }
   // The key state and the consent of each project. The key itself is never kept, and never returned.
-  const providerState = { configured: config.scenario.keyConfigured === true, granted: {} }
+  const providerState = { configured: config.scenario.keyConfigured === true, granted: {}, models: {} }
   // `workspaces_list` answers with a page: the items, and whether more follow them.
   // The cursor of a page with more is the key of its last project, as the shell writes it.
   const cursorOf = (items) => {
@@ -219,6 +221,15 @@ function installMock(config) {
       providerState.granted[workspace] = command === 'provider_consent_grant'
       return { workspace, provider: 'openrouter', granted: providerState.granted[workspace] }
     }
+    if (command === 'models_bindings_get') return providerState.models[payload.input.workspace] ?? null
+    if (command === 'models_set_default_model') {
+      const { workspace, modelId } = payload.input
+      const next = { workspaceId: workspace, ...providerState.models[workspace] }
+      if (modelId === null) delete next.defaultBinding
+      else next.defaultBinding = { providerId: 'openrouter', modelId }
+      providerState.models[workspace] = next
+      return next
+    }
     if (command !== 'workspaces_list') return saved
     const more = config.scenario.more === true
     return { items: config.projects, hasMore: more, nextCursor: more ? cursorOf(config.projects) : null }
@@ -236,6 +247,10 @@ function installMock(config) {
       // A save the scenario refuses gets the shell's own error, as a refused read does.
       if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
       if (command === 'provider_key_save' && config.scenario.keyFails) return Promise.reject(config.scenario.keyFails)
+      // The shell refuses an identifier with no vendor, as the core does.
+      if (command === 'models_set_default_model' && typeof payload.input.modelId === 'string' && !payload.input.modelId.includes('/')) {
+        return Promise.reject(config.modelRefused)
+      }
       return new Promise((resolve, reject) => {
         const answer = () => {
           switch (mode) {
@@ -344,6 +359,35 @@ async function providerFlow(page, scenario, check) {
     consents.every((call) => call.payload.input.workspace === '/work/alpha'),
     'each consent call names the chosen project',
   )
+
+  // The default model of the chosen project: a refused identifier is shown and not saved; a valid one is shown as saved;
+  // null clears it. Every write names the project.
+  const modelField = page.getByLabel('Id do modelo no OpenRouter', { exact: true })
+  await page.getByTestId('model-status').getByText('Nenhum modelo padrão salvo.', { exact: true }).waitFor({ timeout: 8000 })
+  check((await modelField.getAttribute('autocomplete')) === 'off', 'the model field turns off browser autocompletion')
+  await modelField.fill('gpt-4o')
+  await page.getByRole('button', { name: 'Salvar modelo', exact: true }).click()
+  await page.getByTestId('model-error').getByText(MODEL_REFUSED.message, { exact: true }).waitFor({ timeout: 8000 })
+  check((await page.getByTestId('model-status').textContent()) === 'Nenhum modelo padrão salvo.', 'a refused identifier is not shown as saved')
+  await modelField.fill('openai/gpt-4o:free')
+  await page.getByRole('button', { name: 'Salvar modelo', exact: true }).click()
+  await page.getByTestId('model-status').getByText('Modelo salvo: openai/gpt-4o:free', { exact: true }).waitFor({ timeout: 8000 })
+  check((await page.getByTestId('model-error').count()) === 0, 'a saved identifier clears the earlier refusal')
+  await page.getByRole('button', { name: 'Limpar modelo', exact: true }).click()
+  await page.getByTestId('model-status').getByText('Nenhum modelo padrão salvo.', { exact: true }).waitFor({ timeout: 8000 })
+
+  const modelWrites = (await calls()).filter((call) => call.command === 'models_set_default_model')
+  check(
+    modelWrites.map((call) => String(call.payload.input.modelId)).join('|') === 'gpt-4o|openai/gpt-4o:free|null',
+    'the identifiers are sent as typed, and clearing sends null',
+  )
+  check(
+    modelWrites.every(
+      (call) =>
+        Object.keys(call.payload.input).sort().join() === 'modelId,workspace' && call.payload.input.workspace === '/work/alpha',
+    ),
+    'each model write carries only the project and the identifier, for the chosen project',
+  )
 }
 
 const browser = await chromium.launch()
@@ -369,6 +413,7 @@ try {
       settings: settingsSaved(scenario.theme),
       projects: PROJECTS,
       shellError: SHELL_ERROR,
+      modelRefused: MODEL_REFUSED,
     })
     page.on('pageerror', (error) => result.pageErrors.push(error.message))
     const check = (condition, message) => { if (!condition) result.failures.push(message) }
@@ -655,7 +700,7 @@ try {
         const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set'].includes(call.command))
         check(
           reads.every((call) =>
-            call.command === 'provider_consent_status'
+            ['provider_consent_status', 'models_bindings_get'].includes(call.command)
               ? CONSENT_PAYLOAD.test(JSON.stringify(call.payload))
               : JSON.stringify(call.payload) === PAYLOAD_OF[call.command],
           ),
