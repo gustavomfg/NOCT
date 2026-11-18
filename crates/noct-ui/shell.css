@@ -451,6 +451,11 @@ button {
   justify-content: center;
 }
 
+/* Hidden keeps the space of a control, so the layout does not move when it is hidden. */
+.is-hidden {
+  visibility: hidden;
+}
+
 .segmented {
   display: inline-flex;
   gap: 2px;

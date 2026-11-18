@@ -91,6 +91,18 @@ impl ChatState {
         ipc::call(chat::CANCEL, |_| {});
     }
 
+    /// Starts a new conversation: the answer on screen is cleared, and the next save creates a conversation of its own.
+    /// A question still running is stopped first, so nothing arrives into the new conversation.
+    pub fn new_conversation(self) {
+        if self.session.with_untracked(Session::busy) {
+            self.cancel();
+        }
+        self.session.set(Session::default());
+        self.conversation.set(None);
+        self.question.set(String::new());
+        self.save_error.set(None);
+    }
+
     /// Keeps the answer in a conversation of its project. The conversation is created the first time, and reused after.
     fn save(self) {
         let (run, workspace, content) = self.session.with_untracked(|session| {

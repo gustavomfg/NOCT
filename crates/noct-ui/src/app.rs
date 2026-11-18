@@ -155,7 +155,11 @@ pub fn App() -> impl IntoView {
             </aside>
 
             <div class="content">
-                <header class="modes">
+                <header class="topbar">
+                    <div class="crumb" data-testid="crumb">
+                        {move || crumb_view(shared, mode.get(), settings_open.get())}
+                    </div>
+                    <div class="modes">
                     <div class="segmented" role="group" aria-label="Modo de trabalho">
                         <button
                             type="button"
@@ -180,6 +184,24 @@ pub fn App() -> impl IntoView {
                             on:click=move |_| open_mode(Mode::Docs)
                         >
                             "Documentar"
+                        </button>
+                    </div>
+                    </div>
+                    <div class=move || {
+                        if settings_open.get() || mode.get() != Mode::Review {
+                            "topbar__end is-hidden"
+                        } else {
+                            "topbar__end"
+                        }
+                    }>
+                        <button
+                            class="icon-btn row"
+                            type="button"
+                            aria-label="Nova conversa"
+                            title="Nova conversa"
+                            on:click=move |_| chat.new_conversation()
+                        >
+                            {pencil_icon()}
                         </button>
                     </div>
                 </header>
@@ -423,6 +445,42 @@ fn settings_panel(
             <p class="note">"O tema muda pelo botão da barra lateral, que o troca e o salva."</p>
             {provider_panel::provider_section(shared, shared.projects.read_only())}
         </div>
+    }
+}
+
+/// The trail of the top bar: the current project and the mode, or only Ajustes while they are open.
+fn crumb_view(shared: Shared, mode: Mode, settings_open: bool) -> AnyView {
+    if settings_open {
+        return view! { <b>"Ajustes"</b> }.into_any();
+    }
+    let project = current_name(shared).unwrap_or_else(|| "Nenhum projeto".to_string());
+    let mode_label = match mode {
+        Mode::Review => "Revisar",
+        Mode::Build => "Construir",
+        Mode::Docs => "Documentar",
+    };
+    view! { <b>{project}</b> " · " {mode_label} }.into_any()
+}
+
+/// The name of the current project, once the list has arrived.
+fn current_name(shared: Shared) -> Option<String> {
+    let path = shared.current.get()?;
+    match shared.projects.get() {
+        WorkspacesView::Ready(page) => page
+            .items
+            .iter()
+            .find(|workspace| workspace.path == path)
+            .map(|workspace| workspace.name.clone()),
+        WorkspacesView::Loading | WorkspacesView::Failed(_) => None,
+    }
+}
+
+fn pencil_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+        </svg>
     }
 }
 
