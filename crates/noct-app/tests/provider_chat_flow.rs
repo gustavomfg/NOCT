@@ -613,6 +613,65 @@ fn blocks_that_leave_the_project_or_name_a_secret_are_refused_and_nothing_is_rec
     assert_eq!(std::fs::read_to_string(&outside).expect("read"), "fora\n");
 }
 
+#[test]
+fn blocks_for_git_ci_self_running_files_device_names_and_encoded_paths_are_refused() {
+    let (scratch, persistence) = fixture("proposals-self-running");
+    let workspace = project(&scratch, &persistence, "app");
+    let root = std::path::Path::new(&workspace);
+    // The folders exist, so a refusal comes from the rule and not from a missing folder.
+    for folder in [
+        ".git/hooks",
+        ".github/workflows",
+        ".husky",
+        ".vscode",
+        "docs",
+    ] {
+        std::fs::create_dir_all(root.join(folder)).expect("folder");
+    }
+    std::fs::write(root.join(".git/config"), "[core]\n").expect("written");
+    let paths = [
+        ".git/config",
+        ".git/hooks/pre-commit",
+        ".git/hooks/post-checkout",
+        ".github/workflows/ci.yml",
+        ".github/actions/setup/action.yml",
+        ".gitlab-ci.yml",
+        ".husky/pre-commit",
+        ".pre-commit-config.yaml",
+        ".gitattributes",
+        ".gitmodules",
+        ".vscode/tasks.json",
+        ".envrc",
+        "CON",
+        "nul.txt",
+        "docs/COM1.md",
+        "LPT9",
+        "%2e%2e/fora.txt",
+        "docs/%2E%2E/%2e%2e/fora.txt",
+        "..%2ffora.txt",
+        "docs\\..\\..\\fora.txt",
+        "docs\\notas.md",
+    ];
+    for path in paths {
+        let answer = format!("````noct-change path={path}\n#!/bin/sh\necho x\n````\n");
+        let proposals = proposals_of(&persistence, &workspace, &answer);
+        assert!(proposals.changes.is_empty(), "{path} must not be proposed");
+        assert_eq!(proposals.refused, 1, "{path} must be counted as refused");
+    }
+    assert!(
+        noct_app::file_changes::list(&persistence, &[], &workspace)
+            .expect("listed")
+            .is_empty(),
+        "no refused block is in the journal"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join(".git/config")).expect("read"),
+        "[core]\n"
+    );
+    assert!(!root.join(".git/hooks/pre-commit").exists());
+    assert!(!root.join(".github/workflows/ci.yml").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn a_block_through_a_symbolic_link_out_of_the_project_is_refused() {

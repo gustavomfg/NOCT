@@ -1313,6 +1313,44 @@ counts, "Arquivo novo" for a new file, Aprovar and Recusar), applied (Desfazer) 
 changed since the proposal) leaves the change waiting and shows the shell's message. The diff is computed in the window and
 bounded; a text too long to compare is shown whole. Review stays read-only: the conversation only records proposals.
 
+## Owner's review of C, safe answer rendering, and Documentar (2026-11-19)
+
+CI: "Rust shell validation" on `0efa624` (run 44484850830) finished **success** on Linux.
+
+### Paths an assistant proposal may never name (rule of `check_relative_path`)
+
+A block whose path matches any rule below is refused and counted; nothing is recorded and nothing is written. The same
+check runs again when a change is approved.
+
+- **Git:** anything under a `.git` folder at any depth (`.git/config`, `.git/hooks/*`, `sub/.git/...`), and the Git files
+  that make Git run or fetch something: `.gitattributes`, `.gitmodules`, `.gitconfig`.
+- **CI:** `.github/workflows/**`, `.github/actions/**`, `.gitlab-ci.yml`, `.gitlab/**`, `.circleci/**`, `.buildkite/**`,
+  `.travis.yml`, `azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.drone.yml`, `Jenkinsfile`. Other files under
+  `.github` (issue templates, `CODEOWNERS`) stay allowed.
+- **Files that run on their own when the project is opened or committed:** hook managers (`.husky/**`, `.githooks/**`,
+  `.pre-commit-config.yaml`, `.pre-commit-hooks.yaml`, `lefthook.yml`), editor and container settings that can start tasks
+  (`.vscode/**`, `.idea/**`, `.devcontainer/**`), and files a shell or an editor reads on entering the folder (`.envrc`,
+  `.exrc`, `.nvimrc`, `.nvim.lua`, `.lvimrc`).
+- **Windows device names**, with or without an extension and in any case: `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
+  `LPT0`–`LPT9` (also the superscript digits Windows accepts).
+- **Encoded or disguised paths:** any percent escape (`%2e%2e`, `%2F`, `%5c`), a backslash, a colon, NUL or another control
+  character, and characters that look like a dot or a slash (fullwidth dot and slash, one-dot leader, division slash).
+- The rules already in place: absolute paths, `..`, empty or `.` names, a trailing dot or space, sensitive names (`.env`,
+  keys, certificates, credentials), symbolic links, folders outside the project.
+
+Not on the list: build files that run only when the person runs a build or an install (`build.rs`, `package.json`
+scripts, `Makefile`). They are shown as a diff and wait for approval like any other file.
+
+Tests: `crates/noct-core/tests/file_change.rs` (each rule, and names close to them that stay allowed) and
+`crates/noct-app/tests/provider_chat_flow.rs`
+(`blocks_for_git_ci_self_running_files_device_names_and_encoded_paths_are_refused`: one answer per path, each counted as
+refused, the journal stays empty, `.git/config` is unchanged and no hook or workflow file is created).
+
+### Known limitation
+
+A proposal only creates a file or rewrites a whole file, up to 32 KiB of text. Editing part of a file (a hunk or a range
+of lines) is not supported yet.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

@@ -152,6 +152,99 @@ pub enum PathRefusal {
     Traversal,
     Forbidden,
     Sensitive,
+    /// The file runs by itself: a Git hook or setting, a CI pipeline, or a task an editor or the shell runs when the
+    /// project is opened or committed.
+    RunsByItself,
+}
+
+/// Folders whose files run by themselves, at any depth: Git hook managers, CI pipelines, and the settings of editors and
+/// dev containers that may run tasks when the project is opened. `.git` itself is a sensitive folder.
+const SELF_RUNNING_FOLDERS: [&str; 8] = [
+    ".husky",
+    ".githooks",
+    ".circleci",
+    ".buildkite",
+    ".vscode",
+    ".idea",
+    ".devcontainer",
+    ".gitlab",
+];
+/// Folders under `.github` whose files run by themselves: workflows and the actions they call.
+const SELF_RUNNING_GITHUB_FOLDERS: [&str; 2] = ["workflows", "actions"];
+/// Files that run by themselves, by their whole lower-case name, at any depth: CI pipelines, Git hook managers, Git files
+/// that make Git run or fetch something, and files a shell or an editor reads when it enters the folder.
+const SELF_RUNNING_FILES: [&str; 19] = [
+    ".gitlab-ci.yml",
+    ".travis.yml",
+    "azure-pipelines.yml",
+    "bitbucket-pipelines.yml",
+    ".drone.yml",
+    "jenkinsfile",
+    ".pre-commit-config.yaml",
+    ".pre-commit-hooks.yaml",
+    "lefthook.yml",
+    ".lefthook.yml",
+    "lefthook.yaml",
+    ".gitattributes",
+    ".gitmodules",
+    ".gitconfig",
+    ".envrc",
+    ".exrc",
+    ".nvimrc",
+    ".nvim.lua",
+    ".lvimrc",
+];
+/// The names Windows keeps for devices, with or without an extension (`NUL`, `con.txt`).
+const WINDOWS_RESERVED: [&str; 4] = ["con", "prn", "aux", "nul"];
+/// Characters that look like a dot or a slash, which a later step could fold into one.
+const LOOKALIKES: [char; 8] = [
+    '\u{2024}', '\u{FE52}', '\u{FF0E}', '\u{2215}', '\u{2044}', '\u{FF0F}', '\u{29F8}', '\u{FF3C}',
+];
+
+/// Whether a lower-case name is a device name of Windows: CON, PRN, AUX, NUL, COM0 to COM9 and LPT0 to LPT9 (also with
+/// the superscript digits Windows accepts), alone or before an extension.
+fn is_windows_reserved(lower: &str) -> bool {
+    let stem = lower
+        .split('.')
+        .next()
+        .unwrap_or(lower)
+        .trim_end_matches(' ');
+    if WINDOWS_RESERVED.contains(&stem) {
+        return true;
+    }
+    let digit = stem
+        .strip_prefix("com")
+        .or_else(|| stem.strip_prefix("lpt"))
+        .map(|rest| {
+            let mut chars = rest.chars();
+            matches!(
+                (chars.next(), chars.next()),
+                (Some('0'..='9' | '\u{B9}' | '\u{B2}' | '\u{B3}'), None)
+            )
+        });
+    digit == Some(true)
+}
+
+/// Whether a name holds a percent escape (`%2e`, `%2F`), which a later step could decode into a dot or a slash.
+fn has_percent_escape(name: &str) -> bool {
+    name.as_bytes().windows(3).any(|window| {
+        window[0] == b'%' && window[1].is_ascii_hexdigit() && window[2].is_ascii_hexdigit()
+    })
+}
+
+/// Whether the names of a path, in order, reach a file that runs by itself.
+fn runs_by_itself(names: &[String]) -> bool {
+    names.iter().enumerate().any(|(index, name)| {
+        let lower = name.to_ascii_lowercase();
+        let folder = index + 1 < names.len();
+        (folder && SELF_RUNNING_FOLDERS.contains(&lower.as_str()))
+            || (lower == ".github"
+                && names.get(index + 1).is_some_and(|next| {
+                    index + 2 < names.len()
+                        && SELF_RUNNING_GITHUB_FOLDERS.contains(&next.to_ascii_lowercase().as_str())
+                }))
+            || SELF_RUNNING_FILES.contains(&lower.as_str())
+    })
 }
 
 /// Names of folders that never receive a change, at any depth.
@@ -188,8 +281,9 @@ pub fn is_sensitive_name(name: &str) -> bool {
 }
 
 /// Checks the relative path of a change and returns its names. The path must be relative, use `/`, have no empty, `.` or
-/// `..` name, no NUL, no backslash and no colon, and no name that Windows would read differently (a trailing dot or space).
-/// No name may be sensitive.
+/// `..` name, no NUL or other control character, no backslash, no colon, no character that looks like a dot or a slash,
+/// no percent escape, and no name that Windows would read differently (a trailing dot or space, a device name such as
+/// `NUL` or `COM1`). No name may be sensitive, and the path may not reach a file that runs by itself (`runs_by_itself`).
 pub fn check_relative_path(path: &str) -> Result<Vec<String>, PathRefusal> {
     if path.is_empty() {
         return Err(PathRefusal::Empty);
@@ -200,7 +294,10 @@ pub fn check_relative_path(path: &str) -> Result<Vec<String>, PathRefusal> {
     if path.starts_with('/') {
         return Err(PathRefusal::NotRelative);
     }
-    if path.contains(['\\', '\0', ':']) {
+    if path.contains(['\\', '\0', ':'])
+        || path.contains(LOOKALIKES)
+        || path.chars().any(char::is_control)
+    {
         return Err(PathRefusal::Forbidden);
     }
     let mut names = Vec::new();
@@ -208,13 +305,22 @@ pub fn check_relative_path(path: &str) -> Result<Vec<String>, PathRefusal> {
         if name == ".." {
             return Err(PathRefusal::Traversal);
         }
+        if has_percent_escape(name) {
+            return Err(PathRefusal::Traversal);
+        }
         if name.is_empty() || name == "." || name.ends_with(['.', ' ']) {
+            return Err(PathRefusal::Forbidden);
+        }
+        if is_windows_reserved(&name.to_ascii_lowercase()) {
             return Err(PathRefusal::Forbidden);
         }
         if is_sensitive_name(name) {
             return Err(PathRefusal::Sensitive);
         }
         names.push(name.to_string());
+    }
+    if runs_by_itself(&names) {
+        return Err(PathRefusal::RunsByItself);
     }
     Ok(names)
 }
