@@ -90,6 +90,38 @@ const CHAT_PROJECT = '/work/alpha'
 const CHAT_QUESTION = 'Qual é o estado do projeto?'
 const delta = (text) => ({ kind: 'delta', text })
 const DONE = { kind: 'done' }
+// An answer in two pieces: the first ends inside an open code fence, so the page draws Markdown that is not complete yet;
+// the second closes it and brings a wide table and markup that must stay text, a link and a remote image.
+const MARKDOWN_HEAD = [
+  '## Visão geral',
+  '',
+  ...Array.from({ length: 40 }, (_, index) => `Parágrafo ${index + 1} com **negrito**, *itálico* e \`código\`.`),
+  '',
+  '- um',
+  '- dois',
+  '',
+  '> uma citação',
+  '',
+  '```rust',
+  'fn main() {',
+].join('\n')
+const MARKDOWN_TAIL = [
+  '',
+  '    println!("oi");',
+  '}',
+  '```',
+  '',
+  '| coluna com um nome longo | outra coluna bem larga | mais uma coluna | e outra | e a última coluna da tabela larga |',
+  '|---|:-:|--:|---|---|',
+  '| valor um bem comprido | valor dois | 3 | quatro | cinco cinco cinco cinco cinco cinco |',
+  '| só uma célula |',
+  '',
+  '<script>window.__noctInjected = true</script>',
+  '',
+  'Texto <img src="https://evil.invalid/x.png" onerror="window.__noctInjected = true"> e <a href="javascript:alert(1)">clique</a>.',
+  '',
+  'Veja [o site](javascript:alert(1)) e ![logo](https://evil.invalid/logo.png).',
+].join('\n')
 const MODEL_REFUSED = { code: 'invalid-input', message: 'O NOCT recusou o identificador do modelo.' }
 const SECURE_STORAGE_ERROR = {
   code: 'secure-storage-unavailable',
@@ -179,6 +211,22 @@ const SCENARIOS = [
       ],
     },
     expectTheme: 'light',
+  },
+  {
+    name: 'chat-renders-markdown-without-html',
+    mode: 'chat',
+    theme: 'dark',
+    keyConfigured: true,
+    chat: {
+      kind: 'markdown',
+      sequence: [
+        [0, delta(MARKDOWN_HEAD)],
+        'hold',
+        [1, delta(MARKDOWN_TAIL)],
+        [2, DONE],
+      ],
+    },
+    expectTheme: 'dark',
   },
   { name: 'ready-without-a-saved-theme-follows-the-system', mode: 'ready', theme: undefined, scheme: 'dark', expectTheme: 'dark' },
   { name: 'slow-then-ready', mode: 'slow', theme: 'light', expectTheme: 'light' },
@@ -388,6 +436,11 @@ function installMock(config) {
     chatRun.pending = chat.sequence.map((item) => (item === 'hold' ? 'hold' : { index: item[0], frame: item[1] }))
     chatRun.end = chat.sequence.filter((item) => item !== 'hold').length
     return new Promise((resolve) => setTimeout(() => { resolve(null); emitUntilHold() }, 0))
+  }
+  // Lets a held answer go on, as the next pieces of a stream that was only slow.
+  window.__noctChatResume = () => {
+    if (chatRun.pending[0] === 'hold') chatRun.pending.shift()
+    emitUntilHold()
   }
   const cancelChat = () => {
     // A stale event after the cancel is sent on purpose: the page must ignore it.
@@ -718,6 +771,45 @@ async function chatFlow(page, scenario, check) {
     await page.getByRole('heading', { name: 'Construir', level: 1 }).waitFor({ timeout: 8000 })
     await page.getByTestId('change').filter({ hasText: 'src/x.rs' }).waitFor({ timeout: 8000 })
     check((await page.getByTestId('change').filter({ hasText: 'src/x.rs' }).count()) === 1, 'the proposed change waits in Construir')
+    return
+  }
+  if (chat.kind === 'markdown') {
+    const requests = []
+    page.on('request', (request) => requests.push(request.url()))
+    // The first piece ends inside an open code fence: the block is drawn as code up to the end, and nothing breaks.
+    await answer.getByTestId('answer-code').waitFor({ timeout: 8000 })
+    check((await answer.locator('h4', { hasText: 'Visão geral' }).count()) === 1, 'a heading of the answer is drawn as a heading')
+    check((await answer.locator('strong').count()) >= 40 && (await answer.locator('em').count()) >= 40, 'bold and italic are drawn')
+    check((await answer.getByTestId('answer-code').textContent())?.includes('fn main() {'), 'an open code fence is drawn as code while it streams')
+    // The person scrolls up to read; the rest of the answer and its end do not move the view.
+    const main = page.locator('.main')
+    await page.waitForFunction(() => {
+      const area = document.querySelector('.main')
+      return area.scrollTop > 0 && area.scrollTop + area.clientHeight >= area.scrollHeight - 2
+    })
+    await main.evaluate((element) => { element.scrollTop = 0 })
+    await page.evaluate(() => window.__noctChatResume())
+    await page.getByTestId('chat-status').getByText(COMPLETE, { exact: true }).waitFor({ timeout: 8000 })
+    await page.waitForTimeout(150)
+    const top = await main.evaluate((element) => element.scrollTop)
+    check(top === 0, `an answer that ends does not scroll a person who went up to read (at ${top})`)
+    const code = answer.getByTestId('answer-code')
+    check((await code.locator('pre code').textContent()) === 'fn main() {\n    println!("oi");\n}', 'the closed code block holds the code, and only it')
+    check((await code.getByRole('button', { name: 'Copiar o código' }).count()) === 1, 'a code block has its own copy button')
+    check((await code.locator('pre').evaluate((element) => getComputedStyle(element).fontFamily)).includes('monospace'), 'code is in a monospace font')
+    const table = answer.getByTestId('answer-table')
+    check((await table.locator('th').count()) === 5 && (await table.locator('tbody tr').count()) === 2, 'the table has its head and its rows')
+    check(await table.evaluate((element) => element.scrollWidth > element.clientWidth && getComputedStyle(element).overflowX === 'auto'), 'a wide table scrolls sideways inside the answer')
+    check(await answer.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), 'the answer itself does not get wider than the conversation')
+    check((await answer.locator('script, img, a, iframe, [onerror], [href], [src], [style]').count()) === 0, 'no markup of the answer becomes an element: no script, image, link or inline style')
+    const text = (await answer.textContent()) ?? ''
+    check(text.includes('<script>window.__noctInjected = true</script>'), 'raw HTML is shown as text')
+    check(text.includes('<img src="https://evil.invalid/x.png"') && text.includes('<a href="javascript:alert(1)">'), 'inline HTML is shown as text')
+    check(text.includes('o site (javascript:alert(1))'), 'a link is its text and its address, written out')
+    check(text.includes('[imagem: logo]') && !text.includes('logo.png'), 'an image is its description, and its address is not used')
+    check((await page.evaluate(() => window.__noctInjected)) === undefined, 'nothing in the answer ran')
+    check(!requests.some((url) => url.includes('evil.invalid')), 'the answer makes no request')
+    check((await answer.locator('.md-code, .md-table, .md-list, .md-quote').count()) === 4, 'lists, quotes, code and tables are drawn with their classes')
     return
   }
   if (chat.kind === 'refused') {

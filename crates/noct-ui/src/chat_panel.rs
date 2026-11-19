@@ -13,6 +13,7 @@ use noct_core::limits::provider_chat::MAXIMUM_QUESTION_CHARACTERS;
 use crate::chat::{self, CreatedConversation, Phase, Session};
 use crate::dom;
 use crate::ipc;
+use crate::markdown;
 use crate::model_picker;
 use crate::provider::{self, ConsentStatus, ProviderView};
 use crate::sidebar::{self, Shared};
@@ -400,10 +401,11 @@ impl ChatState {
 
 /// The conversation: the switch, then each question and its answer, in order.
 pub fn thread(state: ChatState) -> impl IntoView {
-    // The conversation follows its end: a new question, the permission card and an answer that grows are scrolled into
-    // view, unless the person scrolled up to read, in which case the view stays where they left it.
+    // The conversation follows its end while the person is at it: a new question and the permission card scroll it into
+    // view, and an answer that grows keeps it there. A person who scrolled up to read is left where they are, also when
+    // the answer ends.
     let height = StoredValue::new(0.0_f64);
-    Effect::new(move |_| {
+    Effect::new(move |previous: Option<usize>| {
         let count = state.turns.with(Vec::len);
         let _ = state.turns.with(|turns| {
             turns
@@ -411,10 +413,14 @@ pub fn thread(state: ChatState) -> impl IntoView {
                 .map(|turn| turn.session.with(|session| session.answer().len()))
         });
         let awaiting = state.awaiting.with(Option::is_some);
-        let previous = height.get_value();
-        let force = previous == 0.0 || awaiting;
-        let _ = count;
-        height.set_value(dom::follow_end(".main", previous, force));
+        let force = previous != Some(count) || awaiting;
+        // The blocks of the answer are drawn by their own effects, after this one: the heights are read in the next frame.
+        dom::next_frame(move || {
+            if let Some(previous) = height.try_get_value() {
+                let _ = height.try_set_value(dom::follow_end(".main", previous, force));
+            }
+        });
+        count
     });
     view! {
         <section class="thread" aria-label="Conversa" data-testid="chat">
@@ -446,6 +452,15 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     let copy_note = turn.copy_note;
     let phase = move || session.with(|session| session.phase().clone());
     let answer = move || session.with(|session| session.answer().to_string());
+    // The answer as Markdown blocks, each keyed by its position and content, so a streaming answer redraws only the
+    // block that grows. A proposal block is shown as its one line, as before.
+    let blocks = Memo::new(move |_| {
+        session.with(|session| {
+            markdown::keyed(&noct_core::proposal_block::shown_answer(session.answer()))
+        })
+    });
+    // Only whether there is text decides that the answer area exists, so a new piece does not draw it again.
+    let has_text = Memo::new(move |_| !blocks.with(Vec::is_empty));
     let copy = move |_| {
         let text = session.with_untracked(|session| session.answer().to_string());
         dom::copy_text(&text, move |copied| {
@@ -468,15 +483,23 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 }}
             </div>
             {move || {
-                let text = noct_core::proposal_block::shown_answer(&answer());
-                (!text.is_empty()).then(|| {
+                has_text.get().then(|| {
                     view! {
-                        <div class="msg-ai__body chat-answer" data-testid="chat-answer">
-                            {text}
-                            {move || {
-                                matches!(phase(), Phase::Answering)
-                                    .then(|| view! { <span class="caret" aria-hidden="true"></span> })
-                            }}
+                        <div
+                            class=move || {
+                                if matches!(phase(), Phase::Answering) {
+                                    "msg-ai__body chat-answer md is-streaming"
+                                } else {
+                                    "msg-ai__body chat-answer md"
+                                }
+                            }
+                            data-testid="chat-answer"
+                        >
+                            <For
+                                each=move || blocks.get()
+                                key=|(key, _)| *key
+                                children=|(_, node)| markdown::view(node)
+                            />
                         </div>
                     }
                 })

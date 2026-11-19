@@ -318,9 +318,15 @@ button {
   overflow-wrap: anywhere;
 }
 
+/* One line: the home folder is "~", a long path ends in an ellipsis, and the full path is the element's title. */
 .project__path {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   font-size: 11.5px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .project__state {
@@ -829,6 +835,15 @@ button {
   flex-direction: column;
   gap: 22px;
   padding-top: 6px;
+  /* Room under the last line, inside the content: a scroll area that is a flex container may drop its own bottom
+     padding (WebKit), and the last line would sit at the composer's edge. */
+  padding-bottom: 28px;
+}
+
+/* The conversation fades out over its last pixels, under the composer, instead of being cut. */
+.main:has(> .stack > .thread) {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
 }
 
 .msg-user {
@@ -882,9 +897,218 @@ button {
   margin: 0;
 }
 
+/* The answer as Markdown (crates/noct-ui/src/markdown.rs). Only these classes and elements are drawn: no raw HTML, no
+   link to follow and no image to load. Code keeps its own font and background, and a wide table scrolls sideways. */
 .chat-answer {
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p,
+.md .md-list,
+.md .md-quote,
+.md .md-code,
+.md .md-table {
+  margin: 0 0 12px;
+}
+
+.md .md-raw {
+  white-space: pre-wrap;
+}
+
+.md .md-h {
+  margin: 18px 0 8px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.md .md-h1 {
+  font-size: 19px;
+}
+
+.md .md-h2 {
+  font-size: 17px;
+}
+
+.md .md-h3 {
+  font-size: 15px;
+}
+
+.md .md-h4 {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.md .md-list {
+  padding-left: 22px;
+}
+
+.md .md-list li {
+  margin: 3px 0;
+}
+
+.md .md-list li > p {
+  margin: 0 0 6px;
+}
+
+.md .md-list .md-list {
+  margin: 4px 0;
+}
+
+.md .md-quote {
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+
+.md .md-quote > :last-child {
+  margin-bottom: 0;
+}
+
+.md .md-code-inline {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--code);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.md .md-code {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--code);
+}
+
+.md-code__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 4px 0 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.md-code__head .mono {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.md-code__note {
+  font-size: 12px;
+}
+
+.md-code__body {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 4;
+}
+
+.md .md-table {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.md .md-table:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.md table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  overflow-wrap: normal;
+}
+
+.md th,
+.md td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  background: var(--hover);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.md th.is-center,
+.md td.is-center {
+  text-align: center;
+}
+
+.md th.is-right,
+.md td.is-right {
+  text-align: right;
+}
+
+.md .md-url,
+.md .md-image {
+  color: var(--muted);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.md .md-link {
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+
+.md .md-rule {
+  height: 1px;
+  margin: 16px 0;
+  border: 0;
+  background: var(--line);
+}
+
+/* While the answer streams, the caret follows its last block. */
+.md.is-streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: blink 1s steps(2) infinite;
+}
+
+.md.is-streaming > .md-code:last-child::after,
+.md.is-streaming > .md-table:last-child::after,
+.md.is-streaming > .md-list:last-child::after,
+.md.is-streaming > .md-quote:last-child::after {
+  display: none;
 }
 
 .msg-tools {
@@ -1816,6 +2040,7 @@ button {
   .toggle,
   .switch,
   .switch::after,
+  .md.is-streaming > :last-child::after,
   .caret {
     transition: none;
     animation: none;

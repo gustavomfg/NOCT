@@ -1351,6 +1351,38 @@ refused, the journal stays empty, `.git/config` is unchanged and no hook or work
 A proposal only creates a file or rewrites a whole file, up to 32 KiB of text. Editing part of a file (a hunk or a range
 of lines) is not supported yet.
 
+### Answers drawn as Markdown, without HTML
+
+The answer is read in the window with `pulldown-cmark` 0.13 (no default features, so no HTML writer) into a small tree
+(`crates/noct-ui/src/markdown.rs`) whose leaves are only text, and drawn with Leptos elements whose text is set as text.
+Supported: headings, paragraphs, bold, italic, strikethrough, inline code, code blocks (mono font, own background, a Copiar
+button), lists, task markers, quotes, rules and tables (in a box that scrolls sideways). Elements carry classes only.
+
+Security review:
+
+- Raw HTML, block or inline, is kept as text: `<script>`, `<img onerror>`, `<a href=javascript:>`, `<iframe>` are shown as
+  the characters the model wrote. The tree has no element kind for HTML, so there is no path from the answer to markup.
+- Links are not clickable: the text is shown, then the address in parentheses, as text. Images are not loaded: only
+  "[imagem: description]" is shown. So an answer makes no request and opens nothing.
+- No inline style and no `innerHTML`; the page policy (no inline style) is unchanged.
+- Nesting is cut at 16 levels: deeper content stays as text, which bounds the recursion of drawing, hashing and dropping.
+  The answer itself is capped by the shell at 64 KiB; the parser was tested with four times that.
+- While an answer streams, it is parsed again at each piece and each top-level block is keyed by position and content, so
+  finished blocks keep their elements; an open code fence is drawn as code, and a half table as a paragraph until its
+  delimiter line arrives.
+
+Tests: unit tests in `markdown.rs` (subset, raw HTML, `javascript:` link, remote image, malformed table, cut answer, depth,
+huge answer, stable keys) and the Chromium scenario `chat-renders-markdown-without-html` (no `script`, `img`, `a`,
+`iframe`, `[style]`, `[src]` or `[href]` inside the answer, nothing ran, no request to the image or link hosts, wide table
+scrolls inside the answer, the open fence while streaming).
+
+### Window fixes
+
+- Sidebar: the project path is one line, the home folder is shown as `~`, a long path ends in an ellipsis, and the full
+  path is the element's `title`.
+- Conversation: room under the last line and a short fade under it; the view follows a growing answer only while the
+  person is at its end, and an answer that ends does not move a person who scrolled up (checked in Chromium).
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

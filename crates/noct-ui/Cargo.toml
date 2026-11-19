@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 leptos = { version = "0.8.23", features = ["csr"] }
 noct-core = { path = "../noct-core" }
+pulldown-cmark = { version = "0.13", default-features = false }
 # serde is already a workspace dependency of noct-core and noct-app; the interface derives its reply types with it.
 serde.workspace = true
 # Both crates are already in Cargo.lock through Leptos and the workspace; they are named here because the

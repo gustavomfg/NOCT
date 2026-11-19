@@ -334,7 +334,9 @@ fn project_item(shared: Shared, workspace: &Workspace) -> impl IntoView {
                     {favorite.map(|label| view! { <span class="project__tag">{label}</span> })}
                 </span>
                 {note.map(|text| view! { <span class="project__note">{text}</span> })}
-                <span class="path project__path">{workspace.path.clone()}</span>
+                <span class="path project__path" title=workspace.path.clone()>
+                    {workspaces::short_path(&workspace.path)}
+                </span>
             </button>
         </li>
     }

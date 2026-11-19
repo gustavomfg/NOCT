@@ -38,6 +38,10 @@ extern "C" {
     #[wasm_bindgen(js_namespace = window, js_name = matchMedia)]
     fn match_media(query: &str) -> MediaQueryList;
 
+    /// `window.requestAnimationFrame`: the callback runs before the next paint, after the page's updates.
+    #[wasm_bindgen(js_namespace = window, js_name = requestAnimationFrame)]
+    fn request_animation_frame(callback: &JsValue) -> f64;
+
     /// The first element that matches a selector, as `document.querySelector` returns it.
     #[wasm_bindgen(js_namespace = document, js_name = querySelector)]
     fn query_selector(selector: &str) -> Option<Element>;
@@ -153,19 +157,24 @@ pub fn store_project(path: &str) {
     let _ = storage_set(PROJECT_KEY, path);
 }
 
-/// Keeps a scrolling area at its end while its content grows. `previous` is the content height the last call saw: when
-/// the view was at the end then (within a few lines), or `force` is set, the area is scrolled to its new end. Returns the
-/// height to pass next time. An area that is not on the page is left alone.
+/// Runs `then` before the next paint, when the views that a change of state redraws are on the page.
+pub fn next_frame(then: impl FnOnce() + 'static) {
+    let _ = request_animation_frame(&Closure::once_into_js(then));
+}
+
+/// Keeps a scroll area at its end while the person is there. `previous` is the area's height after the last call: a
+/// person whose view reached that end (within a few pixels) is still following, and the area is scrolled to its new end;
+/// a person who scrolled up is left where they are. The position is read now, so a scroll the page has not yet reported
+/// as an event still counts. Returns the height to pass next time.
 pub fn follow_end(selector: &str, previous: f64, force: bool) -> f64 {
     let Some(area) = query_selector(selector) else {
         return previous;
     };
-    let height = area.scroll_height();
-    let distance = previous - area.scroll_top() - area.client_height();
-    if force || distance < 96.0 {
-        area.set_scroll_top(height);
+    let following = area.scroll_top() + area.client_height() >= previous - 32.0;
+    if force || following {
+        area.set_scroll_top(area.scroll_height());
     }
-    height
+    area.scroll_height()
 }
 
 /// Scrolls a list so that one of its options is in view, when the arrows move past the visible part. The list must be the

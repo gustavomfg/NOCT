@@ -7,6 +7,7 @@ mod chat_panel;
 mod diff;
 mod dom;
 mod ipc;
+mod markdown;
 mod model_picker;
 mod provider;
 mod provider_panel;
