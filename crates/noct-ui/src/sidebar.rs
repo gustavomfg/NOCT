@@ -32,6 +32,10 @@ pub struct Shared {
     pub reload: RwSignal<u64>,
     /// OpenRouter's model list, read the first time a picker opens.
     pub catalog: RwSignal<CatalogView>,
+    /// Counts the times the proposed changes may have changed; Construir reads them again each time.
+    pub changes_version: RwSignal<u64>,
+    /// Counts the requests to open Construir, from an answer that proposed changes.
+    pub build_requests: RwSignal<u64>,
 }
 
 impl Shared {

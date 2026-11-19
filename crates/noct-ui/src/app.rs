@@ -6,6 +6,7 @@
 
 use leptos::prelude::*;
 
+use crate::changes_panel;
 use crate::chat_panel;
 use crate::dom;
 use crate::ipc;
@@ -52,6 +53,8 @@ pub fn App() -> impl IntoView {
         add_error: RwSignal::new(None),
         reload: RwSignal::new(0),
         catalog: RwSignal::new(model_picker::CatalogView::Idle),
+        changes_version: RwSignal::new(0),
+        build_requests: RwSignal::new(0),
     };
     let settings_open = shared.settings_open;
 
@@ -129,6 +132,16 @@ pub fn App() -> impl IntoView {
         Theme::Light => "Usar tema escuro",
         Theme::Dark => "Usar tema claro",
     };
+
+    // An answer that proposed changes can open Construir.
+    Effect::new(move |previous: Option<u64>| {
+        let count = shared.build_requests.get();
+        if previous.is_some_and(|previous| previous != count) {
+            set_mode.set(Mode::Build);
+            shared.close_settings();
+        }
+        count
+    });
 
     let pressed = move |target: Mode| (!settings_open.get() && mode.get() == target).to_string();
     let open_mode = move |chosen: Mode| {
@@ -226,7 +239,7 @@ pub fn App() -> impl IntoView {
                             } else {
                                 match mode.get() {
                                     Mode::Review => chat_panel::thread(chat).into_any(),
-                                    Mode::Build => build_panel().into_any(),
+                                    Mode::Build => changes_panel::panel(shared).into_any(),
                                     Mode::Docs => unavailable_panel(
                                         "Documentar",
                                         "Atualizações incrementais em Markdown, só depois da sua confirmação.",
@@ -260,34 +273,6 @@ fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView
                     "Ainda não disponível nesta versão. Nada é executado nem gravado nesta tela."
                 </p>
             </section>
-        </div>
-    }
-}
-
-/// The steps of Build, as the product will run them. Nothing here runs or writes anything, and no control approves, refuses
-/// or reverts a change, so the steps are only a description.
-fn build_panel() -> impl IntoView {
-    view! {
-        <div class="stack" data-testid="build">
-            <div>
-                <h1 class="h1">"Construir"</h1>
-                <p class="lead">"Cada comando espera a sua aprovação. Toda alteração pode ser revertida."</p>
-            </div>
-            <section class="card" data-testid="build-steps">
-                <div class="step">
-                    <span class="step__n">"1"</span>
-                    <p><b>"Você descreve"</b>" a mudança que quer fazer."</p>
-                </div>
-                <div class="step">
-                    <span class="step__n">"2"</span>
-                    <p><b>"O NOCT mostra o diff"</b>" de cada arquivo antes de gravar."</p>
-                </div>
-                <div class="step">
-                    <span class="step__n">"3"</span>
-                    <p><b>"Você aprova ou recusa"</b>" cada arquivo. Nada é gravado sem a sua aprovação."</p>
-                </div>
-            </section>
-            <p class="lead">"Chega na próxima versão."</p>
         </div>
     }
 }

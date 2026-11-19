@@ -37,9 +37,26 @@ pub struct ChatStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Frame {
-    Delta { text: String },
+    Delta {
+        text: String,
+    },
+    /// The changes the answer proposed, recorded by the shell as pending, and the blocks it refused.
+    Proposed {
+        changes: Vec<ProposedChange>,
+        refused: usize,
+    },
     Done,
-    Failed { code: String },
+    Failed {
+        code: String,
+    },
+}
+
+/// A change an answer proposed: the change in Construir, and its file.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ProposedChange {
+    pub id: String,
+    pub path: String,
 }
 
 /// Reads one event from the text the channel handed on. An event that is not one of the known kinds is ignored.
@@ -146,6 +163,8 @@ pub struct Session {
     workspace: String,
     answer: String,
     saved: bool,
+    /// The changes the answer proposed and the blocks refused, once the shell has recorded them.
+    proposals: Option<(Vec<ProposedChange>, usize)>,
 }
 
 impl Session {
@@ -156,6 +175,7 @@ impl Session {
         self.phase = Phase::Asking;
         self.workspace = workspace.to_string();
         self.answer.clear();
+        self.proposals = None;
         self.saved = false;
         self.run
     }
@@ -170,6 +190,7 @@ impl Session {
                 self.answer.push_str(&text);
                 self.phase = Phase::Answering;
             }
+            Frame::Proposed { changes, refused } => self.proposals = Some((changes, refused)),
             Frame::Done => self.phase = Phase::Done,
             Frame::Failed { code } => {
                 self.phase = Phase::Failed(stream_failure_words(&code).to_string());
@@ -217,6 +238,11 @@ impl Session {
 
     pub fn answer(&self) -> &str {
         &self.answer
+    }
+
+    /// The changes the answer proposed, and how many blocks were refused.
+    pub fn proposals(&self) -> Option<&(Vec<ProposedChange>, usize)> {
+        self.proposals.as_ref()
     }
 
     pub fn workspace(&self) -> &str {

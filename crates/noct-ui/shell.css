@@ -1345,6 +1345,82 @@ button {
   font-weight: 500;
 }
 
+/* Construir: one card per pending change, with its file, its counts and the diff. Long lines scroll inside the diff. */
+.change__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.change__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.change__count {
+  flex: none;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.change .diff {
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+}
+
+.diff__line {
+  min-width: max-content;
+  white-space: pre;
+}
+
+.diff__mark {
+  flex: none;
+  width: 1ch;
+  color: var(--muted);
+  user-select: none;
+}
+
+.diff__line--add .diff__mark,
+.diff__line--del .diff__mark {
+  color: inherit;
+}
+
+.diff__gap {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.diff__whole {
+  padding: 10px 18px;
+  white-space: pre;
+}
+
+.tag--new {
+  background: var(--sel);
+  color: var(--accent);
+}
+
+/* What an answer proposed, under the answer. */
+.proposals {
+  gap: 8px;
+}
+
+.proposals__title {
+  margin: 0;
+  font-weight: 500;
+}
+
+.proposals__files {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
 /* The model picker: a search box with the free filter, then the list. In Ajustes it sits in a row of the group; over the
    composer it is a panel of its own. */
 /* A stacked row never wraps: a column that may wrap is sized from its widest line, which leaves a tall empty band. */

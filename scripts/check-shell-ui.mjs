@@ -69,9 +69,9 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list', 'file_changes_list']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
-const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add']
+const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add', 'file_change_approve', 'file_change_reject', 'file_change_undo']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
 // The chat's commands. The question and the save are the only writes of the chat, and each is a command the person started.
 const CHAT_COMMANDS = ['provider_chat_send', 'provider_chat_cancel', 'conversations_create', 'ai_save_assistant']
@@ -101,7 +101,13 @@ const TEST_KEY = 'sk-or-v1-check-only-0123456789'
 const CONSENT_PAYLOAD = /^\{"input":\{"workspace":"\/work\/[a-z]+"\}\}$/
 const EXAMPLE_NAMES = ['frx', 'ovra']
 // The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
-const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}' }
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}', file_changes_list: '{"input":"/work/alpha"}' }
+// The changes of the Construir scenario: one edit and one new file, both waiting for a decision.
+const CHANGES = [
+  { id: 'c1', workspace: '/work/alpha', path: 'README.md', status: 'pending', base: 'título\nlinha antiga\nfim\n', content: 'título\nlinha nova\nfim\n' },
+  { id: 'c2', workspace: '/work/alpha', path: 'docs/novo.md', status: 'pending', base: null, content: 'nota\n' },
+]
+const CONFLICT = { code: 'change-conflict', message: 'O arquivo mudou desde a proposta. Nada foi escrito.' }
 // OpenRouter's list, as the shell sends it: two free models and a paid one.
 const CATALOG = [
   { id: 'deepseek/deepseek-chat-v3:free', name: 'DeepSeek V3', contextLength: 131072, free: true },
@@ -158,6 +164,22 @@ const SCENARIOS = [
   { name: 'ready-light', mode: 'ready', theme: 'light', full: true, chatEnabled: false, expectTheme: 'light' },
   { name: 'ready-dark', mode: 'ready', theme: 'dark', full: true, chatEnabled: false, expectTheme: 'dark' },
   { name: 'build-and-document-not-yet-available', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
+  { name: 'build-approves-rejects-and-undoes', mode: 'ready', theme: 'dark', changes: true, expectTheme: 'dark' },
+  {
+    name: 'chat-proposes-changes',
+    mode: 'chat',
+    theme: 'light',
+    keyConfigured: true,
+    chat: {
+      kind: 'proposes',
+      sequence: [
+        [0, delta('Sugiro:\n````noct-change path=src/x.rs\nfn x() {}\n````\n')],
+        [1, { kind: 'proposed', changes: [{ id: 'c9', path: 'src/x.rs' }], refused: 1 }],
+        [2, DONE],
+      ],
+    },
+    expectTheme: 'light',
+  },
   { name: 'ready-without-a-saved-theme-follows-the-system', mode: 'ready', theme: undefined, scheme: 'dark', expectTheme: 'dark' },
   { name: 'slow-then-ready', mode: 'slow', theme: 'light', expectTheme: 'light' },
   { name: 'error-then-retry', mode: 'error-then-retry', theme: 'light', expectTheme: 'light' },
@@ -267,6 +289,17 @@ function installMock(config) {
         ? { '/work/alpha': { workspaceId: '/work/alpha', defaultBinding: { providerId: 'openrouter', modelId: config.chatModel } } }
         : {},
   }
+  // The journal of changes: the scenario's own, and the change an answer proposed.
+  const journal = config.scenario.changes
+    ? config.changes.map((change) => ({ ...change }))
+    : config.scenario.chat?.kind === 'proposes'
+      ? [{ id: 'c9', workspace: '/work/alpha', path: 'src/x.rs', status: 'pending', base: null, content: 'fn x() {}\n' }]
+      : []
+  const decide = (id, status) => {
+    const change = journal.find((entry) => entry.id === id)
+    change.status = status
+    return { ...change }
+  }
   // The chat is on unless the scenario turned it off; Ajustes and the line over the composer change it.
   const chatState = { enabled: config.scenario.chatEnabled !== false }
   // The projects the folder picker added.
@@ -303,6 +336,10 @@ function installMock(config) {
     if (command === 'models_bindings_get') return providerState.models[payload.input.workspace] ?? null
     if (command === 'provider_chat_status') return { enabled: chatState.enabled }
     if (command === 'models_list') return config.catalog
+    if (command === 'file_changes_list') return journal.filter((change) => change.workspace === payload.input).map((change) => ({ ...change }))
+    if (command === 'file_change_approve') return decide(payload.input, 'applied')
+    if (command === 'file_change_reject') return decide(payload.input, 'rejected')
+    if (command === 'file_change_undo') return decide(payload.input, 'undone')
     if (command === 'provider_chat_set_enabled') {
       chatState.enabled = payload.input.enabled === true
       return { enabled: chatState.enabled }
@@ -376,6 +413,8 @@ function installMock(config) {
       if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
       if (command === 'provider_key_save' && config.scenario.keyFails) return Promise.reject(config.scenario.keyFails)
       if (command === 'models_list' && config.scenario.modelsFail) return Promise.reject(config.modelsFailure)
+      // The first approval of the Construir scenario meets a file that changed since the proposal.
+      if (command === 'file_change_approve' && config.scenario.changes && attempt === 1) return Promise.reject(config.conflict)
       if (command === 'provider_chat_send') return startChat(payload)
       if (command === 'provider_chat_cancel') return cancelChat()
       if (command === 'ai_save_assistant' && config.scenario.chat?.saveFails) return Promise.reject(config.scenario.chat.saveFails)
@@ -666,6 +705,21 @@ async function chatFlow(page, scenario, check) {
   check(!JSON.stringify(sent?.payload ?? {}).includes('sk-or'), 'no key is in the question')
 
   const { chat } = scenario
+  if (chat.kind === 'proposes') {
+    const proposals = page.getByTestId('chat-proposals')
+    await proposals.waitFor({ timeout: 8000 })
+    const text = (await proposals.textContent()) ?? ''
+    check(text.includes('1 alteração proposta') && text.includes('src/x.rs'), 'the answer names the change it proposed')
+    check((await page.getByTestId('chat-proposals-refused').textContent())?.includes('1 bloco'), 'a refused block is counted')
+    check((await answer.textContent())?.includes('[alteração proposta: src/x.rs]'), 'the block is shown as one line, not the whole file')
+    check(!((await answer.textContent()) ?? '').includes('fn x()'), 'the text of the file is not in the conversation')
+    check(!(await calls()).some((call) => call.command.startsWith('file_change_')), 'nothing is approved from the conversation')
+    await page.getByTestId('open-build').click()
+    await page.getByRole('heading', { name: 'Construir', level: 1 }).waitFor({ timeout: 8000 })
+    await page.getByTestId('change').filter({ hasText: 'src/x.rs' }).waitFor({ timeout: 8000 })
+    check((await page.getByTestId('change').filter({ hasText: 'src/x.rs' }).count()) === 1, 'the proposed change waits in Construir')
+    return
+  }
   if (chat.kind === 'refused') {
     const alert = page.getByTestId('chat-error')
     await alert.waitFor({ timeout: 8000 })
@@ -748,6 +802,8 @@ try {
       addedProject: ADDED_PROJECT,
       catalog: CATALOG,
       modelsFailure: MODELS_FAILURE,
+      changes: CHANGES,
+      conflict: CONFLICT,
     })
     page.on('pageerror', (error) => result.pageErrors.push(error.message))
     const check = (condition, message) => { if (!condition) result.failures.push(message) }
@@ -887,20 +943,53 @@ try {
       await glassSwitch.click()
       check((await html.getAttribute('data-glass')) === 'on', 'the glass switch turns the layer back on')
 
+      // Construir with changes: each pending change shows its file and diff; Aprovar writes nothing when the file changed since
+      // the proposal and says so; a second Aprovar applies it; Desfazer undoes it; Recusar closes the other one.
+      if (scenario.changes) {
+        await page.getByRole('button', { name: 'Construir', exact: true }).click()
+        const cards = page.getByTestId('change')
+        await cards.first().waitFor({ timeout: 8000 })
+        check((await cards.count()) === 2, 'each pending change has its card')
+        const readme = cards.filter({ hasText: 'README.md' })
+        check((await readme.locator('.diff__line--del').textContent())?.includes('linha antiga'), 'the diff shows the removed line')
+        check((await readme.locator('.diff__line--add').textContent())?.includes('linha nova'), 'the diff shows the added line')
+        check((await readme.textContent())?.includes('+1 −1'), 'the card counts the lines it adds and removes')
+        check((await cards.filter({ hasText: 'docs/novo.md' }).textContent())?.includes('Arquivo novo'), 'a new file says so')
+        await page.getByRole('button', { name: 'Aprovar a alteração em README.md', exact: true }).click()
+        await page.getByTestId('change-error').getByText(CONFLICT.message, { exact: true }).waitFor({ timeout: 8000 })
+        check((await cards.count()) === 2, 'a refused approval leaves the change waiting')
+        await page.getByRole('button', { name: 'Aprovar a alteração em README.md', exact: true }).click()
+        await page.getByTestId('changes-applied').waitFor({ timeout: 8000 })
+        check((await page.getByTestId('change-error').count()) === 0, 'an approval that worked clears the error')
+        await page.getByRole('button', { name: 'Desfazer a alteração em README.md', exact: true }).click()
+        await page.getByRole('button', { name: 'Recusar a alteração em docs/novo.md', exact: true }).click()
+        await page.getByTestId('changes-closed').waitFor({ timeout: 8000 })
+        await page.waitForFunction(() => document.querySelectorAll('[data-testid="changes-closed"] .item').length === 2)
+        check((await cards.count()) === 0, 'nothing waits once both are decided')
+        const decisions = (await page.evaluate(() => window.__noctCalls ?? []))
+          .filter((call) => call.command.startsWith('file_change_'))
+          .map((call) => `${call.command}:${call.payload.input}`)
+        check(
+          decisions.join() === 'file_change_approve:c1,file_change_approve:c1,file_change_undo:c1,file_change_reject:c2',
+          `each decision is one call that names its change (${decisions.join()})`,
+        )
+      }
+
       // Construir shows its three steps, with no note that it is unavailable and no control for the work. Documentar says
       // it is not available yet, and offers no control for the work either.
       if (scenario.unavailableModes) {
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Construir', level: 1 }).isVisible(), 'Construir shows its heading')
         const stepsBox = page.getByTestId('build-steps')
+        await stepsBox.waitFor({ timeout: 8000 })
         check((await stepsBox.locator('.step').count()) === 3, 'Construir shows the three steps')
         const stepWords = (await stepsBox.textContent()) ?? ''
         check(
-          ['Você descreve', 'O NOCT mostra o diff', 'Você aprova ou recusa'].every((words) => stepWords.includes(words)),
+          ['Você pede', 'O NOCT mostra o diff', 'Você aprova ou recusa'].every((words) => stepWords.includes(words)),
           'the steps say what the person does and what the window shows',
         )
         check(await page.getByTestId('unavailable').count() === 0, 'Construir does not say it is not available')
-        check(await page.getByText('Chega na próxima versão.', { exact: true }).isVisible(), 'Construir says when it arrives')
+        check(await page.getByTestId('changes-empty').isVisible(), 'Construir says that no change was proposed yet')
         for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
           check(await page.getByRole('button', { name: control, exact: true }).count() === 0, 'Construir offers no ' + control + ' control')
         }
@@ -952,6 +1041,7 @@ try {
         const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check((await pressed('Construir')) === 'true' && (await pressed('Revisar')) === 'false', 'Construir is the pressed mode')
+        await page.getByTestId('build-steps').waitFor({ timeout: 8000 })
         check(await page.getByTestId('build-steps').isVisible(), 'the build mode shows its three steps')
         await page.getByRole('button', { name: 'Documentar', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Documentar', level: 1 }).isVisible(), 'the document mode is shown')

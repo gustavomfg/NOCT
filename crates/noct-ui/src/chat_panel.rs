@@ -270,8 +270,12 @@ impl ChatState {
         self.question.set(String::new());
         self.save_error.set(None);
 
+        let shared = self.shared;
         let Some(channel) = ipc::channel(move |text: String| {
             if let Some(frame) = chat::parse_frame(&text) {
+                if matches!(frame, chat::Frame::Proposed { .. }) {
+                    shared.changes_version.update(|n| *n += 1);
+                }
                 session.update(|session| session.frame(run, frame));
             }
         }) else {
@@ -464,7 +468,7 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 }}
             </div>
             {move || {
-                let text = answer();
+                let text = noct_core::proposal_block::shown_answer(&answer());
                 (!text.is_empty()).then(|| {
                     view! {
                         <div class="msg-ai__body chat-answer" data-testid="chat-answer">
@@ -483,6 +487,11 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 }
                 .into_any(),
                 _ => ().into_any(),
+            }}
+            {move || {
+                session.with(|session| session.proposals().cloned()).map(|(changes, refused)| {
+                    proposals_view(state.shared, changes, refused)
+                })
             }}
             <p class="note" role="status" data-testid="chat-status">
                 {move || chat::phase_words(&phase())}
@@ -523,6 +532,60 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                     })
             }}
         </div>
+    }
+}
+
+/// What an answer proposed: the files of its changes, waiting in Construir, and how many blocks were not taken.
+fn proposals_view(
+    shared: Shared,
+    changes: Vec<chat::ProposedChange>,
+    refused: usize,
+) -> impl IntoView {
+    let count = changes.len();
+    let title = match count {
+        0 => "Nenhuma alteração proposta foi aceita.".to_string(),
+        1 => "1 alteração proposta, esperando a sua aprovação.".to_string(),
+        many => format!("{many} alterações propostas, esperando a sua aprovação."),
+    };
+    view! {
+        <section class="card proposals" data-testid="chat-proposals">
+            <p class="proposals__title">{title}</p>
+            {(count > 0).then(|| {
+                view! {
+                    <ul class="proposals__files">
+                        {changes
+                            .into_iter()
+                            .map(|change| view! { <li class="mono">{change.path}</li> })
+                            .collect_view()}
+                    </ul>
+                }
+            })}
+            {(refused > 0).then(|| {
+                view! {
+                    <p class="note" data-testid="chat-proposals-refused">
+                        {if refused == 1 {
+                            "1 bloco não foi aceito: caminho, nome ou tamanho não permitido.".to_string()
+                        } else {
+                            format!("{refused} blocos não foram aceitos: caminho, nome ou tamanho não permitido.")
+                        }}
+                    </p>
+                }
+            })}
+            {(count > 0).then(|| {
+                view! {
+                    <div class="actions actions--start">
+                        <button
+                            class="btn btn--primary btn--sm"
+                            type="button"
+                            data-testid="open-build"
+                            on:click=move |_| shared.build_requests.update(|n| *n += 1)
+                        >
+                            "Revisar em Construir"
+                        </button>
+                    </div>
+                }
+            })}
+        </section>
     }
 }
 
