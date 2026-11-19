@@ -105,15 +105,8 @@ pub async fn verify_openrouter(url: String) -> Result<Target, ChatFailure> {
     .map_err(|_| ChatFailure::Transport)?
 }
 
-/// Sends one chat request to the verified target and reports each piece of the answer as it arrives. Returns when the
-/// answer ends with `[DONE]`. Any other end is a truncated answer.
-pub async fn stream_chat(
-    target: &Target,
-    key: &SecretString,
-    body: String,
-    limits: &Limits,
-    on_delta: &mut (dyn FnMut(&str) + Send),
-) -> Result<(), ChatFailure> {
+/// The client of one call: no proxy, no redirect, the time caps, and the connection pinned to the checked addresses.
+fn client_for(target: &Target, limits: &Limits) -> Result<reqwest::Client, ChatFailure> {
     ensure_tls_provider();
     let endpoint = &target.endpoint;
     let mut builder = reqwest::Client::builder()
@@ -130,7 +123,52 @@ pub async fn stream_chat(
             .collect();
         builder = builder.resolve_to_addrs(&endpoint.host, &sockets);
     }
-    let client = builder.build().map_err(|_| ChatFailure::Transport)?;
+    builder.build().map_err(|_| ChatFailure::Transport)
+}
+
+/// Reads a public JSON document from the verified target, under the byte cap of `limits`. No key and no
+/// `Authorization` header are sent. A redirect, an error status or a reply over the cap is refused, and the body of an
+/// error reply is not read.
+pub async fn fetch_json(target: &Target, limits: &Limits) -> Result<Vec<u8>, ChatFailure> {
+    let client = client_for(target, limits)?;
+    let mut response = client
+        .get(url_of(&target.endpoint))
+        .header(ACCEPT, "application/json")
+        .send()
+        .await
+        .map_err(failure_of)?;
+    let status = response.status().as_u16();
+    check_status(status).map_err(ChatFailure::Endpoint)?;
+    if let Some(failure) = status_failure(status) {
+        return Err(failure);
+    }
+    if response
+        .content_length()
+        .is_some_and(|length| length > limits.reply_bytes)
+    {
+        return Err(ChatFailure::TooLarge);
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(failure_of)? {
+        if (body.len() + chunk.len()) as u64 > limits.reply_bytes {
+            return Err(ChatFailure::TooLarge);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
+/// Sends one chat request to the verified target and reports each piece of the answer as it arrives. Returns when the
+/// answer ends with `[DONE]`. Any other end is a truncated answer.
+pub async fn stream_chat(
+    target: &Target,
+    key: &SecretString,
+    body: String,
+    limits: &Limits,
+    on_delta: &mut (dyn FnMut(&str) + Send),
+) -> Result<(), ChatFailure> {
+    let endpoint = &target.endpoint;
+    let client = client_for(target, limits)?;
 
     let mut authorization = HeaderValue::from_str(&format!("Bearer {}", key.expose_secret()))
         .map_err(|_| ChatFailure::Rejected)?;

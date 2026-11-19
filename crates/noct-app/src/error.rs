@@ -62,6 +62,16 @@ pub enum CommandError {
     WorkspaceRefused(&'static str),
     /// The folder chosen as a project is already saved. Nothing is saved again.
     WorkspaceExists,
+    /// The model list could not be reached: the network, the policy, a timeout or an error status.
+    ModelsNetwork,
+    /// The model list reply is not a list, or was cut before its end.
+    ModelsInvalid,
+    /// The model list reply is over its byte cap or holds too many entries.
+    ModelsTooLarge,
+    /// The read of the model list was cancelled.
+    ModelsCancelled,
+    /// A read of the model list is already running.
+    ModelsBusy,
 }
 
 impl CommandError {
@@ -93,6 +103,11 @@ impl CommandError {
             Self::ChangeWrite => "change-write",
             Self::WorkspaceRefused(_) => "workspace-refused",
             Self::WorkspaceExists => "workspace-exists",
+            Self::ModelsNetwork => "models-network",
+            Self::ModelsInvalid => "models-invalid",
+            Self::ModelsTooLarge => "models-too-large",
+            Self::ModelsCancelled => "models-cancelled",
+            Self::ModelsBusy => "models-busy",
         }
     }
 
@@ -146,6 +161,11 @@ impl CommandError {
             }
             Self::WorkspaceRefused(message) => message,
             Self::WorkspaceExists => "Este projeto já está na lista.",
+            Self::ModelsNetwork => "Não foi possível buscar a lista de modelos do OpenRouter.",
+            Self::ModelsInvalid => "O OpenRouter respondeu com uma lista de modelos inválida.",
+            Self::ModelsTooLarge => "A lista de modelos do OpenRouter é grande demais.",
+            Self::ModelsCancelled => "A busca da lista de modelos foi cancelada.",
+            Self::ModelsBusy => "A lista de modelos já está sendo buscada.",
         }
     }
 }

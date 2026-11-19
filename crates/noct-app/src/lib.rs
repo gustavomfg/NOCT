@@ -12,6 +12,7 @@ pub mod credentials;
 pub mod error;
 pub mod file_changes;
 pub mod logging;
+pub mod model_catalog;
 pub mod navigation;
 pub mod provider_chat;
 pub mod provider_transport;
@@ -62,6 +63,8 @@ pub fn command_handler<R: Runtime>()
         commands::file_change_undo,
         commands::workspace_add,
         commands::provider_chat_set_enabled,
+        commands::models_list,
+        commands::models_list_cancel,
     ]
 }
 
@@ -86,6 +89,7 @@ pub fn run() {
             )?;
             app.manage(bootstrap::open(&directory)?);
             app.manage(std::sync::Arc::new(provider_chat::ChatControl::default()));
+            app.manage(std::sync::Arc::new(model_catalog::ModelCatalog::default()));
             window::create_main_window(app)?;
             Ok(())
         });

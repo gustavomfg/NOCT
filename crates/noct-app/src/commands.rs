@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use noct_core::ai::bindings::{
     DefaultModelRequest, ProjectBindingsRequest, WorkspaceModelBindings,
 };
+use noct_core::ai::catalog::CatalogModel;
 use noct_core::ai::consent::{ProjectConsentRequest, ProjectConsentStatus};
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
@@ -35,6 +36,7 @@ use crate::credentials;
 use crate::error::CommandError;
 use crate::file_changes;
 use crate::logging::measured;
+use crate::model_catalog::{self, ModelCatalog};
 use crate::provider_chat::{
     self, ChatControl, ChatEvent, ChatRequest, ChatRun, ChatStatus, ChatSwitchRequest,
     OPENROUTER_CHAT_URL,
@@ -339,6 +341,24 @@ pub async fn provider_chat_set_enabled(
         provider_chat::set_enabled(&guard, request.enabled)
     })
     .await
+}
+
+/// The OpenRouter model list: id, name, context and whether it is free. The list is kept for an hour. The request is
+/// public and carries no key.
+#[tauri::command]
+pub async fn models_list(
+    catalog: State<'_, Arc<ModelCatalog>>,
+) -> Result<Vec<CatalogModel>, CommandError> {
+    let list = catalog
+        .list(std::time::Instant::now(), model_catalog::fetch_openrouter)
+        .await?;
+    Ok(list.as_ref().clone())
+}
+
+/// Stops the read of the model list that is running. A cancel with no read running is not an error.
+#[tauri::command]
+pub fn models_list_cancel(catalog: State<'_, Arc<ModelCatalog>>) {
+    catalog.cancel();
 }
 
 /// Adds a project: the system folder picker opens over the window, and the folder the person chooses is checked and
