@@ -811,6 +811,15 @@ async function chatFlow(page, scenario, check) {
     check((await page.evaluate(() => window.__noctInjected)) === undefined, 'nothing in the answer ran')
     check(!requests.some((url) => url.includes('evil.invalid')), 'the answer makes no request')
     check((await answer.locator('.md-code, .md-table, .md-list, .md-quote').count()) === 4, 'lists, quotes, code and tables are drawn with their classes')
+    // The room under the last line does not depend on the fade: it is padding of the conversation itself.
+    check((await page.locator('.thread').evaluate((element) => getComputedStyle(element).paddingBottom)) === '28px', 'the conversation keeps room under its last line')
+    await main.evaluate((element) => { element.scrollTop = element.scrollHeight })
+    const gap = await page.evaluate(() => {
+      const last = document.querySelector('.thread > .msg-ai:last-of-type .msg-tools').getBoundingClientRect()
+      const composer = document.querySelector('.composer').getBoundingClientRect()
+      return composer.top - last.bottom
+    })
+    check(gap >= 20, `at the end, the last line is clear of the composer (${gap}px)`)
     return
   }
   if (chat.kind === 'refused') {

@@ -239,7 +239,16 @@ pub fn App() -> impl IntoView {
                     </div>
                 </header>
 
-                <main class="main" id="main">
+                <main
+                    class=move || {
+                        if mode.get() == Mode::Review && !settings_open.get() {
+                            "main main--chat"
+                        } else {
+                            "main"
+                        }
+                    }
+                    id="main"
+                >
                     <div class="stack">
                         {move || {
                             if settings_open.get() {

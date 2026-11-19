@@ -1389,7 +1389,8 @@ scrolls inside the answer, the open fence while streaming).
 
 - Sidebar: the project path is one line, the home folder is shown as `~`, a long path ends in an ellipsis, and the full
   path is the element's `title`.
-- Conversation: room under the last line and a short fade under it; the view follows a growing answer only while the
+- Conversation: room under the last line (padding of the conversation, always applied) and a short fade under it, applied
+  only under `@supports` for `mask-image` and through a class on the area, not `:has()`; the view follows a growing answer only while the
   person is at its end, and an answer that ends does not move a person who scrolled up (checked in Chromium).
 
 ### Documentar

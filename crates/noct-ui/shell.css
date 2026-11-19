@@ -840,10 +840,18 @@ button {
   padding-bottom: 28px;
 }
 
-/* The conversation fades out over its last pixels, under the composer, instead of being cut. */
-.main:has(> .stack > .thread) {
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+/* The conversation fades out over its last pixels, under the composer, instead of being cut. The room under the last
+   line (`.thread` above) does not depend on it: without mask support, the fade is left out and the room stays. */
+@supports (mask-image: linear-gradient(#000, transparent)) {
+  .main--chat {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  }
+}
+
+@supports (not (mask-image: linear-gradient(#000, transparent))) and (-webkit-mask-image: linear-gradient(#000, transparent)) {
+  .main--chat {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  }
 }
 
 .msg-user {
