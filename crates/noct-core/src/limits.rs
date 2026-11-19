@@ -183,4 +183,6 @@ pub mod file_change {
     pub const MAXIMUM_OPEN_CHANGES: usize = 50;
     /// The most closed changes (rejected or undone) the journal keeps; the oldest are dropped first.
     pub const MAXIMUM_CLOSED_CHANGES: usize = 50;
+    /// The most changes one answer of the assistant may propose. Blocks past it are refused.
+    pub const MAXIMUM_PROPOSALS: usize = 5;
 }

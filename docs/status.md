@@ -1276,6 +1276,43 @@ switch is a setting (`providerChatEnabled`, on by default) with `provider_chat_s
 whenever there is a project, and a line over it names what is missing (project, chat off, key, model, permission) with the
 button that resolves it.
 
+## Model list, assistant proposals and Construir (2026-11-19)
+
+**Model list.** `models_list` reads OpenRouter's public list with no credential, under the same network policy as the
+chat; the policy additions are in `docs/provider-allowlist-design.md`, section 13.1. Ajustes and the composer pill choose the
+model from it; the typed id remains when the list cannot be read.
+
+**Proposals from the assistant (C).** The prompt asks the model to put the whole new text of a file in a block that opens
+with a line of four backticks and `noct-change path=<relative path>`, and closes with the same four backticks. When an answer ends complete, the shell reads the blocks of
+the text it received itself (never text from the window) with `noct_core::proposal_block::read_blocks` and records each
+accepted block as a **pending** change through the same `file_changes::propose` as a proposal from the window. Nothing is
+written to the project; the window is told the recorded changes with a `proposed` event before `done`.
+
+Security review of C:
+
+- The answer is untrusted. A block is read only in its exact shape (a fence of four or more backticks on its own line, the
+  word, `path=` with no space, the same fence to close it); an open block is ignored.
+- The path passes `check_relative_path` (relative, no `..`, no root, drive, backslash, colon or NUL, no sensitive name such
+  as `.env`, keys, certificates, `.git`), then the disk checks of `propose` (every folder real and inside the project, no
+  symbolic link). The text fits 32 KiB. A path appears once; at most 5 blocks per answer; the journal keeps at most 50 open
+  changes. A refused block is counted and shown as a number, never applied.
+- A failed, truncated or cancelled answer proposes nothing: blocks are read only after the provider's `[DONE]`.
+- Nothing is approved automatically. Approval happens only in Construir, one change at a time, and re-checks that the file
+  still holds the text it had when the change was proposed.
+- A project file that tries to steer the model (prompt injection) can at most produce pending proposals, which the person
+  sees as a diff before any write.
+- The window shows a block as one line ("[alteração proposta: path]"), so the file text does not fill the conversation; all
+  text is drawn as text.
+
+Tests: `crates/noct-core/src/proposal_block.rs` (shape, traversal, sensitive names, size, repeats, cap, open blocks, line
+ends) and `crates/noct-app/tests/provider_chat_flow.rs` (pending changes recorded and no file written; refusals; a symbolic
+link out of the project; an answer without blocks; an unsaved project; the prompt).
+
+**Construir (B).** The panel lists the project's changes: waiting for approval (one card per file with a line diff, the
+counts, "Arquivo novo" for a new file, Aprovar and Recusar), applied (Desfazer) and closed. A refused approval (the file
+changed since the proposal) leaves the change waiting and shows the shell's message. The diff is computed in the window and
+bounded; a text too long to compare is shown whole. Review stays read-only: the conversation only records proposals.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

@@ -435,11 +435,40 @@ pub async fn provider_chat_send(
         body,
         limits: Limits::beta_one(),
     };
+    // The answer is kept as it arrives. When it ends complete, the changes it proposed are recorded as pending before `Done`
+    // is sent; a failed or cancelled answer proposes nothing.
+    let persistence = state.inner().clone();
+    let workspace = prepared.workspace.clone();
     chat.start(async move {
-        provider_chat::run_chat(run, &mut |event| {
-            let _ = on_event.send(event);
+        let mut answer = String::new();
+        let mut complete = false;
+        provider_chat::run_chat(run, &mut |event| match event {
+            ChatEvent::Done => complete = true,
+            ChatEvent::Delta { ref text } => {
+                answer.push_str(text);
+                let _ = on_event.send(event);
+            }
+            other => {
+                let _ = on_event.send(other);
+            }
         })
         .await;
+        if complete {
+            let recorded = tauri::async_runtime::spawn_blocking(move || {
+                provider_chat::record_proposals(
+                    &persistence,
+                    &default_blocked_roots(),
+                    &workspace,
+                    &answer,
+                )
+            })
+            .await
+            .unwrap_or_default();
+            if let Some(event) = recorded.event() {
+                let _ = on_event.send(event);
+            }
+            let _ = on_event.send(ChatEvent::Done);
+        }
     })
 }
 
