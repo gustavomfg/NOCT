@@ -337,6 +337,48 @@ pub fn is_markdown(path: &str) -> bool {
         .any(|ending| lower.ends_with(ending))
 }
 
+/// Files that run code when the project is built or installed, by their whole lower-case name. They are allowed, and the
+/// approval card warns about them.
+const BUILD_FILES: [&str; 7] = [
+    "build.rs",
+    "makefile",
+    "gnumakefile",
+    "justfile",
+    ".justfile",
+    "package.json",
+    "dockerfile",
+];
+/// Endings of scripts and of build files that run code.
+const BUILD_ENDINGS: [&str; 5] = [".sh", ".ps1", ".mk", ".dockerfile", ".just"];
+
+/// Whether a change is to a file that runs code when the project is built or installed: `build.rs`, a Makefile, a
+/// justfile, `package.json` (its scripts run on install), a Dockerfile, a shell or PowerShell script, and a `Cargo.toml`
+/// that names a build script or build dependencies, before or after the change. The change is not refused for it.
+pub fn runs_on_build(path: &str, base: Option<&str>, content: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    if BUILD_FILES.contains(&name.as_str())
+        || name.starts_with("dockerfile.")
+        || BUILD_ENDINGS.iter().any(|ending| name.ends_with(ending))
+    {
+        return true;
+    }
+    if name == "cargo.toml" {
+        let builds = |text: &str| {
+            text.lines().any(|line| {
+                let line = line.trim();
+                line.starts_with("[build-dependencies")
+                    || line.starts_with("[target.") && line.contains(".build-dependencies")
+                    || line
+                        .split('=')
+                        .next()
+                        .is_some_and(|key| key.trim() == "build")
+            })
+        };
+        return builds(content) || base.is_some_and(builds);
+    }
+    false
+}
+
 /// Whether the text of a change fits the limit. The limit is in bytes, the same as the one the disk read uses.
 pub fn fits_limit(text: &str) -> bool {
     text.len() as u64 <= MAXIMUM_FILE_BYTES

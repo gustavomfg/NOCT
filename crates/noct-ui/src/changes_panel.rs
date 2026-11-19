@@ -301,6 +301,11 @@ fn change_card(
                 </div>
                 <span class="note change__count">{summary}</span>
             </div>
+            {file_change::runs_on_build(&change.path, change.base.as_deref(), &change.content).then(|| view! {
+                <p class="change__warning change__warning--build" role="note" data-testid="change-runs-on-build">
+                    "Este arquivo roda código quando você compila ou instala. Leia o diff com atenção."
+                </p>
+            })}
             {(!new_file).then(|| view! {
                 <p class="change__warning" role="note">
                     "Este arquivo já existe no projeto. Aprovar substitui o conteúdo inteiro dele pelo da proposta."

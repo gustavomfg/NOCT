@@ -137,7 +137,7 @@ const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500
 // The changes of the Construir scenario: one edit and one new file, both waiting for a decision.
 const CHANGES = [
   { id: 'c1', workspace: '/work/alpha', path: 'src/main.rs', status: 'pending', base: 'título\nlinha antiga\nfim\n', content: 'título\nlinha nova\nfim\n' },
-  { id: 'c2', workspace: '/work/alpha', path: 'src/novo.rs', status: 'pending', base: null, content: 'nota\n' },
+  { id: 'c2', workspace: '/work/alpha', path: 'scripts/setup.sh', status: 'pending', base: null, content: 'nota\n' },
   { id: 'c3', workspace: '/work/alpha', path: 'docs/guia.md', status: 'pending', base: '# Guia\nantes\n', content: '# Guia\ndepois\n' },
 ]
 const CONFLICT = { code: 'change-conflict', message: 'O arquivo mudou desde a proposta. Nada foi escrito.' }
@@ -1047,10 +1047,18 @@ try {
         check((await main.locator('.diff__line--del').textContent())?.includes('linha antiga'), 'the diff shows the removed line')
         check((await main.locator('.diff__line--add').textContent())?.includes('linha nova'), 'the diff shows the added line')
         check((await main.textContent())?.includes('+1 −1'), 'the card counts the lines it adds and removes')
-        check((await cards.filter({ hasText: 'src/novo.rs' }).textContent())?.includes('Arquivo novo'), 'a new file says so')
+        check((await cards.filter({ hasText: 'scripts/setup.sh' }).textContent())?.includes('Arquivo novo'), 'a new file says so')
         check((await main.getByTestId('change-overwrites').count()) === 1 && (await main.getByRole('note').count()) === 1, 'a change to a file that exists says it overwrites it')
-        check((await cards.filter({ hasText: 'src/novo.rs' }).getByTestId('change-overwrites').count()) === 0, 'a new file is not marked as an overwrite')
-        check((await cards.filter({ hasText: 'src/novo.rs' }).getByTestId('change-path').textContent()) === 'src/novo.rs', 'the card shows the whole path')
+        check((await cards.filter({ hasText: 'scripts/setup.sh' }).getByTestId('change-overwrites').count()) === 0, 'a new file is not marked as an overwrite')
+        const script = cards.filter({ hasText: 'scripts/setup.sh' })
+        check(
+          (await script.getByTestId('change-runs-on-build').textContent())?.trim() === 'Este arquivo roda código quando você compila ou instala. Leia o diff com atenção.',
+          'a file that runs on build or install carries the warning',
+        )
+        check(await script.getByTestId('change-runs-on-build').isVisible(), 'the build warning is visible')
+        check(await script.getByRole('button', { name: 'Aprovar a alteração em scripts/setup.sh', exact: true }).isEnabled(), 'the build warning does not block the approval')
+        check((await main.getByTestId('change-runs-on-build').count()) === 0, 'an ordinary source file has no build warning')
+        check((await cards.filter({ hasText: 'scripts/setup.sh' }).getByTestId('change-path').textContent()) === 'scripts/setup.sh', 'the card shows the whole path')
         check(await main.getByTestId('change-path').evaluate((element) => getComputedStyle(element).textOverflow !== 'ellipsis' && element.scrollWidth <= element.clientWidth + 1), 'the path is never cut')
         await page.getByRole('button', { name: 'Aprovar a alteração em src/main.rs', exact: true }).click()
         await page.getByTestId('change-error').getByText(CONFLICT.message, { exact: true }).waitFor({ timeout: 8000 })
@@ -1059,7 +1067,7 @@ try {
         await page.getByTestId('changes-applied').waitFor({ timeout: 8000 })
         check((await page.getByTestId('change-error').count()) === 0, 'an approval that worked clears the error')
         await page.getByRole('button', { name: 'Desfazer a alteração em src/main.rs', exact: true }).click()
-        await page.getByRole('button', { name: 'Recusar a alteração em src/novo.rs', exact: true }).click()
+        await page.getByRole('button', { name: 'Recusar a alteração em scripts/setup.sh', exact: true }).click()
         await page.getByTestId('changes-closed').waitFor({ timeout: 8000 })
         await page.waitForFunction(() => document.querySelectorAll('[data-testid="changes-closed"] .item').length === 2)
         check((await cards.count()) === 0, 'nothing waits once both are decided')

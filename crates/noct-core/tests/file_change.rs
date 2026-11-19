@@ -3,7 +3,7 @@
 
 use noct_core::file_change::{
     FileChange, FileChangeJournal, FileChangeStatus, JournalRefusal, PathRefusal,
-    check_relative_path, fits_limit, is_markdown, is_sensitive_name,
+    check_relative_path, fits_limit, is_markdown, is_sensitive_name, runs_on_build,
 };
 use noct_core::limits::file_change::{
     MAXIMUM_CLOSED_CHANGES, MAXIMUM_FILE_BYTES, MAXIMUM_OPEN_CHANGES,
@@ -377,4 +377,56 @@ fn markdown_is_told_by_the_ending_of_the_path() {
     for path in ["src/lib.rs", "md", "docs/md.txt", "README.md.bak", "a.mdx"] {
         assert!(!is_markdown(path), "{path}");
     }
+}
+
+#[test]
+fn files_that_run_on_build_or_install_are_told_and_not_refused() {
+    for path in [
+        "build.rs",
+        "crates/x/build.rs",
+        "Makefile",
+        "GNUmakefile",
+        "justfile",
+        "package.json",
+        "web/package.json",
+        "Dockerfile",
+        "docker/Dockerfile.dev",
+        "app.dockerfile",
+        "scripts/setup.sh",
+        "tools/install.PS1",
+        "rules.mk",
+    ] {
+        assert!(runs_on_build(path, None, ""), "{path}");
+        assert!(check_relative_path(path).is_ok(), "{path} stays allowed");
+    }
+    for path in [
+        "src/main.rs",
+        "README.md",
+        "package-lock.json",
+        "src/build.rs.md",
+        "docs/sh",
+    ] {
+        assert!(!runs_on_build(path, None, ""), "{path}");
+    }
+    let plain = "[package]\nname = \"x\"\n\n[dependencies]\nserde = \"1\"\n";
+    assert!(!runs_on_build("Cargo.toml", Some(plain), plain));
+    assert!(runs_on_build(
+        "Cargo.toml",
+        None,
+        "[build-dependencies]\ncc = \"1\"\n"
+    ));
+    assert!(runs_on_build(
+        "crates/a/Cargo.toml",
+        Some(plain),
+        "[package]\nbuild = \"gen.rs\"\n"
+    ));
+    assert!(
+        runs_on_build("Cargo.toml", Some("[build-dependencies]\n"), plain),
+        "a build part being removed is told too"
+    );
+    assert!(runs_on_build(
+        "Cargo.toml",
+        None,
+        "[target.'cfg(unix)'.build-dependencies]\ncc = \"1\"\n"
+    ));
 }

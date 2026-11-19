@@ -1350,6 +1350,10 @@ refused, the journal stays empty, `.git/config` is unchanged and no hook or work
 
 The card shows the whole path in a larger mono font, never cut. A change to a file that exists has the tag "Sobrescreve"
 and a line saying that approving replaces the whole content of the file; a new file has the tag "Arquivo novo".
+A file that runs code when the project is built or installed (`build.rs`, Makefile, justfile, `package.json`, Dockerfile,
+`*.sh`, `*.ps1`, and a `Cargo.toml` with a build script or build dependencies before or after the change) is allowed and
+carries a visible warning: "Este arquivo roda código quando você compila ou instala. Leia o diff com atenção."
+(`noct_core::file_change::runs_on_build`).
 
 ### Known limitation
 

@@ -1638,6 +1638,12 @@ button {
   color: var(--accent);
 }
 
+.change__warning--build {
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  color: var(--bad);
+  font-weight: 500;
+}
+
 .tag--overwrite {
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
