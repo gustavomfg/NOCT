@@ -13,6 +13,7 @@ use noct_core::limits::provider_chat::MAXIMUM_QUESTION_CHARACTERS;
 use crate::chat::{self, CreatedConversation, Phase, Session};
 use crate::dom;
 use crate::ipc;
+use crate::model_picker;
 use crate::provider::{self, ConsentStatus, ProviderView};
 use crate::sidebar::{self, Shared};
 use crate::workspaces::WorkspacesView;
@@ -525,11 +526,31 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     }
 }
 
+/// The id of the model pill, which takes the focus back when the picker closes.
+const PILL_ID: &str = "composer-model-pill";
+
 /// The composer under the conversation: the question box, the model, and the button that sends or stops the answer.
 pub fn composer(state: ChatState) -> impl IntoView {
     let busy = Memo::new(move |_| state.busy());
+    // The model picker over the composer. It opens from the pill when a project is chosen, and gives the focus back to
+    // the pill when it closes.
+    let picking = RwSignal::new(false);
+    let close_picker = move || {
+        picking.set(false);
+        dom::focus(PILL_ID);
+    };
     view! {
         <div class="composer-wrap">
+            {move || {
+                picking.get().then(|| {
+                    view! {
+                        <div class="popover-backdrop" aria-hidden="true" on:click=move |_| close_picker()></div>
+                        <div class="popover" role="dialog" aria-label="Escolher o modelo" data-testid="composer-picker">
+                            {model_picker::picker(state.shared, "composer-models", move |_| close_picker())}
+                        </div>
+                    }
+                })
+            }}
             {move || need_view(state)}
             <div class="composer">
                 <label for="chat-question" class="sr-only">"Pergunte sobre o projeto"</label>
@@ -559,9 +580,18 @@ pub fn composer(state: ChatState) -> impl IntoView {
                 <div class="composer__bar">
                     <button
                         class="pill"
+                        id=PILL_ID
                         type="button"
                         data-testid="composer-model"
-                        on:click=move |_| state.shared.open_settings()
+                        aria-haspopup="dialog"
+                        aria-expanded=move || picking.get().to_string()
+                        on:click=move |_| {
+                            if state.shared.current.with_untracked(Option::is_some) {
+                                picking.update(|open| *open = !*open);
+                            } else {
+                                state.shared.open_settings();
+                            }
+                        }
                     >
                         <span
                             class=move || {

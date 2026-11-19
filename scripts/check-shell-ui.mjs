@@ -69,7 +69,7 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
 const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
@@ -101,7 +101,14 @@ const TEST_KEY = 'sk-or-v1-check-only-0123456789'
 const CONSENT_PAYLOAD = /^\{"input":\{"workspace":"\/work\/[a-z]+"\}\}$/
 const EXAMPLE_NAMES = ['frx', 'ovra']
 // The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
-const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}' }
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}' }
+// OpenRouter's list, as the shell sends it: two free models and a paid one.
+const CATALOG = [
+  { id: 'deepseek/deepseek-chat-v3:free', name: 'DeepSeek V3', contextLength: 131072, free: true },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', contextLength: 65536, free: true },
+  { id: 'openai/gpt-4o', name: 'GPT-4o', contextLength: 128000, free: false },
+]
+const MODELS_FAILURE = { code: 'models-network', message: 'Não foi possível buscar a lista de modelos do OpenRouter.' }
 
 // What the shell returns for `workspaces_list`, as the items of its page: one project of each kind the sidebar shows.
 const PROJECTS = [
@@ -166,7 +173,7 @@ const SCENARIOS = [
   { name: 'projects-with-more-to-come', mode: 'ready', theme: 'light', projects: 'ready', more: true, expectTheme: 'light' },
   { name: 'theme-not-saved-says-so', mode: 'ready', theme: 'light', saveFails: true, expectTheme: 'light' },
   { name: 'provider-key-not-configured', mode: 'ready', theme: 'light', provider: true, expectTheme: 'light' },
-  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, granted: ['/work/alpha'], expectTheme: 'light' },
+  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, granted: ['/work/alpha'], modelsFail: true, expectTheme: 'light' },
   { name: 'provider-key-save-refused', mode: 'ready', theme: 'light', keyFails: SECURE_STORAGE_ERROR, provider: true, expectTheme: 'light' },
   { name: 'provider-reply-outside-the-contract', mode: 'invalid', theme: 'light', provider: true, expectTheme: 'light' },
   { name: 'chat-turned-off-in-ajustes', mode: 'chat', theme: 'light', chatEnabled: false, expectTheme: 'light' },
@@ -295,6 +302,7 @@ function installMock(config) {
     }
     if (command === 'models_bindings_get') return providerState.models[payload.input.workspace] ?? null
     if (command === 'provider_chat_status') return { enabled: chatState.enabled }
+    if (command === 'models_list') return config.catalog
     if (command === 'provider_chat_set_enabled') {
       chatState.enabled = payload.input.enabled === true
       return { enabled: chatState.enabled }
@@ -367,6 +375,7 @@ function installMock(config) {
       // A save the scenario refuses gets the shell's own error, as a refused read does.
       if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
       if (command === 'provider_key_save' && config.scenario.keyFails) return Promise.reject(config.scenario.keyFails)
+      if (command === 'models_list' && config.scenario.modelsFail) return Promise.reject(config.modelsFailure)
       if (command === 'provider_chat_send') return startChat(payload)
       if (command === 'provider_chat_cancel') return cancelChat()
       if (command === 'ai_save_assistant' && config.scenario.chat?.saveFails) return Promise.reject(config.scenario.chat.saveFails)
@@ -482,26 +491,60 @@ async function providerFlow(page, scenario, check) {
   )
   check(!(await calls()).some((call) => call.command === 'provider_consent_grant'), 'Ajustes never grants a permission')
 
-  // The default model of the current project: a refused identifier is shown and not kept; a valid one stays in the field;
-  // clearing sends null. Every write names the project.
-  const modelField = page.getByLabel('Id do modelo padrão', { exact: true })
-  check((await modelField.getAttribute('autocomplete')) === 'off', 'the model field turns off browser autocompletion')
-  await modelField.fill('gpt-4o')
-  await page.getByTestId('model-save').click()
-  await page.getByTestId('model-error').getByText(MODEL_REFUSED.message, { exact: true }).waitFor({ timeout: 8000 })
-  await modelField.fill('openai/gpt-4o:free')
-  await page.getByTestId('model-save').click()
-  await page.waitForFunction(() => !document.querySelector('[data-testid="model-error"]'))
-  await page.waitForFunction(() => (window.__noctCalls ?? []).filter((call) => call.command === 'models_set_default_model').length === 2)
-  check((await modelField.inputValue()) === 'openai/gpt-4o:free', 'the saved identifier stays in the field')
-  await page.getByTestId('model-clear').click()
-  await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
-  check((await modelField.inputValue()) === '', 'clearing empties the field')
+  // The default model of the current project. With the list, it is chosen from it; without it, the id is typed. Every write
+  // names the project, and clearing sends null.
+  if (scenario.modelsFail) {
+    const fallback = page.getByTestId('models-fallback')
+    await fallback.waitFor({ timeout: 8000 })
+    check((await fallback.textContent())?.includes('Digite o id do modelo'), 'without the list, the group says why and offers the typed id')
+    const modelField = page.getByLabel('Id do modelo padrão', { exact: true })
+    check((await modelField.getAttribute('autocomplete')) === 'off', 'the model field turns off browser autocompletion')
+    await modelField.fill('gpt-4o')
+    await page.getByTestId('model-save').click()
+    await page.getByTestId('model-error').getByText(MODEL_REFUSED.message, { exact: true }).waitFor({ timeout: 8000 })
+    await modelField.fill('openai/gpt-4o:free')
+    await page.getByTestId('model-save').click()
+    await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
+    check((await page.getByTestId('model-current').textContent())?.trim() === 'openai/gpt-4o:free', 'the saved identifier is shown as the current model')
+    await page.getByTestId('model-clear').click()
+    await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
+  } else {
+    const picker = page.getByTestId('model-picker')
+    await picker.waitFor({ timeout: 8000 })
+    const options = picker.getByRole('option')
+    await options.first().waitFor({ timeout: 8000 })
+    const search = picker.getByRole('combobox', { name: 'Buscar modelo por nome ou id' })
+    check((await picker.getByTestId('free-only').getAttribute('aria-pressed')) === 'true', '"Só gratuitos" is on by default')
+    check((await options.count()) === 2, 'the free filter shows the two free models')
+    const first = (await options.first().textContent()) ?? ''
+    check(first.includes('DeepSeek V3') && first.includes('deepseek/deepseek-chat-v3:free') && first.includes('131k') && first.includes('Grátis'), 'a model shows its name, id, context and the free tag')
+    await search.fill('gpt')
+    await picker.getByTestId('models-empty').waitFor({ timeout: 8000 })
+    await picker.getByTestId('free-only').click()
+    await options.first().waitFor({ timeout: 8000 })
+    check((await options.count()) === 1 && !((await options.first().textContent()) ?? '').includes('Grátis'), 'without the filter, a paid model is found by its name')
+    await search.fill('')
+    await search.press('ArrowDown')
+    check((await search.getAttribute('aria-activedescendant')) === 'settings-models-option-1', 'the arrows move through the list')
+    await search.press('ArrowUp')
+    await search.fill('openai/')
+    await search.press('Enter')
+    await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
+    check((await page.getByTestId('model-current').textContent())?.trim() === 'openai/gpt-4o', 'Enter saves the chosen model')
+    check((await page.getByTestId('model-picker').count()) === 0, 'the picker closes once a model is saved')
+    await page.getByTestId('model-choose').click()
+    await page.getByTestId('model-picker').waitFor({ timeout: 8000 })
+    await page.getByRole('combobox', { name: 'Buscar modelo por nome ou id' }).press('Escape')
+    check((await page.getByTestId('model-picker').count()) === 0, 'Esc closes the picker')
+    await page.getByTestId('model-clear').click()
+    await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
+  }
 
   const modelWrites = (await calls()).filter((call) => call.command === 'models_set_default_model')
   check(
-    modelWrites.map((call) => String(call.payload.input.modelId)).join('|') === 'gpt-4o|openai/gpt-4o:free|null',
-    'the identifiers are sent as typed, and clearing sends null',
+    modelWrites.map((call) => String(call.payload.input.modelId)).join('|') ===
+      (scenario.modelsFail ? 'gpt-4o|openai/gpt-4o:free|null' : 'openai/gpt-4o|null'),
+    'the chosen or typed identifiers are sent as they are, and clearing sends null',
   )
   check(
     modelWrites.every(
@@ -557,15 +600,30 @@ async function chatFlow(page, scenario, check) {
     check(await send.isDisabled(), 'nothing can be sent without a model')
     await need.getByRole('button', { name: 'Escolher modelo', exact: true }).click()
     await page.getByTestId('provider').waitFor({ timeout: 8000 })
-    check(await page.getByLabel('Id do modelo padrão', { exact: true }).isEnabled(), 'the model field is enabled once a project is chosen')
-    await page.getByLabel('Id do modelo padrão', { exact: true }).fill(CHAT_MODEL)
-    await page.getByTestId('model-save').click()
+    // The picker is open while the project has no model; the first free model is chosen with Enter.
+    const search = page.getByRole('combobox', { name: 'Buscar modelo por nome ou id' })
+    await search.waitFor({ timeout: 8000 })
+    await page.getByTestId('model-picker').getByRole('option').first().waitFor({ timeout: 8000 })
+    await search.press('Enter')
     await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
     check((await page.getByTestId('model-card-name').textContent())?.trim() === CHAT_MODEL, 'the sidebar card shows the saved model')
     await page.getByRole('button', { name: 'Revisar', exact: true }).click()
     check((await page.getByTestId('composer-model').textContent())?.trim() === CHAT_MODEL, 'the composer pill shows the saved model')
     await need.getByText(NEED_PERMISSION, { exact: true }).waitFor({ timeout: 8000 })
     check(await send.isEnabled(), 'with a project, a key and a model, the question can be sent')
+    // The pill opens the same picker over the composer; Esc closes it and gives the focus back to the pill.
+    const pill = page.getByTestId('composer-model')
+    await pill.click()
+    const popover = page.getByTestId('composer-picker')
+    await popover.waitFor({ timeout: 8000 })
+    check((await pill.getAttribute('aria-expanded')) === 'true', 'the pill says the picker is open')
+    await popover.getByRole('combobox').press('Escape')
+    check((await popover.count()) === 0, 'Esc closes the picker over the composer')
+    check(await pill.evaluate((element) => document.activeElement === element), 'the focus goes back to the pill')
+    await pill.click()
+    await popover.getByRole('option', { name: /Llama 3.3 70B/ }).click()
+    await popover.waitFor({ state: 'detached', timeout: 8000 })
+    check((await pill.textContent())?.trim() === 'meta-llama/llama-3.3-70b-instruct:free', 'a model chosen over the composer is the one the pill shows')
     return
   }
   // The project is the one the sidebar has chosen: there is no project control in the chat.
@@ -688,6 +746,8 @@ try {
       modelRefused: MODEL_REFUSED,
       chatModel: CHAT_MODEL,
       addedProject: ADDED_PROJECT,
+      catalog: CATALOG,
+      modelsFailure: MODELS_FAILURE,
     })
     page.on('pageerror', (error) => result.pageErrors.push(error.message))
     const check = (condition, message) => { if (!condition) result.failures.push(message) }

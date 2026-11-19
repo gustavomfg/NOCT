@@ -54,6 +54,19 @@ extern "C" {
     #[wasm_bindgen(method, getter = clientHeight)]
     fn client_height(this: &Element) -> f64;
 
+    #[wasm_bindgen(method)]
+    fn focus(this: &Element);
+
+    #[wasm_bindgen(method, getter = offsetTop)]
+    fn offset_top(this: &Element) -> f64;
+
+    #[wasm_bindgen(method, getter = offsetHeight)]
+    fn offset_height(this: &Element) -> f64;
+
+    /// The element with an id, as `document.getElementById` returns it.
+    #[wasm_bindgen(js_namespace = document, js_name = getElementById)]
+    fn element_by_id(id: &str) -> Option<Element>;
+
     /// `window.localStorage.getItem`. A storage that is blocked throws, which `catch` reports.
     #[wasm_bindgen(catch, js_namespace = ["window", "localStorage"], js_name = getItem)]
     fn storage_get(key: &str) -> Result<Option<String>, JsValue>;
@@ -153,4 +166,28 @@ pub fn follow_end(selector: &str, previous: f64, force: bool) -> f64 {
         area.set_scroll_top(height);
     }
     height
+}
+
+/// Scrolls a list so that one of its options is in view, when the arrows move past the visible part. The list must be the
+/// option's offset parent (it is positioned).
+pub fn keep_in_view(list: &str, option: &str) {
+    let (Some(list), Some(option)) = (element_by_id(list), element_by_id(option)) else {
+        return;
+    };
+    let top = option.offset_top();
+    let bottom = top + option.offset_height();
+    let view_top = list.scroll_top();
+    let view_bottom = view_top + list.client_height();
+    if top < view_top {
+        list.set_scroll_top(top);
+    } else if bottom > view_bottom {
+        list.set_scroll_top(bottom - list.client_height());
+    }
+}
+
+/// Moves the keyboard focus to the element with an id, when it is on the page.
+pub fn focus(id: &str) {
+    if let Some(element) = element_by_id(id) {
+        element.focus();
+    }
 }

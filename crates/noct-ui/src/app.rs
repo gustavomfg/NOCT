@@ -9,6 +9,7 @@ use leptos::prelude::*;
 use crate::chat_panel;
 use crate::dom;
 use crate::ipc;
+use crate::model_picker;
 use crate::provider::ProviderView;
 use crate::settings::{self, SettingsView};
 use crate::settings_panel;
@@ -50,6 +51,7 @@ pub fn App() -> impl IntoView {
         adding: RwSignal::new(false),
         add_error: RwSignal::new(None),
         reload: RwSignal::new(0),
+        catalog: RwSignal::new(model_picker::CatalogView::Idle),
     };
     let settings_open = shared.settings_open;
 

@@ -11,6 +11,7 @@ use leptos::prelude::*;
 
 use crate::chat::{self, ChatStatus};
 use crate::ipc;
+use crate::model_picker::{self, CatalogView};
 use crate::provider::{self, ConsentStatus, KeyStatus, ModelBindingsView, ProviderView};
 use crate::sidebar::{self, Shared};
 use crate::workspaces::WorkspacesView;
@@ -21,6 +22,22 @@ fn saved_model_id(bindings: Option<&ModelBindingsView>) -> String {
         .and_then(|bindings| bindings.default_binding.as_ref())
         .map(|model| model.model_id.clone())
         .unwrap_or_default()
+}
+
+/// What the group shows under the default model: nothing, the picker, or the typed id with the reason the list is missing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Chooser {
+    Hidden,
+    Picker,
+    Fallback(String),
+}
+
+/// The id of the model saved for the current project, or empty.
+fn model_picker_saved(shared: Shared) -> String {
+    shared.bindings.with(|view| match view {
+        Some(ProviderView::Ready(bindings)) => saved_model_id(bindings.as_ref()),
+        _ => String::new(),
+    })
 }
 
 /// Whether the current project has a default model saved, as the shell last reported it.
@@ -70,6 +87,20 @@ pub fn model_group(shared: Shared) -> impl IntoView {
     let model_busy = RwSignal::new(false);
     let model_error = RwSignal::new(None::<String>);
     let model_saved = RwSignal::new(false);
+    // The picker opens on "Trocar", and stays open while the project has no model. The typed id is the alternative when the
+    // list could not be read.
+    let choosing = RwSignal::new(false);
+    let chooser = Memo::new(move |_| {
+        let ready = matches!(shared.bindings.get(), Some(ProviderView::Ready(_)));
+        if shared.current.get().is_none() || !ready || !(choosing.get() || !has_saved_model(shared))
+        {
+            return Chooser::Hidden;
+        }
+        match shared.catalog.get() {
+            CatalogView::Failed(failure) => Chooser::Fallback(failure.message),
+            _ => Chooser::Picker,
+        }
+    });
     let chat_busy = RwSignal::new(false);
     let chat_error = RwSignal::new(None::<String>);
     let chat_on = move || {
@@ -286,44 +317,32 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                             }}
                         </div>
                     </div>
-                    <label class="sr-only" for="provider-model">"Id do modelo padrão"</label>
-                    <input
-                        id="provider-model"
-                        class="field field--wide mono"
-                        type="text"
-                        autocomplete="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        placeholder="deepseek/deepseek-chat-v3:free"
-                        disabled=move || model_busy.get() || shared.current.get().is_none()
-                        prop:value=move || model_draft.get()
-                        on:input=move |event| {
-                            model_saved.set(false);
-                            model_draft.set(event_target_value(&event));
-                        }
-                        on:keydown=move |event: leptos::web_sys::KeyboardEvent| {
-                            if event.key() == "Enter" && !model_draft.get_untracked().trim().is_empty() {
-                                write_model(Some(model_draft.get_untracked().trim().to_string()));
-                            }
-                        }
-                    />
                     {move || {
-                        let draft = model_draft.get();
-                        let draft = draft.trim();
-                        let saved = shared.bindings.with(|view| match view {
-                            Some(ProviderView::Ready(bindings)) => saved_model_id(bindings.as_ref()),
-                            _ => String::new(),
-                        });
-                        (!draft.is_empty() && draft != saved).then(|| {
+                        shared.current.get().is_some().then(|| {
+                            view! {
+                                <span class="model-current mono" data-testid="model-current">
+                                    {move || {
+                                        let saved = model_picker_saved(shared);
+                                        if saved.is_empty() { "Nenhum".to_string() } else { saved }
+                                    }}
+                                </span>
+                            }
+                        })
+                    }}
+                    {move || {
+                        has_saved_model(shared).then(|| {
                             view! {
                                 <button
-                                    class="btn btn--primary"
+                                    class="btn"
                                     type="button"
-                                    data-testid="model-save"
-                                    disabled=move || model_busy.get()
-                                    on:click=move |_| write_model(Some(model_draft.get_untracked().trim().to_string()))
+                                    data-testid="model-choose"
+                                    aria-expanded=move || choosing.get().to_string()
+                                    on:click=move |_| {
+                                        model_saved.set(false);
+                                        choosing.update(|open| *open = !*open);
+                                    }
                                 >
-                                    "Salvar"
+                                    "Trocar"
                                 </button>
                             }
                         })
@@ -344,6 +363,75 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                         })
                     }}
                 </div>
+                {move || match chooser.get() {
+                    Chooser::Hidden => ().into_any(),
+                    Chooser::Picker => view! {
+                        <div class="item item--stack">
+                            {model_picker::picker(shared, "settings-models", move |chosen| {
+                                if chosen {
+                                    model_saved.set(true);
+                                }
+                                choosing.set(false);
+                            })}
+                        </div>
+                    }
+                    .into_any(),
+                    Chooser::Fallback(reason) => view! {
+                        <div class="item item--stack" data-testid="models-fallback">
+                            <p class="note">
+                                {format!("A lista de modelos não pôde ser carregada ({}). Digite o id do modelo.", reason.trim_end_matches('.'))}
+                            </p>
+                            <div class="fallback">
+                            <label class="sr-only" for="provider-model">"Id do modelo padrão"</label>
+                            <input
+                                id="provider-model"
+                                class="field field--wide mono"
+                                type="text"
+                                autocomplete="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                placeholder="deepseek/deepseek-chat-v3:free"
+                                disabled=move || model_busy.get() || shared.current.get().is_none()
+                                prop:value=move || model_draft.get()
+                                on:input=move |event| {
+                                    model_saved.set(false);
+                                    model_draft.set(event_target_value(&event));
+                                }
+                                on:keydown=move |event: leptos::web_sys::KeyboardEvent| {
+                                    if event.key() == "Enter" && !model_draft.get_untracked().trim().is_empty() {
+                                        write_model(Some(model_draft.get_untracked().trim().to_string()));
+                                    }
+                                }
+                            />
+                            {move || {
+                                let draft = model_draft.get();
+                                let draft = draft.trim();
+                                let saved = shared.bindings.with(|view| match view {
+                                    Some(ProviderView::Ready(bindings)) => saved_model_id(bindings.as_ref()),
+                                    _ => String::new(),
+                                });
+                                (!draft.is_empty() && draft != saved).then(|| {
+                                    view! {
+                                        <button
+                                            class="btn btn--primary"
+                                            type="button"
+                                            data-testid="model-save"
+                                            disabled=move || model_busy.get()
+                                            on:click=move |_| write_model(Some(model_draft.get_untracked().trim().to_string()))
+                                        >
+                                            "Salvar"
+                                        </button>
+                                    }
+                                })
+                            }}
+                                <button class="btn btn--ghost" type="button" on:click=move |_| model_picker::reload(shared)>
+                                    "Tentar a lista de novo"
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    .into_any(),
+                }}
                 {move || {
                     model_error.get().map(|message| {
                         view! { <p class="note note--error" role="alert" data-testid="model-error">{message}</p> }

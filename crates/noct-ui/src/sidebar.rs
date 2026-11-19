@@ -8,6 +8,7 @@ use noct_core::contracts::Workspace;
 use crate::chat::ChatStatus;
 use crate::dom;
 use crate::ipc;
+use crate::model_picker::CatalogView;
 use crate::provider::{self, KeyStatus, ModelBindingsView, ProviderView};
 use crate::workspaces::{self, WorkspacesView};
 
@@ -29,6 +30,8 @@ pub struct Shared {
     pub add_error: RwSignal<Option<String>>,
     /// Counts the reads of the project list; the window reads the list again each time it changes.
     pub reload: RwSignal<u64>,
+    /// OpenRouter's model list, read the first time a picker opens.
+    pub catalog: RwSignal<CatalogView>,
 }
 
 impl Shared {

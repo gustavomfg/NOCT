@@ -5,6 +5,7 @@ mod chat;
 mod chat_panel;
 mod dom;
 mod ipc;
+mod model_picker;
 mod provider;
 mod provider_panel;
 mod settings;
