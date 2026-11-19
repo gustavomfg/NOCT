@@ -325,6 +325,18 @@ pub fn check_relative_path(path: &str) -> Result<Vec<String>, PathRefusal> {
     Ok(names)
 }
 
+/// The endings of the files Documentar shows: Markdown only.
+const MARKDOWN_ENDINGS: [&str; 2] = [".md", ".markdown"];
+
+/// Whether a change is to a Markdown file, by the lower-case ending of its path. Documentar shows these changes, and
+/// Construir the others.
+pub fn is_markdown(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    MARKDOWN_ENDINGS
+        .iter()
+        .any(|ending| lower.ends_with(ending))
+}
+
 /// Whether the text of a change fits the limit. The limit is in bytes, the same as the one the disk read uses.
 pub fn fits_limit(text: &str) -> bool {
     text.len() as u64 <= MAXIMUM_FILE_BYTES

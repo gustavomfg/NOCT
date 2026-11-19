@@ -1,8 +1,7 @@
 //! The window: the sidebar (`sidebar.rs`), the three modes, the settings (Ajustes) and, in Revisar, the conversation with
 //! the chat (`chat_panel.rs`), laid out as in docs/New_Design/mockup-v2.html. The sidebar's projects come from
-//! `workspaces_list` (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The build and document modes
-//! are not available yet: they say so and offer no control for the work, so nothing in this window runs a command or
-//! writes a file.
+//! `workspaces_list` (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). Construir and Documentar show
+//! the proposed changes (`changes_panel.rs`): a file is written only when the person approves its change there.
 
 use leptos::prelude::*;
 
@@ -55,6 +54,7 @@ pub fn App() -> impl IntoView {
         catalog: RwSignal::new(model_picker::CatalogView::Idle),
         changes_version: RwSignal::new(0),
         build_requests: RwSignal::new(0),
+        docs_requests: RwSignal::new(0),
     };
     let settings_open = shared.settings_open;
 
@@ -133,11 +133,19 @@ pub fn App() -> impl IntoView {
         Theme::Dark => "Usar tema claro",
     };
 
-    // An answer that proposed changes can open Construir.
+    // An answer that proposed changes can open Construir, or Documentar for its Markdown files.
     Effect::new(move |previous: Option<u64>| {
         let count = shared.build_requests.get();
         if previous.is_some_and(|previous| previous != count) {
             set_mode.set(Mode::Build);
+            shared.close_settings();
+        }
+        count
+    });
+    Effect::new(move |previous: Option<u64>| {
+        let count = shared.docs_requests.get();
+        if previous.is_some_and(|previous| previous != count) {
+            set_mode.set(Mode::Docs);
             shared.close_settings();
         }
         count
@@ -239,12 +247,8 @@ pub fn App() -> impl IntoView {
                             } else {
                                 match mode.get() {
                                     Mode::Review => chat_panel::thread(chat).into_any(),
-                                    Mode::Build => changes_panel::panel(shared).into_any(),
-                                    Mode::Docs => unavailable_panel(
-                                        "Documentar",
-                                        "Atualizações incrementais em Markdown, só depois da sua confirmação.",
-                                    )
-                                    .into_any(),
+                                    Mode::Build => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
+                                    Mode::Docs => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
                                 }
                             }
                         }}
@@ -255,24 +259,6 @@ pub fn App() -> impl IntoView {
                         .then(|| chat_panel::composer(chat))
                 }}
             </div>
-        </div>
-    }
-}
-
-/// A mode the shell does not run yet. It says so, and offers no control for the work, so that nothing in it can be
-/// approved, reverted or confirmed.
-fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView {
-    view! {
-        <div class="stack" data-testid="unavailable">
-            <div>
-                <h1 class="h1">{heading}</h1>
-                <p class="lead">{lead}</p>
-            </div>
-            <section class="card">
-                <p class="body" role="status">
-                    "Ainda não disponível nesta versão. Nada é executado nem gravado nesta tela."
-                </p>
-            </section>
         </div>
     }
 }

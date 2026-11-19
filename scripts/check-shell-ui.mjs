@@ -136,8 +136,9 @@ const EXAMPLE_NAMES = ['frx', 'ovra']
 const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}', file_changes_list: '{"input":"/work/alpha"}' }
 // The changes of the Construir scenario: one edit and one new file, both waiting for a decision.
 const CHANGES = [
-  { id: 'c1', workspace: '/work/alpha', path: 'README.md', status: 'pending', base: 'título\nlinha antiga\nfim\n', content: 'título\nlinha nova\nfim\n' },
-  { id: 'c2', workspace: '/work/alpha', path: 'docs/novo.md', status: 'pending', base: null, content: 'nota\n' },
+  { id: 'c1', workspace: '/work/alpha', path: 'src/main.rs', status: 'pending', base: 'título\nlinha antiga\nfim\n', content: 'título\nlinha nova\nfim\n' },
+  { id: 'c2', workspace: '/work/alpha', path: 'src/novo.rs', status: 'pending', base: null, content: 'nota\n' },
+  { id: 'c3', workspace: '/work/alpha', path: 'docs/guia.md', status: 'pending', base: '# Guia\nantes\n', content: '# Guia\ndepois\n' },
 ]
 const CONFLICT = { code: 'change-conflict', message: 'O arquivo mudou desde a proposta. Nada foi escrito.' }
 // OpenRouter's list, as the shell sends it: two free models and a paid one.
@@ -195,7 +196,7 @@ function settingsSaved(theme) {
 const SCENARIOS = [
   { name: 'ready-light', mode: 'ready', theme: 'light', full: true, chatEnabled: false, expectTheme: 'light' },
   { name: 'ready-dark', mode: 'ready', theme: 'dark', full: true, chatEnabled: false, expectTheme: 'dark' },
-  { name: 'build-and-document-not-yet-available', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
+  { name: 'build-and-document-without-changes', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
   { name: 'build-approves-rejects-and-undoes', mode: 'ready', theme: 'dark', changes: true, expectTheme: 'dark' },
   {
     name: 'chat-proposes-changes',
@@ -1042,19 +1043,23 @@ try {
         const cards = page.getByTestId('change')
         await cards.first().waitFor({ timeout: 8000 })
         check((await cards.count()) === 2, 'each pending change has its card')
-        const readme = cards.filter({ hasText: 'README.md' })
-        check((await readme.locator('.diff__line--del').textContent())?.includes('linha antiga'), 'the diff shows the removed line')
-        check((await readme.locator('.diff__line--add').textContent())?.includes('linha nova'), 'the diff shows the added line')
-        check((await readme.textContent())?.includes('+1 −1'), 'the card counts the lines it adds and removes')
-        check((await cards.filter({ hasText: 'docs/novo.md' }).textContent())?.includes('Arquivo novo'), 'a new file says so')
-        await page.getByRole('button', { name: 'Aprovar a alteração em README.md', exact: true }).click()
+        const main = cards.filter({ hasText: 'src/main.rs' })
+        check((await main.locator('.diff__line--del').textContent())?.includes('linha antiga'), 'the diff shows the removed line')
+        check((await main.locator('.diff__line--add').textContent())?.includes('linha nova'), 'the diff shows the added line')
+        check((await main.textContent())?.includes('+1 −1'), 'the card counts the lines it adds and removes')
+        check((await cards.filter({ hasText: 'src/novo.rs' }).textContent())?.includes('Arquivo novo'), 'a new file says so')
+        check((await main.getByTestId('change-overwrites').count()) === 1 && (await main.getByRole('note').count()) === 1, 'a change to a file that exists says it overwrites it')
+        check((await cards.filter({ hasText: 'src/novo.rs' }).getByTestId('change-overwrites').count()) === 0, 'a new file is not marked as an overwrite')
+        check((await cards.filter({ hasText: 'src/novo.rs' }).getByTestId('change-path').textContent()) === 'src/novo.rs', 'the card shows the whole path')
+        check(await main.getByTestId('change-path').evaluate((element) => getComputedStyle(element).textOverflow !== 'ellipsis' && element.scrollWidth <= element.clientWidth + 1), 'the path is never cut')
+        await page.getByRole('button', { name: 'Aprovar a alteração em src/main.rs', exact: true }).click()
         await page.getByTestId('change-error').getByText(CONFLICT.message, { exact: true }).waitFor({ timeout: 8000 })
         check((await cards.count()) === 2, 'a refused approval leaves the change waiting')
-        await page.getByRole('button', { name: 'Aprovar a alteração em README.md', exact: true }).click()
+        await page.getByRole('button', { name: 'Aprovar a alteração em src/main.rs', exact: true }).click()
         await page.getByTestId('changes-applied').waitFor({ timeout: 8000 })
         check((await page.getByTestId('change-error').count()) === 0, 'an approval that worked clears the error')
-        await page.getByRole('button', { name: 'Desfazer a alteração em README.md', exact: true }).click()
-        await page.getByRole('button', { name: 'Recusar a alteração em docs/novo.md', exact: true }).click()
+        await page.getByRole('button', { name: 'Desfazer a alteração em src/main.rs', exact: true }).click()
+        await page.getByRole('button', { name: 'Recusar a alteração em src/novo.rs', exact: true }).click()
         await page.getByTestId('changes-closed').waitFor({ timeout: 8000 })
         await page.waitForFunction(() => document.querySelectorAll('[data-testid="changes-closed"] .item').length === 2)
         check((await cards.count()) === 0, 'nothing waits once both are decided')
@@ -1065,10 +1070,19 @@ try {
           decisions.join() === 'file_change_approve:c1,file_change_approve:c1,file_change_undo:c1,file_change_reject:c2',
           `each decision is one call that names its change (${decisions.join()})`,
         )
+        check((await page.getByText('docs/guia.md').count()) === 0, 'Construir does not show a Markdown change')
+        // Documentar shows the Markdown change, with the same approval.
+        await page.getByRole('button', { name: 'Documentar', exact: true }).click()
+        await page.getByRole('heading', { name: 'Documentar', level: 1 }).waitFor({ timeout: 8000 })
+        await cards.first().waitFor({ timeout: 8000 })
+        check((await cards.count()) === 1 && (await cards.getByTestId('change-path').textContent()) === 'docs/guia.md', 'Documentar shows only the Markdown change')
+        check((await cards.getByTestId('change-overwrites').count()) === 1, 'Documentar marks an overwrite too')
+        await page.getByRole('button', { name: 'Aprovar a alteração em docs/guia.md', exact: true }).click()
+        await page.getByTestId('changes-applied').waitFor({ timeout: 8000 })
+        check((await cards.count()) === 0, 'an approved Markdown change is applied')
       }
 
-      // Construir shows its three steps, with no note that it is unavailable and no control for the work. Documentar says
-      // it is not available yet, and offers no control for the work either.
+      // With no change proposed, Construir and Documentar show their three steps and no control for the work.
       if (scenario.unavailableModes) {
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Construir', level: 1 }).isVisible(), 'Construir shows its heading')
@@ -1086,19 +1100,14 @@ try {
           check(await page.getByRole('button', { name: control, exact: true }).count() === 0, 'Construir offers no ' + control + ' control')
         }
         check(await page.locator('.diff, .prose, .cmd').count() === 0, 'Construir shows no example diff or command')
-        for (const name of ['Documentar']) {
-          await page.getByRole('button', { name, exact: true }).click()
-          check(await page.getByRole('heading', { name, level: 1 }).isVisible(), `${name} shows its heading`)
-          check(await page.getByTestId('unavailable').count() === 1, `${name} says it is not available yet`)
-          check(
-            (await page.getByTestId('unavailable').textContent())?.includes('Ainda não disponível nesta versão'),
-            `${name} gives the note`,
-          )
-          for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
-            check(await page.getByRole('button', { name: control, exact: true }).count() === 0, `${name} offers no ${control} control`)
-          }
-          check(await page.locator('.diff, .prose, .cmd').count() === 0, `${name} shows no example diff or command`)
+        await page.getByRole('button', { name: 'Documentar', exact: true }).click()
+        check(await page.getByRole('heading', { name: 'Documentar', level: 1 }).isVisible(), 'Documentar shows its heading')
+        await page.getByTestId('changes-empty').getByText('Nenhuma alteração de documentação proposta ainda.', { exact: true }).waitFor({ timeout: 8000 })
+        check(await page.getByTestId('unavailable').count() === 0, 'Documentar does not say it is not available')
+        for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
+          check(await page.getByRole('button', { name: control, exact: true }).count() === 0, `Documentar offers no ${control} control`)
         }
+        check(await page.locator('.diff, .prose, .cmd').count() === 0, 'Documentar shows no example diff or command')
       }
 
       // The full scenario reloads the page, which clears the recorded calls; the saves made before the reload are kept here.

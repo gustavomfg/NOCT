@@ -1577,12 +1577,22 @@ button {
   min-width: 0;
 }
 
+/* The whole path, never cut: it is what the person approves. */
 .change__path {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.change__warning {
+  margin: 0;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  color: var(--warn);
+  font-size: 12.5px;
 }
 
 .change__count {
@@ -1626,6 +1636,11 @@ button {
 .tag--new {
   background: var(--sel);
   color: var(--accent);
+}
+
+.tag--overwrite {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
 }
 
 /* What an answer proposed, under the answer. */

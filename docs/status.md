@@ -1346,6 +1346,11 @@ Tests: `crates/noct-core/tests/file_change.rs` (each rule, and names close to th
 (`blocks_for_git_ci_self_running_files_device_names_and_encoded_paths_are_refused`: one answer per path, each counted as
 refused, the journal stays empty, `.git/config` is unchanged and no hook or workflow file is created).
 
+### Approval card
+
+The card shows the whole path in a larger mono font, never cut. A change to a file that exists has the tag "Sobrescreve"
+and a line saying that approving replaces the whole content of the file; a new file has the tag "Arquivo novo".
+
 ### Known limitation
 
 A proposal only creates a file or rewrites a whole file, up to 32 KiB of text. Editing part of a file (a hunk or a range
@@ -1382,6 +1387,12 @@ scrolls inside the answer, the open fence while streaming).
   path is the element's `title`.
 - Conversation: room under the last line and a short fade under it; the view follows a growing answer only while the
   person is at its end, and an answer that ends does not move a person who scrolled up (checked in Chromium).
+
+### Documentar
+
+Documentar uses the same approval flow as Construir and shows only the changes to Markdown files of the project (`.md`,
+`.markdown`); Construir shows the others. Under an answer, "Revisar em Documentar" appears when it proposed Markdown files.
+The split is a view of the same journal: the shell's path rules and the approval re-check are the same for both.
 
 ## Pending: merge of `migration/rust` into `main`
 

@@ -565,6 +565,13 @@ fn proposals_view(
     refused: usize,
 ) -> impl IntoView {
     let count = changes.len();
+    // Markdown files wait in Documentar and the others in Construir; each place present gets its button.
+    let docs = changes
+        .iter()
+        .any(|change| noct_core::file_change::is_markdown(&change.path));
+    let code = changes
+        .iter()
+        .any(|change| !noct_core::file_change::is_markdown(&change.path));
     let title = match count {
         0 => "Nenhuma alteração proposta foi aceita.".to_string(),
         1 => "1 alteração proposta, esperando a sua aprovação.".to_string(),
@@ -597,14 +604,26 @@ fn proposals_view(
             {(count > 0).then(|| {
                 view! {
                     <div class="actions actions--start">
-                        <button
-                            class="btn btn--primary btn--sm"
-                            type="button"
-                            data-testid="open-build"
-                            on:click=move |_| shared.build_requests.update(|n| *n += 1)
-                        >
-                            "Revisar em Construir"
-                        </button>
+                        {code.then(|| view! {
+                            <button
+                                class="btn btn--primary btn--sm"
+                                type="button"
+                                data-testid="open-build"
+                                on:click=move |_| shared.build_requests.update(|n| *n += 1)
+                            >
+                                "Revisar em Construir"
+                            </button>
+                        })}
+                        {docs.then(|| view! {
+                            <button
+                                class=if code { "btn btn--sm" } else { "btn btn--primary btn--sm" }
+                                type="button"
+                                data-testid="open-docs"
+                                on:click=move |_| shared.docs_requests.update(|n| *n += 1)
+                            >
+                                "Revisar em Documentar"
+                            </button>
+                        })}
                     </div>
                 }
             })}

@@ -3,7 +3,7 @@
 
 use noct_core::file_change::{
     FileChange, FileChangeJournal, FileChangeStatus, JournalRefusal, PathRefusal,
-    check_relative_path, fits_limit, is_sensitive_name,
+    check_relative_path, fits_limit, is_markdown, is_sensitive_name,
 };
 use noct_core::limits::file_change::{
     MAXIMUM_CLOSED_CHANGES, MAXIMUM_FILE_BYTES, MAXIMUM_OPEN_CHANGES,
@@ -367,4 +367,14 @@ fn a_change_for_one_project_does_not_show_in_another() {
 fn the_text_limit_is_the_same_byte_count_the_disk_read_uses() {
     assert!(fits_limit(&"a".repeat(MAXIMUM_FILE_BYTES as usize)));
     assert!(!fits_limit(&"a".repeat(MAXIMUM_FILE_BYTES as usize + 1)));
+}
+
+#[test]
+fn markdown_is_told_by_the_ending_of_the_path() {
+    for path in ["README.md", "docs/Guia.MD", "notas.markdown"] {
+        assert!(is_markdown(path), "{path}");
+    }
+    for path in ["src/lib.rs", "md", "docs/md.txt", "README.md.bak", "a.mdx"] {
+        assert!(!is_markdown(path), "{path}");
+    }
 }

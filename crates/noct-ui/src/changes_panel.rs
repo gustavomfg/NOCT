@@ -1,10 +1,11 @@
-//! Construir: the changes proposed for the current project, approved or rejected one at a time, and undone after. Each
+//! Construir and Documentar: the changes proposed for the current project, approved or rejected one at a time, and undone
+//! after. Documentar shows the changes to Markdown files and Construir the others; the flow is the same. Each
 //! pending change shows its file and a line diff against the text the file had when it was proposed. Nothing is written
 //! until the person presses Aprovar; the shell checks again that the file still holds that text, and refuses otherwise.
 //! An applied change can be undone while the file still holds what the approval wrote.
 
 use leptos::prelude::*;
-use noct_core::file_change::{FileChange, FileChangeStatus};
+use noct_core::file_change::{self, FileChange, FileChangeStatus};
 
 use crate::diff::{self, Line};
 use crate::ipc::{self, Failure};
@@ -38,8 +39,21 @@ fn settle(outcome: ipc::Outcome) -> ChangesView {
     }
 }
 
-/// The panel of Construir.
-pub fn panel(shared: Shared) -> impl IntoView {
+/// Which changes a panel shows: Construir the code and other files, Documentar the Markdown files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    Build,
+    Docs,
+}
+
+impl Scope {
+    fn holds(self, change: &FileChange) -> bool {
+        file_change::is_markdown(&change.path) == (self == Scope::Docs)
+    }
+}
+
+/// The panel of Construir or of Documentar.
+pub fn panel(shared: Shared, scope: Scope) -> impl IntoView {
     let view = RwSignal::new(ChangesView::Loading);
     let busy = RwSignal::new(None::<String>);
     let error = RwSignal::new(None::<String>);
@@ -51,7 +65,15 @@ pub fn panel(shared: Shared) -> impl IntoView {
         };
         ipc::call_with(LIST, &payload(&path), move |outcome| {
             if shared.current.get_untracked().as_deref() == Some(path.as_str()) {
-                view.set(settle(outcome));
+                view.set(match settle(outcome) {
+                    ChangesView::Ready(changes) => ChangesView::Ready(
+                        changes
+                            .into_iter()
+                            .filter(|change| scope.holds(change))
+                            .collect(),
+                    ),
+                    other => other,
+                });
             }
         });
     };
@@ -78,10 +100,15 @@ pub fn panel(shared: Shared) -> impl IntoView {
     };
 
     view! {
-        <div class="stack" data-testid="build">
+        <div class="stack" data-testid=match scope { Scope::Build => "build", Scope::Docs => "docs" }>
             <div>
-                <h1 class="h1">"Construir"</h1>
-                <p class="lead">"Cada alteração espera a sua aprovação. Toda alteração aplicada pode ser desfeita."</p>
+                <h1 class="h1">{match scope { Scope::Build => "Construir", Scope::Docs => "Documentar" }}</h1>
+                <p class="lead">
+                    {match scope {
+                        Scope::Build => "Cada alteração espera a sua aprovação. Toda alteração aplicada pode ser desfeita.",
+                        Scope::Docs => "Alterações em arquivos Markdown do projeto. Cada uma espera a sua aprovação e pode ser desfeita.",
+                    }}
+                </p>
             </div>
             {move || {
                 error.get().map(|message| {
@@ -110,7 +137,7 @@ pub fn panel(shared: Shared) -> impl IntoView {
                         </div>
                     }
                     .into_any(),
-                    ChangesView::Ready(changes) if changes.is_empty() => steps_view().into_any(),
+                    ChangesView::Ready(changes) if changes.is_empty() => steps_view(scope).into_any(),
                     ChangesView::Ready(changes) => lists_view(shared, changes, busy, decide).into_any(),
                 }
             }}
@@ -262,11 +289,23 @@ fn change_card(
         <section class="card card--flush change" data-testid="change">
             <div class="card__head">
                 <div class="change__title">
-                    <span class="mono change__path">{change.path.clone()}</span>
-                    {new_file.then(|| view! { <span class="tag tag--new">"Arquivo novo"</span> })}
+                    <span class="mono change__path" data-testid="change-path">{change.path.clone()}</span>
+                    {if new_file {
+                        view! { <span class="tag tag--new" data-testid="change-new">"Arquivo novo"</span> }.into_any()
+                    } else {
+                        view! {
+                            <span class="tag tag--overwrite" data-testid="change-overwrites">"Sobrescreve"</span>
+                        }
+                        .into_any()
+                    }}
                 </div>
                 <span class="note change__count">{summary}</span>
             </div>
+            {(!new_file).then(|| view! {
+                <p class="change__warning" role="note">
+                    "Este arquivo já existe no projeto. Aprovar substitui o conteúdo inteiro dele pelo da proposta."
+                </p>
+            })}
             {body}
             <div class="card__foot">
                 <button
@@ -302,12 +341,22 @@ fn diff_line(line: Line<'_>) -> AnyView {
 }
 
 /// The start of Construir, while no change was proposed: how a change goes, step by step.
-fn steps_view() -> impl IntoView {
+fn steps_view(scope: Scope) -> impl IntoView {
+    let (asked, empty) = match scope {
+        Scope::Build => (
+            " uma alteração em Revisar.",
+            "Nenhuma alteração proposta ainda.",
+        ),
+        Scope::Docs => (
+            " uma atualização da documentação em Revisar.",
+            "Nenhuma alteração de documentação proposta ainda.",
+        ),
+    };
     view! {
         <section class="card" data-testid="build-steps">
             <div class="step">
                 <span class="step__n">"1"</span>
-                <p><b>"Você pede"</b>" uma alteração em Revisar."</p>
+                <p><b>"Você pede"</b>{asked}</p>
             </div>
             <div class="step">
                 <span class="step__n">"2"</span>
@@ -318,6 +367,6 @@ fn steps_view() -> impl IntoView {
                 <p><b>"Você aprova ou recusa"</b>" cada arquivo. Nada é gravado sem a sua aprovação."</p>
             </div>
         </section>
-        <p class="lead" data-testid="changes-empty">"Nenhuma alteração proposta ainda."</p>
+        <p class="lead" data-testid="changes-empty">{empty}</p>
     }
 }

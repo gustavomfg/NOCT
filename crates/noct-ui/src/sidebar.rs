@@ -36,6 +36,8 @@ pub struct Shared {
     pub changes_version: RwSignal<u64>,
     /// Counts the requests to open Construir, from an answer that proposed changes.
     pub build_requests: RwSignal<u64>,
+    /// A press of "Revisar em Documentar" under an answer: the window opens Documentar.
+    pub docs_requests: RwSignal<u64>,
 }
 
 impl Shared {
