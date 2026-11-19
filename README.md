@@ -190,7 +190,7 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 | `cargo build -p noct-app --release --features custom-protocol` | Builds the release shell with the interface embedded. |
 | `npm test` | Runs the Node tests of the scripts (`scripts/*.test.mjs`). |
 | `npm run check:csp` | Checks the Content-Security-Policy in Chromium. |
-| `npm run check:ui` | Checks the settings area with a mocked shell in Chromium. |
+| `npm run check:ui` | Checks the interface (conversation, Markdown answers, model picker, Construir, Documentar, Ajustes) with a mocked shell in Chromium. |
 
 > **Never point the shell at a data folder that holds real data.** Without `--data-dir`, the shell uses its default data
 > folder, and that is where the data of a real user of the Rust shell is kept. For tests, use `--data-dir` with an empty

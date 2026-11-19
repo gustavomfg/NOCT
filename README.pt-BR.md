@@ -192,7 +192,7 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 | `cargo build -p noct-app --release --features custom-protocol` | Compila o shell de release com a interface embutida. |
 | `npm test` | Roda os testes Node dos scripts (`scripts/*.test.mjs`). |
 | `npm run check:csp` | Confere a Content-Security-Policy no Chromium. |
-| `npm run check:ui` | Confere a área de configurações com um shell simulado no Chromium. |
+| `npm run check:ui` | Confere a interface (conversa, respostas em Markdown, escolha de modelo, Construir, Documentar, Ajustes) com um shell simulado no Chromium. |
 
 > **Nunca aponte o shell para uma pasta de dados que tenha dados reais.** Sem `--data-dir`, o shell usa a pasta de dados
 > padrão, e é ali que ficam os dados de um usuário real do shell em Rust. Para testes, use `--data-dir` com uma pasta vazia
