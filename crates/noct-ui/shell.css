@@ -452,7 +452,7 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* No `overflow: hidden` (see `.card--flush`): its children stay inside it, and `.main` scrolls on its own. */
   border: 1px solid var(--line);
   border-radius: 26px;
   background: var(--bg);
@@ -608,10 +608,21 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
+/* No `overflow: hidden` to round the corners: in WebKitGTK the compositor clips a rounded corner of a layer (and a glass
+   pane is one) with a stencil, which has no antialiasing. The first and last children take the inner radius instead. */
 .card--flush {
   gap: 0;
   padding: 0;
-  overflow: hidden;
+}
+
+.card--flush > :first-child {
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+.card--flush > :last-child {
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 }
 
 .card__head {
@@ -1394,8 +1405,8 @@ button {
   color: var(--muted);
 }
 
+/* Rounded without `overflow: hidden`, as `.card--flush` above. */
 .list {
-  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
@@ -1409,6 +1420,16 @@ button {
   flex-wrap: wrap;
   gap: 12px 14px;
   padding: 12px 16px;
+}
+
+.list > :first-child {
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+.list > :last-child {
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 }
 
 .item + .item {
@@ -2051,6 +2072,20 @@ button {
   background: linear-gradient(160deg, var(--card-a), var(--card-b));
   -webkit-backdrop-filter: blur(22px) saturate(1.5);
   backdrop-filter: blur(22px) saturate(1.5);
+}
+
+/* "Bordas sem camadas" (a test the owner can turn on in Ajustes): the panes inside the window keep their translucent
+   colours but lose their own blur, so they are not composited layers. The sidebar and the window pane keep the glass. */
+[data-glass="on"][data-layers="flat"] .card,
+[data-glass="on"][data-layers="flat"] .list,
+[data-glass="on"][data-layers="flat"] .composer,
+[data-glass="on"][data-layers="flat"] .need,
+[data-glass="on"][data-layers="flat"] .suggest button,
+[data-glass="on"][data-layers="flat"] .sel__list,
+[data-glass="on"][data-layers="flat"] .popover > .picker {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Translucent panes take the light edge of the prototype and a soft shadow, never the solid theme shadow, which reads as

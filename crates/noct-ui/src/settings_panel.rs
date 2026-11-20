@@ -50,6 +50,7 @@ pub fn settings_panel(
     theme: ReadSignal<Theme>,
     choose_theme: impl Fn(Theme) + Copy + Send + Sync + 'static,
     glass: RwSignal<bool>,
+    flat_layers: RwSignal<bool>,
 ) -> impl IntoView {
     let ready = move || matches!(settings_view.get(), SettingsView::Ready(_));
     let saved = move || match settings_view.get() {
@@ -116,6 +117,27 @@ pub fn settings_panel(
                             aria-label="Efeito de vidro"
                             aria-checked=move || glass.get().to_string()
                             on:click=move |_| toggle_glass(glass)
+                        ></button>
+                    </div>
+                    <div class="item">
+                        <div class="item__txt">
+                            <div class="item__name">"Bordas sem camadas (teste)"</div>
+                            <div class="item__desc">
+                                "Se as bordas dos cartões parecerem serrilhadas, ligue para ver se melhora. O vidro continua."
+                            </div>
+                        </div>
+                        <button
+                            class="switch"
+                            type="button"
+                            role="switch"
+                            aria-label="Bordas sem camadas"
+                            data-testid="flat-layers"
+                            aria-checked=move || flat_layers.get().to_string()
+                            on:click=move |_| {
+                                let next = !flat_layers.get_untracked();
+                                flat_layers.set(next);
+                                dom::store_flat_layers(next);
+                            }
                         ></button>
                     </div>
                 </div>

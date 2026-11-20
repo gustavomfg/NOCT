@@ -195,6 +195,24 @@ pub fn set_glass(on: bool) {
     set_root_attribute("data-glass", if on { "on" } else { "off" });
 }
 
+/// The key under which the "bordas sem camadas" test is remembered for this viewer.
+const LAYERS_KEY: &str = "noct.layers";
+
+/// Whether this viewer turned on the "bordas sem camadas" test. Off unless stored as on.
+pub fn stored_flat_layers() -> bool {
+    storage_get(LAYERS_KEY).ok().flatten().as_deref() == Some("flat")
+}
+
+/// Remembers the "bordas sem camadas" choice for this viewer.
+pub fn store_flat_layers(flat: bool) {
+    let _ = storage_set(LAYERS_KEY, if flat { "flat" } else { "glass" });
+}
+
+/// Draws the panes inside the window without their own blur, or with it, through `data-layers` on `<html>`.
+pub fn set_flat_layers(flat: bool) {
+    set_root_attribute("data-layers", if flat { "flat" } else { "glass" });
+}
+
 /// The path of the last project this viewer chose, or `None` when none was chosen or the storage cannot be read.
 pub fn stored_project() -> Option<String> {
     storage_get(PROJECT_KEY)

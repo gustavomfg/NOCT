@@ -39,6 +39,9 @@ pub fn App() -> impl IntoView {
     // changes what the page shows.
     let glass = RwSignal::new(dom::stored_glass().unwrap_or(true));
     Effect::new(move |_| dom::set_glass(glass.get()));
+    // The "bordas sem camadas" test: off unless this viewer turned it on.
+    let flat_layers = RwSignal::new(dom::stored_flat_layers());
+    Effect::new(move |_| dom::set_flat_layers(flat_layers.get()));
 
     let (mode, set_mode) = signal(Mode::Review);
     let shared = Shared {
@@ -252,7 +255,7 @@ pub fn App() -> impl IntoView {
                     <div class="stack">
                         {move || {
                             if settings_open.get() {
-                                settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass).into_any()
+                                settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass, flat_layers).into_any()
                             } else {
                                 match mode.get() {
                                     Mode::Review => chat_panel::thread(chat).into_any(),

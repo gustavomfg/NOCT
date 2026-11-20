@@ -1412,6 +1412,21 @@ on `<html>` through the CSS object model; it ignores any name that is not a cust
 that one call. It opens upward when there is no room below. Checked in Chromium: mouse, keyboard, Esc, click outside,
 both themes, position under the button and upward at a short window.
 
+### Jagged edges on the cards
+
+- **Chromium:** not reproduced. Card corners zoomed 10x, glass on and off, light and dark, are antialiased.
+- **Real window:** not captured. The installed `import` cannot read the X display here, and Playwright's WebKit needs
+  system libraries that need sudo. The screen scale is 1 and the window is opaque, so fractional scaling and a
+  transparent window are ruled out; no card has a transform or `will-change`.
+- **Probable cause:** WebKitGTK composites with TextureMapper, which clips a rounded corner of a composited layer with a
+  stencil, without antialiasing. Every glass pane is a composited layer (`backdrop-filter`), and `.content`, `.list` and
+  `.card--flush` rounded their content with `overflow: hidden`.
+- **Change:** those three no longer clip; their first and last children take the inner radius (`.diff` and `.main`
+  scroll on their own). The glass is unchanged.
+- **For the owner to test:** Ajustes › Aparência › "Bordas sem camadas (teste)" keeps the glass on the sidebar and the
+  window pane but draws the cards, lists, composer and popups without their own blur. If the edges are smooth only with it
+  on, the cause is the blur clip of the panes themselves, and the next step is to move that blur to an inset pseudo-element.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
