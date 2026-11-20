@@ -7,12 +7,12 @@
 > O produto anterior, escrito em TypeScript com o shell Electron, fica preservado na tag `electron-final` (commit
 > `c8c378b`). Essa tag é o ponto de restauração de tudo o que foi removido do repositório.
 
-![NOCT em Revisar: uma pergunta sobre o projeto e a resposta desenhada como Markdown, no tema escuro com a camada de vidro](docs/images/noct-review-dark.png)
+![NOCT em Revisar: uma pergunta sobre o projeto e a resposta desenhada como Markdown, no tema claro com a camada de vidro](docs/images/noct-review-light.png)
 
 <details>
-<summary>A mesma tela no tema claro</summary>
+<summary>A mesma tela no tema escuro</summary>
 
-![NOCT em Revisar, no tema claro](docs/images/noct-review-light.png)
+![NOCT em Revisar, no tema escuro](docs/images/noct-review-dark.png)
 
 </details>
 
