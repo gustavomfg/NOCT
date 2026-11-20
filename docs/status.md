@@ -1427,6 +1427,17 @@ both themes, position under the button and upward at a short window.
   window pane but draws the cards, lists, composer and popups without their own blur. If the edges are smooth only with it
   on, the cause is the blur clip of the panes themselves, and the next step is to move that blur to an inset pseudo-element.
 
+### The webview does not act as a browser in a release build
+
+`crates/noct-ui/src/browser_guard.rs`, from WebAssembly, in a release build only (`debug_assertions` off): the right
+click shows no page menu, except in a text box, an editable element or over a selection (copy and paste stay); F5,
+Ctrl/Cmd+R, Ctrl/Cmd+Shift+R, Alt+Left/Right, Cmd+[ and ], Ctrl/Cmd+P and the browser keys are cancelled; `dragover` and
+`drop` are cancelled. The window keeps Tauri's drag and drop handler (a dropped file is a shell event, not a navigation),
+and the navigation policy refuses `file:` pages. The window sets `.devtools(DEVTOOLS)`, true only in a debug build, and
+Tauri's `devtools` feature is not enabled (`cargo tree -e features -i tauri` shows none). Tests: unit test of the
+shortcut list, Chromium checks of the menu, the shortcuts, the allowed copy and paste and the drop, and
+`crates/noct-app/tests/window.rs` for the inspector and the drop handler. A real reload or navigation is not exercised.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

@@ -960,6 +960,68 @@ async function selectChecks(page, check, theme) {
   await page.setViewportSize(size)
 }
 
+// In a release build (the one checked here) the page does not act as a browser: the right click keeps the system menu only
+// in text boxes, editable elements and over a selection; reload, navigation and print shortcuts and a dropped file do
+// nothing. The events are dispatched to the page, so what is checked is that the page cancels them.
+async function browserGuardChecks(page, check) {
+  const result = await page.evaluate(() => {
+    const menu = (target) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      target.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const key = (init) => {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const drag = (type) => {
+      const event = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const box = document.createElement('textarea')
+    const field = document.createElement('input')
+    const editable = document.createElement('div')
+    editable.contentEditable = 'true'
+    editable.textContent = 'editável'
+    document.body.append(box, field, editable)
+    const brand = document.querySelector('.brand')
+    const out = {
+      plain: menu(brand),
+      textarea: menu(box),
+      input: menu(field),
+      editable: menu(editable.firstChild),
+    }
+    const range = document.createRange()
+    range.selectNodeContents(brand)
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(range)
+    out.selection = menu(brand)
+    window.getSelection().removeAllRanges()
+    box.remove()
+    field.remove()
+    editable.remove()
+    out.keys = {
+      F5: key({ key: 'F5' }),
+      ctrlR: key({ key: 'r', ctrlKey: true }),
+      ctrlShiftR: key({ key: 'R', ctrlKey: true, shiftKey: true }),
+      altLeft: key({ key: 'ArrowLeft', altKey: true }),
+      altRight: key({ key: 'ArrowRight', altKey: true }),
+      ctrlP: key({ key: 'p', ctrlKey: true }),
+    }
+    out.allowed = { ctrlC: key({ key: 'c', ctrlKey: true }), ctrlV: key({ key: 'v', ctrlKey: true }), r: key({ key: 'r' }) }
+    out.drop = { over: drag('dragover'), drop: drag('drop') }
+    return out
+  })
+  check(result.plain === true, 'a right click on the page shows no browser menu')
+  check(result.textarea === false && result.input === false && result.editable === false, 'a right click in a text box or an editable element keeps the system menu')
+  check(result.selection === false, 'a right click over selected text keeps the system menu')
+  for (const [name, prevented] of Object.entries(result.keys)) check(prevented === true, `${name} does not reload, navigate or print`)
+  for (const [name, prevented] of Object.entries(result.allowed)) check(prevented === false, `${name} still works`)
+  check(result.drop.over === true && result.drop.drop === true, 'a file dropped on the window is not opened by the page')
+}
+
 const browser = await chromium.launch()
 const server = await serve()
 const results = []
@@ -1267,6 +1329,7 @@ try {
         }
         check((await page.getByTestId('settings-save-error').count()) === 0, 'a saved change shows no error')
         await selectChecks(page, check, scenario.expectTheme)
+        await browserGuardChecks(page, check)
         await page.getByRole('button', { name: 'Revisar', exact: true }).click()
         check((await pressed('Revisar')) === 'true', 'a mode leaves Ajustes')
 

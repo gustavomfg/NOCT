@@ -5,6 +5,7 @@
 
 use leptos::prelude::*;
 
+use crate::browser_guard;
 use crate::changes_panel;
 use crate::chat_panel;
 use crate::dom;
@@ -27,6 +28,9 @@ enum Mode {
 
 #[component]
 pub fn App() -> impl IntoView {
+    // In a release build the webview does not act as a browser: no page menu, reload or navigation shortcuts.
+    browser_guard::install();
+
     // The theme starts as the system prefers, and takes the saved setting when the settings arrive. A theme the
     // person changed in this session is kept over the saved one.
     let system_dark = dom::system_prefers_dark();
