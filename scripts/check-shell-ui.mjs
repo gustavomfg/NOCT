@@ -876,6 +876,90 @@ async function chatFlow(page, scenario, check) {
   check(!(await save.isEnabled()), 'a saved answer is saved once')
 }
 
+// Opens the app's select named by its label with the mouse and clicks the option with a value.
+async function chooseOption(page, label, value) {
+  await page.getByLabel(label, { exact: true }).click()
+  await page.locator(`.sel__list [role="option"][data-value="${value}"]`).click()
+  await page.locator('.sel__list').waitFor({ state: 'detached', timeout: 8000 })
+}
+
+// The app's select: its popup, the mouse, the keyboard, Esc, a click outside, the theme, and the list opening upward.
+async function selectChecks(page, check, theme) {
+  const button = page.getByLabel('Diagnóstico', { exact: true })
+  const list = page.locator('.sel__list[role="listbox"]')
+  check((await button.getAttribute('role')) === 'combobox' && (await button.getAttribute('aria-expanded')) === 'false', 'a select is a closed combobox')
+  check((await page.locator('select').count()) === 0, 'no system select is left in the window')
+  // The mouse opens it; a click outside closes it and chooses nothing.
+  await button.click()
+  await list.waitFor({ timeout: 8000 })
+  check((await button.getAttribute('aria-expanded')) === 'true', 'the button says the list is open')
+  check((await list.getByRole('option').count()) === 2, 'the list holds the options')
+  check((await list.getByRole('option', { selected: true }).getAttribute('data-value')) === 'off', 'the saved option is marked as selected')
+  check(await list.locator('[aria-selected="true"] .sel__check').isVisible(), 'the selected option has its mark')
+  const box = await list.boundingBox()
+  const opener = await button.boundingBox()
+  check(Math.abs(box.y - (opener.y + opener.height + 6)) <= 2 && Math.abs(box.x - opener.x) <= 2, `the list opens under its button (${box.x},${box.y} for ${opener.x},${opener.y + opener.height})`)
+  const viewport = page.viewportSize()
+  check(box && box.y >= 0 && box.y + box.height <= viewport.height && box.x >= 0 && box.x + box.width <= viewport.width, 'the list is whole on the screen')
+  const colours = await list.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { background: style.backgroundColor, color: style.color }
+  })
+  const textColour = theme === 'dark' ? 'rgb(244, 244, 245)' : 'rgb(29, 29, 31)'
+  check(colours.color === textColour && colours.background !== 'rgba(0, 0, 0, 0)', `the list takes the ${theme} theme (${colours.color} on ${colours.background})`)
+  check((await list.evaluate((element) => element.getAttribute('style'))) === null, 'the list has no style attribute')
+  await page.getByTestId('select-backdrop').click({ position: { x: 5, y: 5 } })
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  check((await button.getAttribute('aria-expanded')) === 'false', 'a click outside closes the list')
+  const calls = () => page.evaluate(() => window.__noctCalls.filter((call) => call.command === 'settings_set').length)
+  const saves = await calls()
+  check(saves === (await calls()), 'closing chooses nothing')
+  // The keyboard: the arrow opens on the saved option, Home and End move, Esc closes and keeps the focus.
+  await button.focus()
+  await page.keyboard.press('ArrowDown')
+  await list.waitFor({ timeout: 8000 })
+  const active = () => button.getAttribute('aria-activedescendant')
+  const optionId = async (value) => list.locator(`[data-value="${value}"]`).getAttribute('id')
+  check((await active()) === (await optionId('off')), 'the arrow opens on the saved option')
+  await page.keyboard.press('Home')
+  check((await active()) === (await optionId('on')), 'Home moves to the first option')
+  await page.keyboard.press('End')
+  check((await active()) === (await optionId('off')), 'End moves to the last option')
+  await page.keyboard.press('ArrowUp')
+  check((await active()) === (await optionId('on')), 'the up arrow moves up')
+  await page.keyboard.press('Escape')
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  check(await button.evaluate((element) => document.activeElement === element), 'Esc closes and keeps the focus on the button')
+  check((await calls()) === saves, 'Esc chooses nothing')
+  // Enter chooses the active option; a typed letter jumps to the option that starts with it; Space chooses.
+  await page.keyboard.press('Enter')
+  await list.waitFor({ timeout: 8000 })
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('Enter')
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  await page.waitForFunction(() => document.getElementById('setting-diagnostic')?.dataset.value === 'on')
+  check((await button.getAttribute('data-value')) === 'on', 'Enter chooses the active option, and the shell keeps it')
+  await page.keyboard.press('i')
+  await list.waitFor({ timeout: 8000 })
+  check((await active()) === (await optionId('off')), 'a letter jumps to the option that starts with it (Inativo)')
+  await page.keyboard.press(' ')
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  await page.waitForFunction(() => document.getElementById('setting-diagnostic')?.dataset.value === 'off')
+  check(await button.evaluate((element) => document.activeElement === element), 'after a choice the focus stays on the button')
+  // With no room below, the list opens over the button.
+  const size = page.viewportSize()
+  await button.scrollIntoViewIfNeeded()
+  const buttonBox = await button.boundingBox()
+  await page.setViewportSize({ width: size.width, height: Math.ceil(buttonBox.y + buttonBox.height + 40) })
+  await button.click()
+  await list.waitFor({ timeout: 8000 })
+  const upBox = await list.boundingBox()
+  const nowButton = await button.boundingBox()
+  check(upBox.y + upBox.height <= nowButton.y + 1 && upBox.y >= 0, 'without room below, the list opens upward and stays whole')
+  await page.keyboard.press('Escape')
+  await page.setViewportSize(size)
+}
+
 const browser = await chromium.launch()
 const server = await serve()
 const results = []
@@ -948,11 +1032,11 @@ try {
         // The theme select shows the theme of the page. Pandoc is read from its row. Idioma, Segurança do agente and
         // Diagnóstico are selects, and carry their values.
         const pageTheme = await html.getAttribute('data-theme')
-        check((await page.getByLabel('Tema', { exact: true }).inputValue()) === pageTheme, 'the theme select shows the theme of the page')
+        check((await page.getByLabel('Tema', { exact: true }).getAttribute('data-value')) === pageTheme, 'the theme select shows the theme of the page')
         const pandoc = page.locator('.item', { has: page.getByText('Pandoc', { exact: true }) }).locator('.body')
         check((await pandoc.textContent())?.trim() === '3.1.2', 'Pandoc shows 3.1.2')
         for (const [label, value] of [['Idioma', 'en'], ['Segurança do agente', 'untrusted'], ['Diagnóstico', 'on']]) {
-          check((await page.getByLabel(label).inputValue()) === value, `${label} selects ${value}`)
+          check((await page.getByLabel(label).getAttribute('data-value')) === value, `${label} selects ${value}`)
         }
       }
 
@@ -1138,11 +1222,11 @@ try {
         check((await html.getAttribute('data-theme')) === 'dark', 'the theme still changes on screen when the save is refused')
         // A setting the shell does not save says so, and its control goes back to the saved value.
         await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
-        await page.getByLabel('Idioma').selectOption('pt-BR')
+        await chooseOption(page, 'Idioma', 'pt-BR')
         const refused = page.getByTestId('settings-save-error')
         await refused.waitFor({ timeout: 8000 })
         check((await refused.textContent())?.includes(SHELL_ERROR.message), 'a setting that is not saved says so with the shell message')
-        check((await page.getByLabel('Idioma').inputValue()) === 'en', 'the language goes back to the saved value')
+        check((await page.getByLabel('Idioma').getAttribute('data-value')) === 'en', 'the language goes back to the saved value')
       }
 
       if (scenario.full) {
@@ -1174,14 +1258,15 @@ try {
           ['Diagnóstico', 'off', '{"input":{"diagnosticMode":false}}'],
         ]) {
           const before = await page.evaluate(() => window.__noctCalls.length)
-          await page.getByLabel(label).selectOption(value)
+          await chooseOption(page, label, value)
           await page.waitForFunction((count) => window.__noctCalls.length > count, before)
           await page.waitForFunction(() => !document.querySelector('[data-testid="settings-saving"]'))
           const last = await page.evaluate(() => window.__noctCalls.filter((call) => call.command === 'settings_set').at(-1))
           check(JSON.stringify(last?.payload) === expected, `${label} is saved alone`)
-          check((await page.getByLabel(label).inputValue()) === value, `${label} shows the value the shell replied with`)
+          check((await page.getByLabel(label).getAttribute('data-value')) === value, `${label} shows the value the shell replied with`)
         }
         check((await page.getByTestId('settings-save-error').count()) === 0, 'a saved change shows no error')
+        await selectChecks(page, check, scenario.expectTheme)
         await page.getByRole('button', { name: 'Revisar', exact: true }).click()
         check((await pressed('Revisar')) === 'true', 'a mode leaves Ajustes')
 
@@ -1292,7 +1377,8 @@ try {
         )
         const settingSaves = saves.length - themeSaves.length
         check(
-          settingSaves === (scenario.full ? 3 : scenario.saveFails ? 1 : 0),
+          // The full scenario saves three settings, then the select checks choose Diagnóstico twice by keyboard.
+          settingSaves === (scenario.full ? 5 : scenario.saveFails ? 1 : 0),
           `each change in Ajustes is saved once (saves: ${settingSaves})`,
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
@@ -1302,8 +1388,15 @@ try {
         check(count('provider_key_status') === 1, `provider_key_status is read once, on load (reads: ${count('provider_key_status')})`)
       }
 
-      const inline = await page.evaluate(() => document.querySelectorAll('[style], style').length)
-      check(inline === 0, 'no inline style is set in the page')
+      // The only inline style allowed is the place of the select's popup: custom properties `--select-*` that the code sets
+      // on <html> through the CSS object model (the page policy allows it; no markup carries a style attribute).
+      const inline = await page.evaluate(() =>
+        [...document.querySelectorAll('[style], style')].filter((element) => {
+          if (element !== document.documentElement) return true
+          return [...element.style].some((name) => !name.startsWith('--select-'))
+        }).length,
+      )
+      check(inline === 0, 'no inline style is set in the page, other than the place of the select popup')
       result.violations = await page.evaluate(() => window.__cspViolations)
       check(result.violations.length === 0, 'the policy reports no violation')
     } catch (error) {

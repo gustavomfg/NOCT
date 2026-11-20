@@ -67,6 +67,34 @@ extern "C" {
     #[wasm_bindgen(method, getter = offsetHeight)]
     fn offset_height(this: &Element) -> f64;
 
+    /// The box of an element on the screen, as `getBoundingClientRect` returns it.
+    pub type Rect;
+
+    #[wasm_bindgen(method, js_name = getBoundingClientRect)]
+    fn bounding_rect(this: &Element) -> Rect;
+
+    #[wasm_bindgen(method, getter)]
+    fn left(this: &Rect) -> f64;
+
+    #[wasm_bindgen(method, getter)]
+    fn top(this: &Rect) -> f64;
+
+    #[wasm_bindgen(method, getter)]
+    fn bottom(this: &Rect) -> f64;
+
+    #[wasm_bindgen(method, getter)]
+    fn width(this: &Rect) -> f64;
+
+    /// The inline style object of an element. Only custom properties are set on it, through the CSS object model, which
+    /// the page policy allows; no `style` attribute is ever written.
+    type Style;
+
+    #[wasm_bindgen(method, getter)]
+    fn style(this: &Element) -> Style;
+
+    #[wasm_bindgen(method, js_name = setProperty)]
+    fn set_property(this: &Style, name: &str, value: &str);
+
     /// The element with an id, as `document.getElementById` returns it.
     #[wasm_bindgen(js_namespace = document, js_name = getElementById)]
     fn element_by_id(id: &str) -> Option<Element>;
@@ -85,6 +113,29 @@ const GLASS_KEY: &str = "noct.glass";
 
 /// The key under which the last project chosen is remembered for this viewer.
 const PROJECT_KEY: &str = "noct.project";
+
+/// The box of the element with an id on the screen: left, top, bottom and width, in CSS pixels.
+pub fn box_of(id: &str) -> Option<(f64, f64, f64, f64)> {
+    element_by_id(id).map(|element| {
+        let rect = element.bounding_rect();
+        (rect.left(), rect.top(), rect.bottom(), rect.width())
+    })
+}
+
+/// The height of the window's viewport, in CSS pixels.
+pub fn viewport_height() -> f64 {
+    DOCUMENT_ELEMENT.with(|root| root.client_height())
+}
+
+/// Sets a CSS custom property (`--name`) on the `<html>` element through the CSS object model. A popup that must be
+/// placed by measure reads it from its classes.
+pub fn set_root_property(name: &str, value: &str) {
+    // Only custom properties: a declared look stays in the stylesheet.
+    if !name.starts_with("--") {
+        return;
+    }
+    DOCUMENT_ELEMENT.with(|root| root.style().set_property(name, value));
+}
 
 /// Sets an attribute on the `<html>` element, for example `data-theme`.
 pub fn set_root_attribute(name: &str, value: &str) {

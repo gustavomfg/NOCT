@@ -6,9 +6,22 @@ use leptos::prelude::*;
 
 use crate::dom;
 use crate::provider_panel;
+use crate::select::{self, Choice};
 use crate::settings::{self, SettingsView};
 use crate::sidebar::Shared;
 use crate::theme::Theme;
+
+/// The options of the theme select.
+const THEME_CHOICES: [Choice; 2] = [
+    Choice {
+        value: "dark",
+        label: "Escuro",
+    },
+    Choice {
+        value: "light",
+        label: "Claro",
+    },
+];
 
 /// The theme for an option of the appearance select.
 fn theme_choice(value: &str) -> Option<Theme> {
@@ -78,19 +91,18 @@ pub fn settings_panel(
                         <div class="item__txt">
                             <label class="item__name" for="setting-theme">"Tema"</label>
                         </div>
-                        <select
-                            id="setting-theme"
-                            class="select"
-                            prop:value=move || theme.get().attribute()
-                            on:change=move |event| {
-                                if let Some(next) = theme_choice(&event_target_value(&event)) {
+                        {select::select(
+                            "setting-theme",
+                            THEME_CHOICES.to_vec(),
+                            Signal::derive(move || theme.get().attribute().to_string()),
+                            "",
+                            Signal::derive(|| false),
+                            move |value| {
+                                if let Some(next) = theme_choice(value) {
                                     choose_theme(next);
                                 }
-                            }
-                        >
-                            <option value="dark">"Escuro"</option>
-                            <option value="light">"Claro"</option>
-                        </select>
+                            },
+                        )}
                     </div>
                     <div class="item">
                         <div class="item__txt">
@@ -116,94 +128,72 @@ pub fn settings_panel(
                         <div class="item__txt">
                             <label class="item__name" for="setting-language">"Idioma"</label>
                         </div>
-                        <select
-                            id="setting-language"
-                            class="select"
-                            disabled=move || !ready()
-                            prop:value=move || {
+                        {select::select(
+                            "setting-language",
+                            select::choices_of(&settings::LANGUAGE_CHOICES),
+                            Signal::derive(move || {
                                 saved()
                                     .and_then(|settings| settings.language)
                                     .map_or("", |language| {
                                         settings::choice_value(&settings::LANGUAGE_CHOICES, language)
                                     })
-                            }
-                            on:change=move |event| {
-                                let choice = settings::choice_of(
-                                    &settings::LANGUAGE_CHOICES,
-                                    &event_target_value(&event),
-                                );
-                                if let Some(language) = choice {
+                                    .to_string()
+                            }),
+                            settings::NOT_INFORMED,
+                            Signal::derive(move || !ready()),
+                            move |value| {
+                                if let Some(language) = settings::choice_of(&settings::LANGUAGE_CHOICES, value) {
                                     save(settings::language_request(language));
                                 }
-                            }
-                        >
-                            <option value="" disabled>{settings::NOT_INFORMED}</option>
-                            {settings::LANGUAGE_CHOICES
-                                .iter()
-                                .map(|(_, value, label)| view! { <option value=*value>{*label}</option> })
-                                .collect_view()}
-                        </select>
+                            },
+                        )}
                     </div>
                     <div class="item">
                         <div class="item__txt">
                             <label class="item__name" for="setting-approval">"Segurança do agente"</label>
                         </div>
-                        <select
-                            id="setting-approval"
-                            class="select"
-                            disabled=move || !ready()
-                            prop:value=move || {
-                                saved().map_or("", |settings| {
-                                    settings::choice_value(&settings::APPROVAL_CHOICES, settings.approval_policy)
-                                })
-                            }
-                            on:change=move |event| {
-                                let choice = settings::choice_of(
-                                    &settings::APPROVAL_CHOICES,
-                                    &event_target_value(&event),
-                                );
-                                if let Some(policy) = choice {
+                        {select::select(
+                            "setting-approval",
+                            select::choices_of(&settings::APPROVAL_CHOICES),
+                            Signal::derive(move || {
+                                saved()
+                                    .map_or("", |settings| {
+                                        settings::choice_value(&settings::APPROVAL_CHOICES, settings.approval_policy)
+                                    })
+                                    .to_string()
+                            }),
+                            settings::NOT_INFORMED,
+                            Signal::derive(move || !ready()),
+                            move |value| {
+                                if let Some(policy) = settings::choice_of(&settings::APPROVAL_CHOICES, value) {
                                     save(settings::approval_request(policy));
                                 }
-                            }
-                        >
-                            {settings::APPROVAL_CHOICES
-                                .iter()
-                                .map(|(_, value, label)| view! { <option value=*value>{*label}</option> })
-                                .collect_view()}
-                        </select>
+                            },
+                        )}
                     </div>
                     <div class="item">
                         <div class="item__txt">
                             <label class="item__name" for="setting-diagnostic">"Diagnóstico"</label>
                         </div>
-                        <select
-                            id="setting-diagnostic"
-                            class="select"
-                            disabled=move || !ready()
-                            prop:value=move || {
+                        {select::select(
+                            "setting-diagnostic",
+                            select::choices_of(&settings::DIAGNOSTIC_CHOICES),
+                            Signal::derive(move || {
                                 saved()
                                     .and_then(|settings| settings.diagnostic_mode)
                                     .map_or("", |enabled| {
                                         settings::choice_value(&settings::DIAGNOSTIC_CHOICES, enabled)
                                     })
-                            }
-                            on:change=move |event| {
-                                let choice = settings::choice_of(
-                                    &settings::DIAGNOSTIC_CHOICES,
-                                    &event_target_value(&event),
-                                );
-                                if let Some(enabled) = choice {
+                                    .to_string()
+                            }),
+                            settings::NOT_INFORMED,
+                            Signal::derive(move || !ready()),
+                            move |value| {
+                                if let Some(enabled) = settings::choice_of(&settings::DIAGNOSTIC_CHOICES, value) {
                                     save(settings::diagnostic_request(enabled));
                                 }
-                            }
-                        >
-                            <option value="" disabled>{settings::NOT_INFORMED}</option>
-                            {settings::DIAGNOSTIC_CHOICES
-                                .iter()
-                                .map(|(_, value, label)| view! { <option value=*value>{*label}</option> })
-                                .collect_view()}
-                        </select>
+                            },
+                        )}
                     </div>
                     <div class="item">
                         <div class="item__txt">

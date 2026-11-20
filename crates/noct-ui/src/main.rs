@@ -11,6 +11,7 @@ mod markdown;
 mod model_picker;
 mod provider;
 mod provider_panel;
+mod select;
 mod settings;
 mod settings_panel;
 mod sidebar;

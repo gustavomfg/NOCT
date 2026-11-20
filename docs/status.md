@@ -1399,6 +1399,19 @@ Documentar uses the same approval flow as Construir and shows only the changes t
 `.markdown`); Construir shows the others. Under an answer, "Revisar em Documentar" appears when it proposed Markdown files.
 The split is a view of the same journal: the shell's path rules and the approval re-check are the same for both.
 
+## Finishing touches from the real window (2026-11-20)
+
+### The app's select
+
+Ajustes no longer uses `<select>`, whose open list GTK draws. `crates/noct-ui/src/select.rs` is a select-only combobox:
+a button with the value, and a `listbox` popup in the app's style (glass, light and dark, the selected option marked).
+Keyboard: arrows, Home/End, Enter and Space choose, Esc closes and keeps the focus, a letter jumps to the next option that
+starts with it; a click outside closes. The list is mounted in `<body>` (a pane with `overflow: hidden` or a backdrop
+filter would cut a fixed list inside it) and placed by custom properties `--select-*` that `dom::set_root_property` sets
+on `<html>` through the CSS object model; it ignores any name that is not a custom property, and the policy test allows
+that one call. It opens upward when there is no room below. Checked in Chromium: mouse, keyboard, Esc, click outside,
+both themes, position under the button and upward at a short window.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
