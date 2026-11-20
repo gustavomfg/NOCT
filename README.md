@@ -2,10 +2,22 @@
 
 [Português do Brasil](README.pt-BR.md)
 
-> This is the branch `migration/rust`. It holds the Rust product only: the Tauri shell, the SQLite layer, the provider
-> credential vault and the Leptos interface. It is not a release. The product on `main` is not changed by this branch.
+> This repository holds the Rust product only: the Tauri shell, the SQLite layer, the provider credential vault and the
+> Leptos interface. It is developed on `migration/rust` and merged into `main` by pull request; it is not a release yet.
 > The previous product, written in TypeScript with its Electron shell, is kept at the tag `electron-final` (commit
-> `c8c378b`). That tag is the restore point for everything removed from this branch.
+> `c8c378b`). That tag is the restore point for everything removed from the repository.
+
+![NOCT in Revisar: a question about the project and the answer drawn as Markdown, in the dark theme with the glass layer](docs/images/noct-review-dark.png)
+
+<details>
+<summary>The same view in the light theme</summary>
+
+![NOCT in Revisar, in the light theme](docs/images/noct-review-light.png)
+
+</details>
+
+The captures come from the interface check in Chromium, with a mocked shell and demonstration projects; they are not
+from the real window. [docs/images/README.md](docs/images/README.md) says how they were made.
 
 This file describes the branch after the removal of the previous product. Each statement names what it rests on. The
 results of the local checks and of CI for the final commit are in [docs/status.md](docs/status.md). The removal, with
@@ -21,11 +33,11 @@ plans, approvals and validation results (`AGENTS.md`, "Product identity").
 
 | Path | Responsibility |
 | --- | --- |
-| `crates/noct-app` | The Tauri 2 shell. It opens the data folder and the log, registers the five commands, sets the window policy, and checks workspace access. |
+| `crates/noct-app` | The Tauri 2 shell. It opens the data folder and the log, registers its 37 commands, sets the window policy, and checks workspace access. |
 | `crates/noct-core` | The contracts, limits and types of the product, and the log redaction. |
 | `crates/noct-db` | SQLite persistence: the runtime, migrations 1 to 32, the repositories, backups and recovery snapshots, atomic writes, the file log and the operation observer. |
 | `crates/noct-native` | A separate rollback worker binary for filesystem operations. It has a Linux backend only. |
-| `crates/noct-secrets` | The provider credential vault: an encrypted document, a non-secret index, and a master key in the operating system credential store. The shell does not open it yet. |
+| `crates/noct-secrets` | The provider credential vault: an encrypted document, a non-secret index, and a master key in the operating system credential store. The shell opens it to keep the OpenRouter key. |
 | `crates/noct-ui` | The Leptos interface, compiled to WebAssembly by Trunk. The Geist fonts are vendored under the SIL Open Font License 1.1. |
 | `native/` | The source of the C++ rollback worker. CI does not compile it. |
 | `scripts/` | The launcher, the UI and CSP checks in Chromium, the shell release helper, and the Node tests of those scripts. |
@@ -33,9 +45,9 @@ plans, approvals and validation results (`AGENTS.md`, "Product identity").
 
 What this branch does not do yet:
 
-- it calls an AI provider only from the chat, and the chat is switched off in this version (section 3);
-- it writes no project file from the interface: approving, rejecting and undoing a file change exist as commands only (section 3);
-- it does not show conversations in the interface;
+- it calls one AI provider, OpenRouter, and only from the chat of Revisar (section 3);
+- it writes a project file only when the person approves that change in Construir or Documentar, one change at a time;
+- it does not list the saved conversations in the interface;
 - it produces no installer or signed package;
 - no window has been checked on Windows or on macOS (section 6).
 
@@ -51,11 +63,13 @@ The phase table of [ADR 0001](docs/adr/0001-rust-migration.md) is the authority.
   are listed in [the backends document](docs/rust-native-rollback-backends.md).
 - **Phase 4, workspace services:** partly done. The repositories exist; the services, such as `ProjectIndexService`, are
   not ported.
-- **Phase 5, AI:** partly done. The credential vault, the OpenRouter transport and the chat are done, and the chat is switched
-  off. Other provider adapters and the tool loop are not ported.
-- **Phase 6, IPC and shell:** partly done. 33 commands, granted only to the `main` window.
-- **Phase 7, UI:** partly done. The settings area, the project list in the sidebar, the glass layer and the themes.
-  Checked in Chromium with a mocked shell. Not checked in a real window.
+- **Phase 5, AI:** partly done. The credential vault, the network policy, the OpenRouter transport, its model list, the chat
+  and the changes an answer proposes are done. Other provider adapters and the tool loop are not ported.
+- **Phase 6, IPC and shell:** partly done. 37 commands, granted only to the `main` window.
+- **Phase 7, UI:** partly done. Revisar (the chat, with answers drawn as Markdown without HTML), Construir and Documentar
+  (the approval of each proposed change, with undo), Ajustes, the project list in the sidebar, the model picker, the glass
+  layer and the themes. Checked in Chromium with a mocked shell; the real window on Linux was seen by the owner, and is
+  not checked by CI.
 - **Phase 8, updates and packaging:** not started on the Rust side. Blocked (section 4).
 - **Phase 9, retirement:** the TypeScript product, its Vite and npm build and its Electron packaging are removed from this
   branch. The Node requirement stays for the Playwright checks. ADR 0001's table has not been changed by this removal.
@@ -94,8 +108,8 @@ What the code does on this branch:
 
 - The key is typed once in the settings area. The shell checks its format and saves it in the operating system's credential
   store. No network call checks it. The reply carries no key, and the interface never reads it back.
-- Each project has a consent and a default model. The model is typed as an identifier, and the shell checks its form. The
-  shell does not list the provider's models: it never calls `GET /models`.
+- Each project has a consent and a default model. The model is chosen from OpenRouter's list, which the shell reads through
+  the same network policy, or typed as an identifier, and the shell checks its form.
 - The chat answers a question about the project. It sends the top-level text files that the context rules allow, with the
   question, to `https://openrouter.ai/api/v1/chat/completions`, and shows the answer as it streams in. The transport allows
   HTTPS only, follows no redirect, checks every resolved address before it connects, and caps the size and the time. Save
@@ -105,9 +119,12 @@ What the code does on this branch:
   connection is made.
 - **What is tested.** The chain from the question to the saved answer runs in the test suite against a local fake server
   (`crates/noct-app/tests/provider_chat_flow.rs` and `provider_transport.rs`). No test calls OpenRouter, and no run used a
-  real key. The interface checks run in Chromium with a mocked shell, with the switch off.
+  real key. The interface checks run in Chromium with a mocked shell.
+- **Proposed changes.** An answer can propose file changes. They wait, pending, in Construir (or in Documentar for Markdown
+  files) until the person approves each one; the path rules refuse Git, CI and self-running files, device names and encoded
+  paths (`noct_core::file_change`).
 
-Not done: a list of the provider's models, other providers, the interface that approves file changes, and the changes the assistant proposes.
+Not done: other providers, and the tool loop.
 The status of each item is in [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" and the sections after it.
 
 ## 4. Verification
@@ -204,7 +221,7 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 - **Webview policy.** `withGlobalTauri` is `false`. The Content-Security-Policy is
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   Chromium checks it (`scripts/check-shell-csp.mjs`). No webview has enforced it yet.
-- **Commands.** 33 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
+- **Commands.** 37 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
   application manifest. `crates/noct-app/capabilities/default.json` grants them to the `main` window only. Tests with Tauri's
   mock runtime refuse a command that is not granted and a request from a second window.
 - **Navigation.** The main window accepts navigation only to the packaged interface, and to the development server in
@@ -213,7 +230,10 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
   running webview.
 - **Credentials.** The database holds only a UUID reference for each provider configuration. The vault encrypts the
   credentials with XChaCha20-Poly1305 and keeps the master key in the operating system credential store (ADR 0002). The
-  shell does not open the vault, so no credential reaches the interface.
+  shell opens the vault for the OpenRouter key; the key never reaches the interface or the logs.
+- **The webview is not a browser in a release build.** No page menu on a right click (except in text fields and over a
+  selection), no reload, navigation or print shortcut, no navigation to a dropped file, and no inspector
+  (`crates/noct-ui/src/browser_guard.rs`, `crates/noct-app/src/window.rs`).
 - **Logs.** Lines are redacted before they are queued for the file log (`crates/noct-core/src/log_redaction.rs`).
 - **Local files.** On Unix, the database, its backups, the logs and the atomic writes are created with mode `0600`, and
   the folders with `0700`. On Windows, no ACL is applied (see the list below).
@@ -222,11 +242,9 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 
 ### Still missing
 
-- **Provider allowlist.** None is implemented. The repository has a design,
-  [`docs/provider-allowlist-design.md`](docs/provider-allowlist-design.md), with six open questions and no code. The rules
-  that the previous product applied to provider endpoints (HTTPS for remote endpoints, no redirects, a check of every
-  resolved address, plain HTTP only for loopback) are recorded at `electron-final`, in `docs/security.md`. This branch has
-  no provider client, so none of them is in force here. Which policy applies is a decision for the owner.
+- **Provider allowlist beyond OpenRouter.** The network policy (`crates/noct-core/src/ai/network.rs`) holds OpenRouter
+  alone, with the restrictive answers to the design's questions (`docs/provider-allowlist-design.md`, section 13). Hosts
+  that the user approves, and local endpoints, are not implemented.
 - **Windows ACL.** The data folder gets no DACL. Setting one needs `windows-sys` as a direct dependency, which the owner
   has not approved. The owner decided that it waits for the vault integration, with the owner present. The analysis is in
   `docs/rust-windows-file-permissions.md`.
@@ -304,16 +322,16 @@ caching of the Rust shell workflow.
   is missing.
 - [Windows file permissions](docs/rust-windows-file-permissions.md). The analysis, the warning, and the ACL that is not
   implemented.
-- [Provider allowlist design](docs/provider-allowlist-design.md). A proposal, with open questions. No code.
+- [Provider allowlist design](docs/provider-allowlist-design.md). The design, and in section 13 the answers that the
+  network policy implements for OpenRouter.
 - [npm audit triage](docs/npm-audit-triage.md). The findings of the previous tree, their scope, and the options. Nothing is
   fixed.
 - [Documentation index](docs/README.md). The other documents. Some describe the previous product; they are kept as history.
-- [`AGENTS.md`](AGENTS.md). Contributor rules and the validation commands. It still describes the previous product's
-  invariants; see the owner decisions below.
+- [`AGENTS.md`](AGENTS.md). Contributor rules, the shell's security invariants and the validation commands.
 
 ### Next steps
 
-1. **Owner.** Decide the provider allowlist, using the design in `docs/provider-allowlist-design.md`.
+1. **Owner.** Decide the providers and the user-approved hosts after OpenRouter (`docs/provider-allowlist-design.md`).
 2. **Owner, with the owner present.** Decide on `windows-sys` or on declarations in the repository, and on the Windows
    ACL, during the vault integration (section 6).
 3. **Real windows.** Open the shell on Windows (WebView2) and macOS (WKWebView). On Linux, check the current layout and the
@@ -326,9 +344,7 @@ caching of the Rust shell workflow.
 7. **Phase 8 decisions.** Who holds the signing keys, and how the packaging integrity checks are replaced. The macOS bundle
    setting is still to be written.
 8. **Owner decisions on the repository.** These are outside the files of this branch:
-   - pull request #23 must not be merged into `main` as it stands, because it would remove the previous product from `main`;
    - the CodeQL language set contains `javascript-typescript`, and no JavaScript product remains on this branch;
-   - `AGENTS.md` still describes the previous product's invariants;
    - whether the parity checks should be recreated as Rust-only tests against frozen data, on a separate branch or tag;
    - whether the row-gate parity coverage is accepted as ended on this branch.
 9. **Owner.** Decide the npm audit option for the previous tree (`docs/npm-audit-triage.md`).
@@ -337,5 +353,5 @@ caching of the Rust shell workflow.
 
 - ADR 0001's phase table still describes the TypeScript and Electron paths of the previous product, and phase 9 is not
   marked done. This README reports the removal; the ADR has not been changed for it.
-- `AGENTS.md` still describes the previous product's invariants (owner decisions, section 10).
-- No provider allowlist is implemented. `docs/provider-allowlist-design.md` is a design only (section 6).
+- `docs/provider-allowlist-design.md` still says "Nothing is implemented" in its header; the network policy implements it
+  for OpenRouter (section 6).
