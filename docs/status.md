@@ -1276,6 +1276,168 @@ switch is a setting (`providerChatEnabled`, on by default) with `provider_chat_s
 whenever there is a project, and a line over it names what is missing (project, chat off, key, model, permission) with the
 button that resolves it.
 
+## Model list, assistant proposals and Construir (2026-11-19)
+
+**Model list.** `models_list` reads OpenRouter's public list with no credential, under the same network policy as the
+chat; the policy additions are in `docs/provider-allowlist-design.md`, section 13.1. Ajustes and the composer pill choose the
+model from it; the typed id remains when the list cannot be read.
+
+**Proposals from the assistant (C).** The prompt asks the model to put the whole new text of a file in a block that opens
+with a line of four backticks and `noct-change path=<relative path>`, and closes with the same four backticks. When an answer ends complete, the shell reads the blocks of
+the text it received itself (never text from the window) with `noct_core::proposal_block::read_blocks` and records each
+accepted block as a **pending** change through the same `file_changes::propose` as a proposal from the window. Nothing is
+written to the project; the window is told the recorded changes with a `proposed` event before `done`.
+
+Security review of C:
+
+- The answer is untrusted. A block is read only in its exact shape (a fence of four or more backticks on its own line, the
+  word, `path=` with no space, the same fence to close it); an open block is ignored.
+- The path passes `check_relative_path` (relative, no `..`, no root, drive, backslash, colon or NUL, no sensitive name such
+  as `.env`, keys, certificates, `.git`), then the disk checks of `propose` (every folder real and inside the project, no
+  symbolic link). The text fits 32 KiB. A path appears once; at most 5 blocks per answer; the journal keeps at most 50 open
+  changes. A refused block is counted and shown as a number, never applied.
+- A failed, truncated or cancelled answer proposes nothing: blocks are read only after the provider's `[DONE]`.
+- Nothing is approved automatically. Approval happens only in Construir, one change at a time, and re-checks that the file
+  still holds the text it had when the change was proposed.
+- A project file that tries to steer the model (prompt injection) can at most produce pending proposals, which the person
+  sees as a diff before any write.
+- The window shows a block as one line ("[alteração proposta: path]"), so the file text does not fill the conversation; all
+  text is drawn as text.
+
+Tests: `crates/noct-core/src/proposal_block.rs` (shape, traversal, sensitive names, size, repeats, cap, open blocks, line
+ends) and `crates/noct-app/tests/provider_chat_flow.rs` (pending changes recorded and no file written; refusals; a symbolic
+link out of the project; an answer without blocks; an unsaved project; the prompt).
+
+**Construir (B).** The panel lists the project's changes: waiting for approval (one card per file with a line diff, the
+counts, "Arquivo novo" for a new file, Aprovar and Recusar), applied (Desfazer) and closed. A refused approval (the file
+changed since the proposal) leaves the change waiting and shows the shell's message. The diff is computed in the window and
+bounded; a text too long to compare is shown whole. Review stays read-only: the conversation only records proposals.
+
+## Owner's review of C, safe answer rendering, and Documentar (2026-11-19)
+
+CI: "Rust shell validation" on `0efa624` (run 44484850830) finished **success** on Linux.
+
+### Paths an assistant proposal may never name (rule of `check_relative_path`)
+
+A block whose path matches any rule below is refused and counted; nothing is recorded and nothing is written. The same
+check runs again when a change is approved.
+
+- **Git:** anything under a `.git` folder at any depth (`.git/config`, `.git/hooks/*`, `sub/.git/...`), and the Git files
+  that make Git run or fetch something: `.gitattributes`, `.gitmodules`, `.gitconfig`.
+- **CI:** `.github/workflows/**`, `.github/actions/**`, `.gitlab-ci.yml`, `.gitlab/**`, `.circleci/**`, `.buildkite/**`,
+  `.travis.yml`, `azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.drone.yml`, `Jenkinsfile`. Other files under
+  `.github` (issue templates, `CODEOWNERS`) stay allowed.
+- **Files that run on their own when the project is opened or committed:** hook managers (`.husky/**`, `.githooks/**`,
+  `.pre-commit-config.yaml`, `.pre-commit-hooks.yaml`, `lefthook.yml`), editor and container settings that can start tasks
+  (`.vscode/**`, `.idea/**`, `.devcontainer/**`), and files a shell or an editor reads on entering the folder (`.envrc`,
+  `.exrc`, `.nvimrc`, `.nvim.lua`, `.lvimrc`).
+- **Windows device names**, with or without an extension and in any case: `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`,
+  `LPT0`–`LPT9` (also the superscript digits Windows accepts).
+- **Encoded or disguised paths:** any percent escape (`%2e%2e`, `%2F`, `%5c`), a backslash, a colon, NUL or another control
+  character, and characters that look like a dot or a slash (fullwidth dot and slash, one-dot leader, division slash).
+- The rules already in place: absolute paths, `..`, empty or `.` names, a trailing dot or space, sensitive names (`.env`,
+  keys, certificates, credentials), symbolic links, folders outside the project.
+
+Not on the list: build files that run only when the person runs a build or an install (`build.rs`, `package.json`
+scripts, `Makefile`). They are shown as a diff and wait for approval like any other file.
+
+Tests: `crates/noct-core/tests/file_change.rs` (each rule, and names close to them that stay allowed) and
+`crates/noct-app/tests/provider_chat_flow.rs`
+(`blocks_for_git_ci_self_running_files_device_names_and_encoded_paths_are_refused`: one answer per path, each counted as
+refused, the journal stays empty, `.git/config` is unchanged and no hook or workflow file is created).
+
+### Approval card
+
+The card shows the whole path in a larger mono font, never cut. A change to a file that exists has the tag "Sobrescreve"
+and a line saying that approving replaces the whole content of the file; a new file has the tag "Arquivo novo".
+A file that runs code when the project is built or installed (`build.rs`, Makefile, justfile, `package.json`, Dockerfile,
+`*.sh`, `*.ps1`, and a `Cargo.toml` with a build script or build dependencies before or after the change) is allowed and
+carries a visible warning: "Este arquivo roda código quando você compila ou instala. Leia o diff com atenção."
+(`noct_core::file_change::runs_on_build`).
+
+### Known limitation
+
+A proposal only creates a file or rewrites a whole file, up to 32 KiB of text. Editing part of a file (a hunk or a range
+of lines) is not supported yet.
+
+### Answers drawn as Markdown, without HTML
+
+The answer is read in the window with `pulldown-cmark` 0.13 (no default features, so no HTML writer) into a small tree
+(`crates/noct-ui/src/markdown.rs`) whose leaves are only text, and drawn with Leptos elements whose text is set as text.
+Supported: headings, paragraphs, bold, italic, strikethrough, inline code, code blocks (mono font, own background, a Copiar
+button), lists, task markers, quotes, rules and tables (in a box that scrolls sideways). Elements carry classes only.
+
+Security review:
+
+- Raw HTML, block or inline, is kept as text: `<script>`, `<img onerror>`, `<a href=javascript:>`, `<iframe>` are shown as
+  the characters the model wrote. The tree has no element kind for HTML, so there is no path from the answer to markup.
+- Links are not clickable: the text is shown, then the address in parentheses, as text. Images are not loaded: only
+  "[imagem: description]" is shown. So an answer makes no request and opens nothing.
+- No inline style and no `innerHTML`; the page policy (no inline style) is unchanged.
+- Nesting is cut at 16 levels: deeper content stays as text, which bounds the recursion of drawing, hashing and dropping.
+  The answer itself is capped by the shell at 64 KiB; the parser was tested with four times that.
+- While an answer streams, it is parsed again at each piece and each top-level block is keyed by position and content, so
+  finished blocks keep their elements; an open code fence is drawn as code, and a half table as a paragraph until its
+  delimiter line arrives.
+
+Tests: unit tests in `markdown.rs` (subset, raw HTML, `javascript:` link, remote image, malformed table, cut answer, depth,
+huge answer, stable keys) and the Chromium scenario `chat-renders-markdown-without-html` (no `script`, `img`, `a`,
+`iframe`, `[style]`, `[src]` or `[href]` inside the answer, nothing ran, no request to the image or link hosts, wide table
+scrolls inside the answer, the open fence while streaming).
+
+### Window fixes
+
+- Sidebar: the project path is one line, the home folder is shown as `~`, a long path ends in an ellipsis, and the full
+  path is the element's `title`.
+- Conversation: room under the last line (padding of the conversation, always applied) and a short fade under it, applied
+  only under `@supports` for `mask-image` and through a class on the area, not `:has()`; the view follows a growing answer only while the
+  person is at its end, and an answer that ends does not move a person who scrolled up (checked in Chromium).
+
+### Documentar
+
+Documentar uses the same approval flow as Construir and shows only the changes to Markdown files of the project (`.md`,
+`.markdown`); Construir shows the others. Under an answer, "Revisar em Documentar" appears when it proposed Markdown files.
+The split is a view of the same journal: the shell's path rules and the approval re-check are the same for both.
+
+## Finishing touches from the real window (2026-11-20)
+
+### The app's select
+
+Ajustes no longer uses `<select>`, whose open list GTK draws. `crates/noct-ui/src/select.rs` is a select-only combobox:
+a button with the value, and a `listbox` popup in the app's style (glass, light and dark, the selected option marked).
+Keyboard: arrows, Home/End, Enter and Space choose, Esc closes and keeps the focus, a letter jumps to the next option that
+starts with it; a click outside closes. The list is mounted in `<body>` (a pane with `overflow: hidden` or a backdrop
+filter would cut a fixed list inside it) and placed by custom properties `--select-*` that `dom::set_root_property` sets
+on `<html>` through the CSS object model; it ignores any name that is not a custom property, and the policy test allows
+that one call. It opens upward when there is no room below. Checked in Chromium: mouse, keyboard, Esc, click outside,
+both themes, position under the button and upward at a short window.
+
+### Jagged edges on the cards
+
+- **Chromium:** not reproduced. Card corners zoomed 10x, glass on and off, light and dark, are antialiased.
+- **Real window:** not captured. The installed `import` cannot read the X display here, and Playwright's WebKit needs
+  system libraries that need sudo. The screen scale is 1 and the window is opaque, so fractional scaling and a
+  transparent window are ruled out; no card has a transform or `will-change`.
+- **Probable cause:** WebKitGTK composites with TextureMapper, which clips a rounded corner of a composited layer with a
+  stencil, without antialiasing. Every glass pane is a composited layer (`backdrop-filter`), and `.content`, `.list` and
+  `.card--flush` rounded their content with `overflow: hidden`.
+- **Change:** those three no longer clip; their first and last children take the inner radius (`.diff` and `.main`
+  scroll on their own). The glass is unchanged.
+- **For the owner to test:** Ajustes › Aparência › "Bordas sem camadas (teste)" keeps the glass on the sidebar and the
+  window pane but draws the cards, lists, composer and popups without their own blur. If the edges are smooth only with it
+  on, the cause is the blur clip of the panes themselves, and the next step is to move that blur to an inset pseudo-element.
+
+### The webview does not act as a browser in a release build
+
+`crates/noct-ui/src/browser_guard.rs`, from WebAssembly, in a release build only (`debug_assertions` off): the right
+click shows no page menu, except in a text box, an editable element or over a selection (copy and paste stay); F5,
+Ctrl/Cmd+R, Ctrl/Cmd+Shift+R, Alt+Left/Right, Cmd+[ and ], Ctrl/Cmd+P and the browser keys are cancelled; `dragover` and
+`drop` are cancelled. The window keeps Tauri's drag and drop handler (a dropped file is a shell event, not a navigation),
+and the navigation policy refuses `file:` pages. The window sets `.devtools(DEVTOOLS)`, true only in a debug build, and
+Tauri's `devtools` feature is not enabled (`cargo tree -e features -i tauri` shows none). Tests: unit test of the
+shortcut list, Chromium checks of the menu, the shortcuts, the allowed copy and paste and the drop, and
+`crates/noct-app/tests/window.rs` for the inspector and the drop handler. A real reload or navigation is not exercised.
+
 ## Pending: merge of `migration/rust` into `main`
 
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73

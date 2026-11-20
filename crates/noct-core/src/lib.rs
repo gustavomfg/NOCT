@@ -13,6 +13,7 @@ pub mod json;
 pub mod limits;
 pub mod log_redaction;
 pub mod operation_recovery;
+pub mod proposal_block;
 pub mod semantic_index;
 pub mod suggestions;
 pub mod text;

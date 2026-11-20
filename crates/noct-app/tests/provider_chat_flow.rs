@@ -529,3 +529,201 @@ fn the_default_model_of_another_provider_is_not_the_chat_model() {
         "a model of another provider does not answer the OpenRouter chat"
     );
 }
+
+// Proposals of an answer: the shell reads the blocks of the answer it received and records each as a pending change.
+// Nothing is written to the project.
+
+fn proposals_of(
+    persistence: &Persistence,
+    workspace: &str,
+    answer: &str,
+) -> noct_app::provider_chat::Proposals {
+    noct_app::provider_chat::record_proposals(persistence, &[], workspace, answer)
+}
+
+#[test]
+fn a_complete_answer_records_its_blocks_as_pending_changes_and_writes_nothing() {
+    let (scratch, persistence) = fixture("proposals-ok");
+    let workspace = project(&scratch, &persistence, "app");
+    std::fs::write(
+        std::path::Path::new(&workspace).join("README.md"),
+        "antigo\n",
+    )
+    .expect("written");
+    let answer = "Sugiro:\n````noct-change path=README.md\nnovo\n````\n````noct-change path=docs/notas.md\nnota\n````\n";
+    std::fs::create_dir(std::path::Path::new(&workspace).join("docs")).expect("folder");
+
+    let proposals = proposals_of(&persistence, &workspace, answer);
+
+    let paths: Vec<&str> = proposals
+        .changes
+        .iter()
+        .map(|change| change.path.as_str())
+        .collect();
+    assert_eq!(paths, ["README.md", "docs/notas.md"]);
+    assert_eq!(proposals.refused, 0);
+    let listed = noct_app::file_changes::list(&persistence, &[], &workspace).expect("listed");
+    assert!(
+        listed
+            .iter()
+            .all(|change| change.status == noct_core::file_change::FileChangeStatus::Pending)
+    );
+    assert_eq!(listed[0].base.as_deref(), Some("antigo\n"));
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(&workspace).join("README.md")).expect("read"),
+        "antigo\n",
+        "the project file is not written"
+    );
+    assert!(
+        !std::path::Path::new(&workspace)
+            .join("docs/notas.md")
+            .exists(),
+        "a new file is not created"
+    );
+    assert!(matches!(
+        proposals.event(),
+        Some(ChatEvent::Proposed { .. })
+    ));
+}
+
+#[test]
+fn blocks_that_leave_the_project_or_name_a_secret_are_refused_and_nothing_is_recorded() {
+    let (scratch, persistence) = fixture("proposals-refused");
+    let workspace = project(&scratch, &persistence, "app");
+    let outside = scratch.path().join("outside.txt");
+    std::fs::write(&outside, "fora\n").expect("written");
+    let answer = [
+        "````noct-change path=../outside.txt\nx\n````\n",
+        "````noct-change path=.env\nKEY=1\n````\n",
+        "````noct-change path=.git/hooks/pre-commit\nx\n````\n",
+        "````noct-change path=certs/server.key\nx\n````\n",
+        "````noct-change path=falta/pasta.txt\nx\n````\n",
+    ]
+    .concat();
+
+    let proposals = proposals_of(&persistence, &workspace, &answer);
+
+    assert!(proposals.changes.is_empty());
+    assert_eq!(proposals.refused, 5);
+    assert!(
+        noct_app::file_changes::list(&persistence, &[], &workspace)
+            .expect("listed")
+            .is_empty()
+    );
+    assert_eq!(std::fs::read_to_string(&outside).expect("read"), "fora\n");
+}
+
+#[test]
+fn blocks_for_git_ci_self_running_files_device_names_and_encoded_paths_are_refused() {
+    let (scratch, persistence) = fixture("proposals-self-running");
+    let workspace = project(&scratch, &persistence, "app");
+    let root = std::path::Path::new(&workspace);
+    // The folders exist, so a refusal comes from the rule and not from a missing folder.
+    for folder in [
+        ".git/hooks",
+        ".github/workflows",
+        ".husky",
+        ".vscode",
+        "docs",
+    ] {
+        std::fs::create_dir_all(root.join(folder)).expect("folder");
+    }
+    std::fs::write(root.join(".git/config"), "[core]\n").expect("written");
+    let paths = [
+        ".git/config",
+        ".git/hooks/pre-commit",
+        ".git/hooks/post-checkout",
+        ".github/workflows/ci.yml",
+        ".github/actions/setup/action.yml",
+        ".gitlab-ci.yml",
+        ".husky/pre-commit",
+        ".pre-commit-config.yaml",
+        ".gitattributes",
+        ".gitmodules",
+        ".vscode/tasks.json",
+        ".envrc",
+        "CON",
+        "nul.txt",
+        "docs/COM1.md",
+        "LPT9",
+        "%2e%2e/fora.txt",
+        "docs/%2E%2E/%2e%2e/fora.txt",
+        "..%2ffora.txt",
+        "docs\\..\\..\\fora.txt",
+        "docs\\notas.md",
+    ];
+    for path in paths {
+        let answer = format!("````noct-change path={path}\n#!/bin/sh\necho x\n````\n");
+        let proposals = proposals_of(&persistence, &workspace, &answer);
+        assert!(proposals.changes.is_empty(), "{path} must not be proposed");
+        assert_eq!(proposals.refused, 1, "{path} must be counted as refused");
+    }
+    assert!(
+        noct_app::file_changes::list(&persistence, &[], &workspace)
+            .expect("listed")
+            .is_empty(),
+        "no refused block is in the journal"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join(".git/config")).expect("read"),
+        "[core]\n"
+    );
+    assert!(!root.join(".git/hooks/pre-commit").exists());
+    assert!(!root.join(".github/workflows/ci.yml").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_block_through_a_symbolic_link_out_of_the_project_is_refused() {
+    let (scratch, persistence) = fixture("proposals-link");
+    let workspace = project(&scratch, &persistence, "app");
+    let elsewhere = scratch.path().join("elsewhere");
+    std::fs::create_dir(&elsewhere).expect("folder");
+    std::os::unix::fs::symlink(&elsewhere, std::path::Path::new(&workspace).join("link"))
+        .expect("link");
+
+    let proposals = proposals_of(
+        &persistence,
+        &workspace,
+        "````noct-change path=link/x.txt\nx\n````\n",
+    );
+
+    assert!(proposals.changes.is_empty());
+    assert_eq!(proposals.refused, 1);
+    assert!(!elsewhere.join("x.txt").exists());
+}
+
+#[test]
+fn an_answer_without_blocks_or_for_a_project_not_saved_records_nothing() {
+    let (scratch, persistence) = fixture("proposals-none");
+    let workspace = project(&scratch, &persistence, "app");
+    let plain = proposals_of(
+        &persistence,
+        &workspace,
+        "Só texto, sem bloco.\n```rust\nfn x() {}\n```\n",
+    );
+    assert_eq!(plain, noct_app::provider_chat::Proposals::default());
+    assert_eq!(
+        plain.event(),
+        None,
+        "no event when the answer proposes nothing"
+    );
+
+    let unsaved = scratch.path().join("unsaved");
+    std::fs::create_dir(&unsaved).expect("folder");
+    let refused = proposals_of(
+        &persistence,
+        &unsaved.to_string_lossy(),
+        "````noct-change path=a.txt\nx\n````\n",
+    );
+    assert!(refused.changes.is_empty());
+    assert_eq!(refused.refused, 1);
+}
+
+#[test]
+fn the_prompt_teaches_the_block_and_says_nothing_is_written() {
+    let messages = noct_app::provider_chat::messages("pergunta", &[]);
+    let system = &messages[0].content;
+    assert!(system.contains("````noct-change path="));
+    assert!(system.contains("Nada é gravado"));
+}

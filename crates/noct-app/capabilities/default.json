@@ -39,6 +39,8 @@
     "allow-file-change-reject",
     "allow-file-change-undo",
     "allow-workspace-add",
-    "allow-provider-chat-set-enabled"
+    "allow-provider-chat-set-enabled",
+    "allow-models-list",
+    "allow-models-list-cancel"
   ]
 }

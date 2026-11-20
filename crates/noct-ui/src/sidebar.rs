@@ -8,6 +8,7 @@ use noct_core::contracts::Workspace;
 use crate::chat::ChatStatus;
 use crate::dom;
 use crate::ipc;
+use crate::model_picker::CatalogView;
 use crate::provider::{self, KeyStatus, ModelBindingsView, ProviderView};
 use crate::workspaces::{self, WorkspacesView};
 
@@ -29,6 +30,14 @@ pub struct Shared {
     pub add_error: RwSignal<Option<String>>,
     /// Counts the reads of the project list; the window reads the list again each time it changes.
     pub reload: RwSignal<u64>,
+    /// OpenRouter's model list, read the first time a picker opens.
+    pub catalog: RwSignal<CatalogView>,
+    /// Counts the times the proposed changes may have changed; Construir reads them again each time.
+    pub changes_version: RwSignal<u64>,
+    /// Counts the requests to open Construir, from an answer that proposed changes.
+    pub build_requests: RwSignal<u64>,
+    /// A press of "Revisar em Documentar" under an answer: the window opens Documentar.
+    pub docs_requests: RwSignal<u64>,
 }
 
 impl Shared {
@@ -327,7 +336,9 @@ fn project_item(shared: Shared, workspace: &Workspace) -> impl IntoView {
                     {favorite.map(|label| view! { <span class="project__tag">{label}</span> })}
                 </span>
                 {note.map(|text| view! { <span class="project__note">{text}</span> })}
-                <span class="path project__path">{workspace.path.clone()}</span>
+                <span class="path project__path" title=workspace.path.clone()>
+                    {workspaces::short_path(&workspace.path)}
+                </span>
             </button>
         </li>
     }

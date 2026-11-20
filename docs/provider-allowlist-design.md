@@ -177,3 +177,26 @@ The owner's review of this proposal is pending. Until it is recorded, the Rust p
 - **Q6.** Restrictive: beta 1 has no "Other" endpoints. The form that would accept one does not exist yet.
 
 Redirects are refused for every source (`check_status`). The connection timeout, the request timeout and the reply size limit are in `crates/noct-core/src/limits.rs`, module `provider_network`. No HTTP client exists in beta 1, so no code applies these values yet. The pinned connection of section 8, step 4, is not implemented in beta 1: the reqwest dependency that would carry it is waiting for the owner's decision on its native build (see `docs/status.md`).
+
+### 13.1 The model list (`GET /api/v1/models`, 2026-11-19)
+
+The owner asked to choose the model from OpenRouter's list instead of typing its id. The list is read with the same policy
+as the chat, under the same built-in approval (`openrouter.ai`, port 443, remote source). Nothing in the approvals, the
+address scope, the redirect rule or the time caps changed. What is new:
+
+- **Path.** `https://openrouter.ai/api/v1/models` (`OPENROUTER_MODELS_PATH` in `crates/noct-core/src/ai/catalog.rs`). The
+  approval is per host and port, so no new approval was needed.
+- **No credential.** The endpoint is public. The request is a `GET` with `Accept: application/json` and no `Authorization`
+  header, no key and no cookie (`fetch_json` in `crates/noct-app/src/provider_transport.rs`; a test reads the request the
+  fake server received).
+- **Own size cap.** The list is larger than a chat reply, so it has its own cap of 4 MiB
+  (`limits::model_catalog::MAXIMUM_RESPONSE_BYTES`). A `Content-Length` over the cap is refused before the body is read; a
+  reply without a length is cut off when it passes the cap. A list with more than 2,000 entries is refused, not shortened.
+- **Untrusted content.** Only `id`, `name`, `context_length` and `pricing.prompt`/`pricing.completion` are read. An entry whose
+  `id` fails `validated_model_id` is dropped; a name loses control characters and is cut to 120 characters; every other
+  field is ignored. The window receives these four values and shows them as text.
+- **Cache and cancel.** A list that was read is kept in memory for one hour (`ModelCatalog` in
+  `crates/noct-app/src/model_catalog.rs`). One read runs at a time; `models_list_cancel` stops it. A failed or cancelled read
+  is not kept.
+- **Typed failures.** `models-network` (policy, DNS, connection, timeout, redirect or error status), `models-invalid` (not a
+  list, or cut), `models-too-large`, `models-cancelled`, `models-busy`. No part of the reply is put in a message.

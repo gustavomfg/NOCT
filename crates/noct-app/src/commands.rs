@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use noct_core::ai::bindings::{
     DefaultModelRequest, ProjectBindingsRequest, WorkspaceModelBindings,
 };
+use noct_core::ai::catalog::CatalogModel;
 use noct_core::ai::consent::{ProjectConsentRequest, ProjectConsentStatus};
 use noct_core::ai::provider_key::{ProviderKeyInput, ProviderKeyProvider, ProviderKeyStatus};
 use noct_core::brain_memory::BrainMemory;
@@ -35,6 +36,7 @@ use crate::credentials;
 use crate::error::CommandError;
 use crate::file_changes;
 use crate::logging::measured;
+use crate::model_catalog::{self, ModelCatalog};
 use crate::provider_chat::{
     self, ChatControl, ChatEvent, ChatRequest, ChatRun, ChatStatus, ChatSwitchRequest,
     OPENROUTER_CHAT_URL,
@@ -341,6 +343,24 @@ pub async fn provider_chat_set_enabled(
     .await
 }
 
+/// The OpenRouter model list: id, name, context and whether it is free. The list is kept for an hour. The request is
+/// public and carries no key.
+#[tauri::command]
+pub async fn models_list(
+    catalog: State<'_, Arc<ModelCatalog>>,
+) -> Result<Vec<CatalogModel>, CommandError> {
+    let list = catalog
+        .list(std::time::Instant::now(), model_catalog::fetch_openrouter)
+        .await?;
+    Ok(list.as_ref().clone())
+}
+
+/// Stops the read of the model list that is running. A cancel with no read running is not an error.
+#[tauri::command]
+pub fn models_list_cancel(catalog: State<'_, Arc<ModelCatalog>>) {
+    catalog.cancel();
+}
+
 /// Adds a project: the system folder picker opens over the window, and the folder the person chooses is checked and
 /// saved. The window sends no path: the shell asks the person, so only a folder chosen in the picker is saved. A closed
 /// picker replies with nothing, and saves nothing.
@@ -415,11 +435,40 @@ pub async fn provider_chat_send(
         body,
         limits: Limits::beta_one(),
     };
+    // The answer is kept as it arrives. When it ends complete, the changes it proposed are recorded as pending before `Done`
+    // is sent; a failed or cancelled answer proposes nothing.
+    let persistence = state.inner().clone();
+    let workspace = prepared.workspace.clone();
     chat.start(async move {
-        provider_chat::run_chat(run, &mut |event| {
-            let _ = on_event.send(event);
+        let mut answer = String::new();
+        let mut complete = false;
+        provider_chat::run_chat(run, &mut |event| match event {
+            ChatEvent::Done => complete = true,
+            ChatEvent::Delta { ref text } => {
+                answer.push_str(text);
+                let _ = on_event.send(event);
+            }
+            other => {
+                let _ = on_event.send(other);
+            }
         })
         .await;
+        if complete {
+            let recorded = tauri::async_runtime::spawn_blocking(move || {
+                provider_chat::record_proposals(
+                    &persistence,
+                    &default_blocked_roots(),
+                    &workspace,
+                    &answer,
+                )
+            })
+            .await
+            .unwrap_or_default();
+            if let Some(event) = recorded.event() {
+                let _ = on_event.send(event);
+            }
+            let _ = on_event.send(ChatEvent::Done);
+        }
     })
 }
 

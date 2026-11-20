@@ -78,6 +78,30 @@ fn availability_label(availability: WorkspaceAvailability) -> &'static str {
     }
 }
 
+/// A project's folder as the sidebar shows it: the home folder of the account becomes "~". The interface does not know the
+/// home folder, so it reads the usual places of one (`/home/<name>`, `/Users/<name>`, `C:\Users\<name>`); any other
+/// path is shown as it is.
+pub fn short_path(path: &str) -> String {
+    let unix = ["/home/", "/Users/"]
+        .iter()
+        .find_map(|prefix| path.strip_prefix(prefix).map(|rest| (rest, '/')));
+    let windows = path
+        .get(..9)
+        .filter(|head| {
+            let bytes = head.as_bytes();
+            bytes[0].is_ascii_alphabetic() && head[1..].eq_ignore_ascii_case(":\\Users\\")
+        })
+        .map(|_| (&path[9..], '\\'));
+    let Some((rest, separator)) = unix.or(windows) else {
+        return path.to_string();
+    };
+    match rest.split_once(separator) {
+        Some((name, tail)) if !name.is_empty() => format!("~{separator}{tail}"),
+        None if !rest.is_empty() => "~".to_string(),
+        _ => path.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,5 +261,21 @@ mod tests {
             note(&workspace("invalid", false, None)),
             Some("O caminho não é uma pasta válida.".to_string())
         );
+    }
+
+    #[test]
+    fn the_home_folder_is_shown_as_a_tilde() {
+        assert_eq!(
+            super::short_path("/home/ana/projetos/noct"),
+            "~/projetos/noct"
+        );
+        assert_eq!(super::short_path("/home/ana"), "~");
+        assert_eq!(super::short_path("/Users/ana/src"), "~/src");
+        assert_eq!(super::short_path("C:\\Users\\ana\\src"), "~\\src");
+        assert_eq!(super::short_path("c:\\users\\ana\\src"), "~\\src");
+        assert_eq!(super::short_path("/srv/projeto"), "/srv/projeto");
+        assert_eq!(super::short_path("/home/"), "/home/");
+        assert_eq!(super::short_path("D:\\obra"), "D:\\obra");
+        assert_eq!(super::short_path("/home/ana/ç"), "~/ç");
     }
 }

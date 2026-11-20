@@ -121,6 +121,19 @@ pub mod provider_network {
     pub const MAXIMUM_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 }
 
+/// Limits of the OpenRouter model list (`GET /api/v1/models`). The list is larger than a chat reply, so it has its own byte
+/// cap; the entries and the names it carries are bounded too.
+pub mod model_catalog {
+    /// The most bytes of the model list that the shell reads.
+    pub const MAXIMUM_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
+    /// The most entries a list may hold. A longer list is refused, not cut.
+    pub const MAXIMUM_MODELS: usize = 2_000;
+    /// The longest display name kept for a model, in characters.
+    pub const MAXIMUM_NAME_CHARACTERS: usize = 120;
+    /// How long a list read from OpenRouter is reused, in seconds.
+    pub const CACHE_SECONDS: u64 = 3_600;
+}
+
 /// Limits of the project context sent with a provider call. The caps are the restrictive values of beta 1: a file larger
 /// than one cap is never sent, and the total never passes the budget.
 pub mod provider_context {
@@ -170,4 +183,6 @@ pub mod file_change {
     pub const MAXIMUM_OPEN_CHANGES: usize = 50;
     /// The most closed changes (rejected or undone) the journal keeps; the oldest are dropped first.
     pub const MAXIMUM_CLOSED_CHANGES: usize = 50;
+    /// The most changes one answer of the assistant may propose. Blocks past it are refused.
+    pub const MAXIMUM_PROPOSALS: usize = 5;
 }

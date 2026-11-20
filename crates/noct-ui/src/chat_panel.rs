@@ -13,6 +13,8 @@ use noct_core::limits::provider_chat::MAXIMUM_QUESTION_CHARACTERS;
 use crate::chat::{self, CreatedConversation, Phase, Session};
 use crate::dom;
 use crate::ipc;
+use crate::markdown;
+use crate::model_picker;
 use crate::provider::{self, ConsentStatus, ProviderView};
 use crate::sidebar::{self, Shared};
 use crate::workspaces::WorkspacesView;
@@ -269,8 +271,12 @@ impl ChatState {
         self.question.set(String::new());
         self.save_error.set(None);
 
+        let shared = self.shared;
         let Some(channel) = ipc::channel(move |text: String| {
             if let Some(frame) = chat::parse_frame(&text) {
+                if matches!(frame, chat::Frame::Proposed { .. }) {
+                    shared.changes_version.update(|n| *n += 1);
+                }
                 session.update(|session| session.frame(run, frame));
             }
         }) else {
@@ -395,10 +401,11 @@ impl ChatState {
 
 /// The conversation: the switch, then each question and its answer, in order.
 pub fn thread(state: ChatState) -> impl IntoView {
-    // The conversation follows its end: a new question, the permission card and an answer that grows are scrolled into
-    // view, unless the person scrolled up to read, in which case the view stays where they left it.
+    // The conversation follows its end while the person is at it: a new question and the permission card scroll it into
+    // view, and an answer that grows keeps it there. A person who scrolled up to read is left where they are, also when
+    // the answer ends.
     let height = StoredValue::new(0.0_f64);
-    Effect::new(move |_| {
+    Effect::new(move |previous: Option<usize>| {
         let count = state.turns.with(Vec::len);
         let _ = state.turns.with(|turns| {
             turns
@@ -406,10 +413,14 @@ pub fn thread(state: ChatState) -> impl IntoView {
                 .map(|turn| turn.session.with(|session| session.answer().len()))
         });
         let awaiting = state.awaiting.with(Option::is_some);
-        let previous = height.get_value();
-        let force = previous == 0.0 || awaiting;
-        let _ = count;
-        height.set_value(dom::follow_end(".main", previous, force));
+        let force = previous != Some(count) || awaiting;
+        // The blocks of the answer are drawn by their own effects, after this one: the heights are read in the next frame.
+        dom::next_frame(move || {
+            if let Some(previous) = height.try_get_value() {
+                let _ = height.try_set_value(dom::follow_end(".main", previous, force));
+            }
+        });
+        count
     });
     view! {
         <section class="thread" aria-label="Conversa" data-testid="chat">
@@ -441,6 +452,15 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     let copy_note = turn.copy_note;
     let phase = move || session.with(|session| session.phase().clone());
     let answer = move || session.with(|session| session.answer().to_string());
+    // The answer as Markdown blocks, each keyed by its position and content, so a streaming answer redraws only the
+    // block that grows. A proposal block is shown as its one line, as before.
+    let blocks = Memo::new(move |_| {
+        session.with(|session| {
+            markdown::keyed(&noct_core::proposal_block::shown_answer(session.answer()))
+        })
+    });
+    // Only whether there is text decides that the answer area exists, so a new piece does not draw it again.
+    let has_text = Memo::new(move |_| !blocks.with(Vec::is_empty));
     let copy = move |_| {
         let text = session.with_untracked(|session| session.answer().to_string());
         dom::copy_text(&text, move |copied| {
@@ -463,15 +483,23 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 }}
             </div>
             {move || {
-                let text = answer();
-                (!text.is_empty()).then(|| {
+                has_text.get().then(|| {
                     view! {
-                        <div class="msg-ai__body chat-answer" data-testid="chat-answer">
-                            {text}
-                            {move || {
-                                matches!(phase(), Phase::Answering)
-                                    .then(|| view! { <span class="caret" aria-hidden="true"></span> })
-                            }}
+                        <div
+                            class=move || {
+                                if matches!(phase(), Phase::Answering) {
+                                    "msg-ai__body chat-answer md is-streaming"
+                                } else {
+                                    "msg-ai__body chat-answer md"
+                                }
+                            }
+                            data-testid="chat-answer"
+                        >
+                            <For
+                                each=move || blocks.get()
+                                key=|(key, _)| *key
+                                children=|(_, node)| markdown::view(node)
+                            />
                         </div>
                     }
                 })
@@ -482,6 +510,11 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 }
                 .into_any(),
                 _ => ().into_any(),
+            }}
+            {move || {
+                session.with(|session| session.proposals().cloned()).map(|(changes, refused)| {
+                    proposals_view(state.shared, changes, refused)
+                })
             }}
             <p class="note" role="status" data-testid="chat-status">
                 {move || chat::phase_words(&phase())}
@@ -525,11 +558,104 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     }
 }
 
+/// What an answer proposed: the files of its changes, waiting in Construir, and how many blocks were not taken.
+fn proposals_view(
+    shared: Shared,
+    changes: Vec<chat::ProposedChange>,
+    refused: usize,
+) -> impl IntoView {
+    let count = changes.len();
+    // Markdown files wait in Documentar and the others in Construir; each place present gets its button.
+    let docs = changes
+        .iter()
+        .any(|change| noct_core::file_change::is_markdown(&change.path));
+    let code = changes
+        .iter()
+        .any(|change| !noct_core::file_change::is_markdown(&change.path));
+    let title = match count {
+        0 => "Nenhuma alteração proposta foi aceita.".to_string(),
+        1 => "1 alteração proposta, esperando a sua aprovação.".to_string(),
+        many => format!("{many} alterações propostas, esperando a sua aprovação."),
+    };
+    view! {
+        <section class="card proposals" data-testid="chat-proposals">
+            <p class="proposals__title">{title}</p>
+            {(count > 0).then(|| {
+                view! {
+                    <ul class="proposals__files">
+                        {changes
+                            .into_iter()
+                            .map(|change| view! { <li class="mono">{change.path}</li> })
+                            .collect_view()}
+                    </ul>
+                }
+            })}
+            {(refused > 0).then(|| {
+                view! {
+                    <p class="note" data-testid="chat-proposals-refused">
+                        {if refused == 1 {
+                            "1 bloco não foi aceito: caminho, nome ou tamanho não permitido.".to_string()
+                        } else {
+                            format!("{refused} blocos não foram aceitos: caminho, nome ou tamanho não permitido.")
+                        }}
+                    </p>
+                }
+            })}
+            {(count > 0).then(|| {
+                view! {
+                    <div class="actions actions--start">
+                        {code.then(|| view! {
+                            <button
+                                class="btn btn--primary btn--sm"
+                                type="button"
+                                data-testid="open-build"
+                                on:click=move |_| shared.build_requests.update(|n| *n += 1)
+                            >
+                                "Revisar em Construir"
+                            </button>
+                        })}
+                        {docs.then(|| view! {
+                            <button
+                                class=if code { "btn btn--sm" } else { "btn btn--primary btn--sm" }
+                                type="button"
+                                data-testid="open-docs"
+                                on:click=move |_| shared.docs_requests.update(|n| *n += 1)
+                            >
+                                "Revisar em Documentar"
+                            </button>
+                        })}
+                    </div>
+                }
+            })}
+        </section>
+    }
+}
+
+/// The id of the model pill, which takes the focus back when the picker closes.
+const PILL_ID: &str = "composer-model-pill";
+
 /// The composer under the conversation: the question box, the model, and the button that sends or stops the answer.
 pub fn composer(state: ChatState) -> impl IntoView {
     let busy = Memo::new(move |_| state.busy());
+    // The model picker over the composer. It opens from the pill when a project is chosen, and gives the focus back to
+    // the pill when it closes.
+    let picking = RwSignal::new(false);
+    let close_picker = move || {
+        picking.set(false);
+        dom::focus(PILL_ID);
+    };
     view! {
         <div class="composer-wrap">
+            {move || {
+                picking.get().then(|| {
+                    view! {
+                        <div class="popover-backdrop" aria-hidden="true" on:click=move |_| close_picker()></div>
+                        <div class="popover" role="dialog" aria-label="Escolher o modelo" data-testid="composer-picker">
+                            {model_picker::picker(state.shared, "composer-models", move |_| close_picker())}
+                        </div>
+                    }
+                })
+            }}
             {move || need_view(state)}
             <div class="composer">
                 <label for="chat-question" class="sr-only">"Pergunte sobre o projeto"</label>
@@ -559,9 +685,18 @@ pub fn composer(state: ChatState) -> impl IntoView {
                 <div class="composer__bar">
                     <button
                         class="pill"
+                        id=PILL_ID
                         type="button"
                         data-testid="composer-model"
-                        on:click=move |_| state.shared.open_settings()
+                        aria-haspopup="dialog"
+                        aria-expanded=move || picking.get().to_string()
+                        on:click=move |_| {
+                            if state.shared.current.with_untracked(Option::is_some) {
+                                picking.update(|open| *open = !*open);
+                            } else {
+                                state.shared.open_settings();
+                            }
+                        }
                     >
                         <span
                             class=move || {

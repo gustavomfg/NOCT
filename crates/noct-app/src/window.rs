@@ -21,8 +21,13 @@ pub const WINDOW_BACKGROUND: Color = Color(0x0b, 0x0b, 0x0e, 0xff);
 pub const MIN_WINDOW_WIDTH: f64 = 720.0;
 pub const MIN_WINDOW_HEIGHT: f64 = 600.0;
 
+/// Whether the window has the web inspector: in a debug build only.
+pub const DEVTOOLS: bool = cfg!(debug_assertions);
+
 /// Opens the main window on the packaged frontend. Its navigation is limited to the application
-/// (see `navigation::is_app_url`), and every request for a new window is denied.
+/// (see `navigation::is_app_url`), and every request for a new window is denied. The drag and drop handler of Tauri stays
+/// on (it is the default): a file dropped on the window becomes an event of the shell, not a navigation of the webview,
+/// and the navigation policy refuses a `file:` page anyway.
 pub fn create_main_window<R: Runtime>(app: &App<R>) -> tauri::Result<WebviewWindow<R>> {
     // The development server is an origin only in debug builds.
     let dev_server = if cfg!(debug_assertions) {
@@ -39,5 +44,7 @@ pub fn create_main_window<R: Runtime>(app: &App<R>) -> tauri::Result<WebviewWind
         .background_color(WINDOW_BACKGROUND)
         .on_navigation(move |url| navigation::is_app_url(url, dev_server.as_ref()))
         .on_new_window(|_, _| NewWindowResponse::Deny)
+        // The inspector is for development builds; a release build has none (and Tauri's `devtools` feature is off).
+        .devtools(DEVTOOLS)
         .build()
 }

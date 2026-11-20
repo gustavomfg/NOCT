@@ -318,9 +318,15 @@ button {
   overflow-wrap: anywhere;
 }
 
+/* One line: the home folder is "~", a long path ends in an ellipsis, and the full path is the element's title. */
 .project__path {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   font-size: 11.5px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .project__state {
@@ -446,7 +452,7 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* No `overflow: hidden` (see `.card--flush`): its children stay inside it, and `.main` scrolls on its own. */
   border: 1px solid var(--line);
   border-radius: 26px;
   background: var(--bg);
@@ -602,10 +608,21 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
+/* No `overflow: hidden` to round the corners: in WebKitGTK the compositor clips a rounded corner of a layer (and a glass
+   pane is one) with a stencil, which has no antialiasing. The first and last children take the inner radius instead. */
 .card--flush {
   gap: 0;
   padding: 0;
-  overflow: hidden;
+}
+
+.card--flush > :first-child {
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+.card--flush > :last-child {
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 }
 
 .card__head {
@@ -829,6 +846,23 @@ button {
   flex-direction: column;
   gap: 22px;
   padding-top: 6px;
+  /* Room under the last line, inside the content: a scroll area that is a flex container may drop its own bottom
+     padding (WebKit), and the last line would sit at the composer's edge. */
+  padding-bottom: 28px;
+}
+
+/* The conversation fades out over its last pixels, under the composer, instead of being cut. The room under the last
+   line (`.thread` above) does not depend on it: without mask support, the fade is left out and the room stays. */
+@supports (mask-image: linear-gradient(#000, transparent)) {
+  .main--chat {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  }
+}
+
+@supports (not (mask-image: linear-gradient(#000, transparent))) and (-webkit-mask-image: linear-gradient(#000, transparent)) {
+  .main--chat {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  }
 }
 
 .msg-user {
@@ -882,9 +916,218 @@ button {
   margin: 0;
 }
 
+/* The answer as Markdown (crates/noct-ui/src/markdown.rs). Only these classes and elements are drawn: no raw HTML, no
+   link to follow and no image to load. Code keeps its own font and background, and a wide table scrolls sideways. */
 .chat-answer {
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p,
+.md .md-list,
+.md .md-quote,
+.md .md-code,
+.md .md-table {
+  margin: 0 0 12px;
+}
+
+.md .md-raw {
+  white-space: pre-wrap;
+}
+
+.md .md-h {
+  margin: 18px 0 8px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.md .md-h1 {
+  font-size: 19px;
+}
+
+.md .md-h2 {
+  font-size: 17px;
+}
+
+.md .md-h3 {
+  font-size: 15px;
+}
+
+.md .md-h4 {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.md .md-list {
+  padding-left: 22px;
+}
+
+.md .md-list li {
+  margin: 3px 0;
+}
+
+.md .md-list li > p {
+  margin: 0 0 6px;
+}
+
+.md .md-list .md-list {
+  margin: 4px 0;
+}
+
+.md .md-quote {
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+
+.md .md-quote > :last-child {
+  margin-bottom: 0;
+}
+
+.md .md-code-inline {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--code);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.md .md-code {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--code);
+}
+
+.md-code__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 4px 0 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.md-code__head .mono {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.md-code__note {
+  font-size: 12px;
+}
+
+.md-code__body {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 4;
+}
+
+.md .md-table {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.md .md-table:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.md table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  overflow-wrap: normal;
+}
+
+.md th,
+.md td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  background: var(--hover);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.md th.is-center,
+.md td.is-center {
+  text-align: center;
+}
+
+.md th.is-right,
+.md td.is-right {
+  text-align: right;
+}
+
+.md .md-url,
+.md .md-image {
+  color: var(--muted);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.md .md-link {
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+
+.md .md-rule {
+  height: 1px;
+  margin: 16px 0;
+  border: 0;
+  background: var(--line);
+}
+
+/* While the answer streams, the caret follows its last block. */
+.md.is-streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: blink 1s steps(2) infinite;
+}
+
+.md.is-streaming > .md-code:last-child::after,
+.md.is-streaming > .md-table:last-child::after,
+.md.is-streaming > .md-list:last-child::after,
+.md.is-streaming > .md-quote:last-child::after {
+  display: none;
 }
 
 .msg-tools {
@@ -1162,8 +1405,8 @@ button {
   color: var(--muted);
 }
 
+/* Rounded without `overflow: hidden`, as `.card--flush` above. */
 .list {
-  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
@@ -1177,6 +1420,16 @@ button {
   flex-wrap: wrap;
   gap: 12px 14px;
   padding: 12px 16px;
+}
+
+.list > :first-child {
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+.list > :last-child {
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 }
 
 .item + .item {
@@ -1274,6 +1527,126 @@ button {
   padding-right: 28px;
 }
 
+/* The app's select (crates/noct-ui/src/select.rs): a button that shows the value, and a list mounted in <body> and placed
+   with fixed coordinates from custom properties that the code sets on <html> (never a style attribute). */
+.sel {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sel__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 11rem;
+  max-width: 100%;
+  padding: 0 12px;
+  text-align: left;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.sel__button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.sel__button[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.sel__button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.sel__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sel__chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.sel__button[aria-expanded="true"] .sel__chevron {
+  transform: rotate(180deg);
+}
+
+.sel__backdrop {
+  z-index: 49;
+}
+
+.sel__list {
+  position: fixed;
+  z-index: 50;
+  top: var(--select-top, 0);
+  left: var(--select-left, 0);
+  min-width: var(--select-width, 11rem);
+  max-width: min(24rem, calc(100vw - 24px));
+  max-height: min(18rem, calc(100vh - 24px));
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sel__list--up {
+  top: auto;
+  bottom: var(--select-bottom, 0);
+}
+
+.sel__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sel__option.is-active {
+  background: var(--hover);
+}
+
+.sel__option[aria-selected="true"] {
+  background: var(--sel);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sel__check {
+  flex: none;
+  visibility: hidden;
+}
+
+.sel__option[aria-selected="true"] .sel__check {
+  visibility: visible;
+}
+
+[data-glass="on"] .sel__list {
+  border-color: var(--pane-edge);
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+
 .field {
   width: min(100%, 22rem);
 }
@@ -1345,6 +1718,297 @@ button {
   font-weight: 500;
 }
 
+/* Construir: one card per pending change, with its file, its counts and the diff. Long lines scroll inside the diff. */
+.change__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The whole path, never cut: it is what the person approves. */
+.change__path {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.change__warning {
+  margin: 0;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+.change__count {
+  flex: none;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.change .diff {
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+}
+
+.diff__line {
+  min-width: max-content;
+  white-space: pre;
+}
+
+.diff__mark {
+  flex: none;
+  width: 1ch;
+  color: var(--muted);
+  user-select: none;
+}
+
+.diff__line--add .diff__mark,
+.diff__line--del .diff__mark {
+  color: inherit;
+}
+
+.diff__gap {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.diff__whole {
+  padding: 10px 18px;
+  white-space: pre;
+}
+
+.tag--new {
+  background: var(--sel);
+  color: var(--accent);
+}
+
+.change__warning--build {
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  color: var(--bad);
+  font-weight: 500;
+}
+
+.tag--overwrite {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+
+/* What an answer proposed, under the answer. */
+.proposals {
+  gap: 8px;
+}
+
+.proposals__title {
+  margin: 0;
+  font-weight: 500;
+}
+
+.proposals__files {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* The model picker: a search box with the free filter, then the list. In Ajustes it sits in a row of the group; over the
+   composer it is a panel of its own. */
+/* A stacked row never wraps: a column that may wrap is sized from its widest line, which leaves a tall empty band. */
+.item--stack {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 10px;
+}
+
+/* A note directly under a group title lines up with the title. */
+.group > .note {
+  padding: 0 6px;
+}
+
+.model-current {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.picker__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.picker__search {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.toggle {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.toggle:hover {
+  color: var(--text);
+}
+
+.toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--sel);
+  color: var(--accent);
+}
+
+.picker__state {
+  padding: 2px 4px;
+}
+
+.picker__list {
+  position: relative;
+  max-height: 300px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.picker__list:empty {
+  display: none;
+}
+
+.picker__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.picker__option[data-active="true"] {
+  background: var(--hover);
+}
+
+.picker__option[aria-selected="true"] .picker__name {
+  color: var(--accent);
+}
+
+.picker__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.picker__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.picker__meta {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.picker__meta .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  color: var(--ok);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* The picker over the composer, and the transparent layer that closes it on a click outside. */
+.composer-wrap {
+  position: relative;
+}
+
+.popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+}
+
+.popover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  padding: 0 32px 6px;
+  pointer-events: none;
+}
+
+.popover > .picker {
+  width: 100%;
+  max-width: 740px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+[data-glass="on"] .popover > .picker {
+  border-color: var(--pane-edge);
+  background: var(--glass-strong);
+  box-shadow: inset 0 1px 0 var(--pane-hi), 0 10px 30px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+
+@media (max-width: 920px) {
+  .popover {
+    padding: 0 18px 6px;
+  }
+}
+
 /* The glass layer. The solid colours above are the fallback; these rules paint the panes over the gradient. */
 [data-glass="on"] .app {
   background:
@@ -1410,6 +2074,20 @@ button {
   backdrop-filter: blur(22px) saturate(1.5);
 }
 
+/* "Bordas sem camadas" (a test the owner can turn on in Ajustes): the panes inside the window keep their translucent
+   colours but lose their own blur, so they are not composited layers. The sidebar and the window pane keep the glass. */
+[data-glass="on"][data-layers="flat"] .card,
+[data-glass="on"][data-layers="flat"] .list,
+[data-glass="on"][data-layers="flat"] .composer,
+[data-glass="on"][data-layers="flat"] .need,
+[data-glass="on"][data-layers="flat"] .suggest button,
+[data-glass="on"][data-layers="flat"] .sel__list,
+[data-glass="on"][data-layers="flat"] .popover > .picker {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Translucent panes take the light edge of the prototype and a soft shadow, never the solid theme shadow, which reads as
    a dark smudge through the glass. */
 [data-glass="on"] .card {
@@ -1451,6 +2129,7 @@ button {
   [data-glass="on"] .suggest button,
   [data-glass="on"] .model-card,
   [data-glass="on"] .status,
+  [data-glass="on"] .sel__list,
   [data-glass="on"] .content {
     border-color: var(--line);
     background: var(--surface);
@@ -1543,8 +2222,12 @@ button {
   .model-card,
   .suggest button,
   .composer,
+  .toggle,
   .switch,
   .switch::after,
+  .sel__button,
+  .sel__chevron,
+  .md.is-streaming > :last-child::after,
   .caret {
     transition: none;
     animation: none;

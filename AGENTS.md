@@ -25,7 +25,8 @@ implicit step when the existing product flow keeps them separate.
 ## Current release line
 
 Current release line: `1.0.5`. The historical `v1.0.1` tag and release assets
-must not be moved or modified.
+must not be moved or modified. The previous TypeScript and Electron product is
+kept at the tag `electron-final`; nothing in this branch depends on it.
 
 Current priorities:
 
@@ -41,31 +42,35 @@ keep provider credentials in the main process and support local endpoints.
 
 ## Technology stack
 
-- Electron
-- React
-- TypeScript
-- Vite
-- SQLite through `better-sqlite3`
-- Zustand
-- Zod
-- Vitest
-- Playwright
-- electron-builder
-- npm
+- Rust workspace (toolchain pinned in `rust-toolchain.toml`, with the
+  `wasm32-unknown-unknown` target)
+- Tauri 2 shell (`crates/noct-app`), with its plugins pinned in `Cargo.toml`
+- Leptos 0.8 interface, client-side rendered and compiled to WebAssembly with
+  trunk (`crates/noct-ui`)
+- SQLite through the Rust persistence crate (`crates/noct-db`)
+- Operating-system credential stores (`crates/noct-secrets`)
+- serde / serde_json for every boundary contract
+- Node.js 24 and npm 11 only for the launcher (`scripts/run-rust-shell.mjs`),
+  the Node tests of the scripts and the Playwright (Chromium) checks
+
+There is no Electron, React, TypeScript or Vite code in this branch. Do not
+reintroduce them without an explicit architectural decision.
 
 Required development environment:
 
-- Node.js `>=24.18 <25`
-- npm `>=11 <12`
-- WebStorm with the `webstorm` launcher available in `PATH`
+- Rust as pinned by `rust-toolchain.toml`
+- trunk `0.22.1`
+- Node.js `>=24.18 <25` and npm `>=11 <12`
+- On Linux, the Tauri system packages listed in the README
 
-Do not change the adopted Node or npm major lines without an explicit
+Do not change the pinned Rust, trunk, Node or npm lines without an explicit
 compatibility task.
 
 ## Architectural authority
 
 Before making architectural or security-sensitive changes, inspect the relevant
-documentation under `docs/`, the README, and existing implementation.
+documentation under `docs/` (ADRs in `docs/adr/`, `docs/status.md`,
+`docs/provider-allowlist-design.md`), the README, and existing implementation.
 
 Prefer sources in this order:
 
@@ -78,89 +83,80 @@ Prefer sources in this order:
 If authoritative sources conflict, report the conflict instead of choosing
 silently.
 
-## Electron security invariants
+## Shell security invariants
 
 These requirements must remain true unless an explicit architectural decision
 changes them:
 
-- `contextIsolation` remains enabled.
-- `nodeIntegration` remains disabled.
-- The renderer never accesses Node.js or Electron privileged APIs directly.
-- Native capabilities cross an explicit preload/contextBridge boundary.
-- IPC payloads and origins are validated.
-- Privileged operations remain in the main process.
-- Workspace paths are normalized and constrained before access.
-- Browser permissions are denied by default.
-- External navigation remains restricted.
-- Authentication credentials never reach the renderer.
+- The interface reaches native capabilities only through Tauri commands that
+  are listed in the capability files and covered by the ACL test
+  (`crates/noct-app/tests/capabilities.rs`). Never grant a broad or generic
+  permission to the window.
+- Every command validates its input against its contract and returns a
+  `CommandError` with a code and a fixed message; causes, paths and stacks stay
+  in the main process.
+- The Content-Security-Policy stays strict: no inline script, no inline style
+  (views use classes only), no remote origins for the page.
+- Provider credentials never reach the interface, the logs or the repository.
+  They live in the operating-system credential store.
+- Provider network calls go through the network policy (built-in approvals,
+  resolved-address checks, pinned addresses, no proxy, no redirects, timeouts,
+  byte caps).
+- Workspace paths are normalized and constrained before access; symbolic links
+  out of the project are refused.
 - Review Mode remains read-only.
+- Assistant output is untrusted: it is drawn as text (Markdown without HTML, no
+  clickable links, no loaded images), and proposed file changes stay pending
+  until the person approves each one.
 - Restored workspaces remain unauthorized until explicitly reselected.
-- Electron production fuses and ASAR integrity protections remain enabled.
-
-Never expose a generic unrestricted `ipcRenderer` API to the renderer.
+- Release builds keep updater signature checks.
 
 When changing a native capability, update together:
 
-- shared contracts and types;
-- preload surface;
-- IPC handler;
-- validation;
-- error behavior;
-- relevant tests;
+- the command and its input/output types;
+- the capability file and the command list;
+- validation and error behavior;
+- relevant tests (including the ACL test);
 - documentation when the contract is externally meaningful.
 
 ## Modes and boundaries
 
-### Review Mode
+### Review Mode (Revisar)
 
-Review Mode is analysis-only and must remain read-only.
+Review Mode is analysis-only and must remain read-only. It may inspect files,
+explain findings and record suggestions or proposed changes as pending. It must
+not modify the workspace.
 
-It may:
+### Build Mode (Construir)
 
-- inspect files;
-- inspect Git state;
-- run safe read-only checks;
-- explain findings;
-- produce structured suggestions.
+Build Mode may modify files only within the configured workspace, one approved
+change at a time, according to the path rules of
+`noct_core::file_change::check_relative_path`. Preserve visibility of the
+changed files, the diffs, the approvals and undo.
 
-It must not modify the workspace implicitly.
+### Docs Mode (Documentar)
 
-### Build Mode
-
-Build Mode may modify files only within the configured workspace and according
-to sandbox, approval, and command-safety policies.
-
-Generated changes are not automatically correct. Preserve visibility of:
-
-- plans;
-- activities;
-- approvals;
-- changed files;
-- diffs;
-- validation results.
-
-### Docs Mode
-
-Docs Mode must remain focused on documentation related to the request.
-
-Do not use a documentation-only task as justification for unrelated source-code
-changes.
+Docs Mode shows the proposed changes to Markdown files of the project, with the
+same approval flow. Do not use a documentation-only task as justification for
+unrelated source-code changes.
 
 ## Persistence and recovery
 
-Treat the SQLite database and workspace context as sensitive state.
+Treat the SQLite database, the data folder and workspace context as sensitive
+state.
 
 When changing persistence:
 
 - preserve transactional migrations;
 - preserve rollback on invalid restoration;
 - reject duplicate or inconsistent identifiers;
-- avoid partial writes;
-- prefer asynchronous filesystem I/O where applicable;
-- use atomic writes for workspace context;
+- avoid partial writes; use atomic writes for files in the data folder;
 - preserve restrictive permissions;
 - test migration from the previous supported schema;
 - preserve existing user data unless deletion is explicitly required.
+
+Never point the shell at a data folder that holds real data during
+development or tests; use `--data-dir` with an empty temporary folder.
 
 Never add databases, tokens, authentication data, private logs, or unsanitized
 diagnostics to the repository.
@@ -169,22 +165,19 @@ diagnostics to the repository.
 
 Performance is part of correctness.
 
-When changing renderer behavior:
+When changing interface behavior:
 
-- avoid application-wide updates for streaming deltas;
-- isolate frequently changing state;
-- avoid unnecessary React re-renders;
-- preserve lazy or viewport-based rendering for long lists;
-- preserve pagination for large histories;
-- keep large Git output and diffs bounded;
-- avoid synchronous filesystem work on interactive paths.
+- isolate frequently changing state in its own signals;
+- avoid redrawing whole lists for streaming deltas;
+- keep long lists, large diffs and large replies bounded;
+- avoid blocking work on interactive paths.
 
 When changing main-process behavior:
 
-- avoid blocking IPC handlers;
+- avoid blocking command handlers (use blocking tasks for disk work);
 - avoid duplicated provider operations;
 - preserve deterministic cleanup;
-- handle process failure and cancellation explicitly;
+- handle failure and cancellation explicitly;
 - consider large workspaces, histories, backups, and diffs.
 
 Do not claim a performance improvement without a measurement, regression test,
@@ -192,44 +185,45 @@ budget, or clearly observable reduction in work.
 
 ## UI, accessibility, and design system
 
-Respect the existing Nocturne design language.
+Respect the existing Nocturne design language (`DESIGN.md`,
+`docs/New_Design/`) and the tokens of `crates/noct-ui/shell.css`.
 
 Preserve:
 
-- dark visual identity;
+- light and dark themes, and the glass layer with its solid fallback;
 - canonical responsive ranges;
 - minimum typography and interaction targets;
-- visible focus;
-- keyboard navigation;
-- focus containment and restoration in dialogs and drawers;
-- reduced-motion behavior;
-- clear async and error feedback;
+- visible focus and keyboard navigation;
+- focus containment and restoration in dialogs and popovers;
+- reduced-motion and reduced-transparency behavior;
+- clear async and error feedback in Portuguese;
 - accessible status communication;
 - stable geometry during hover, focus, and click.
 
 Do not introduce isolated visual values when an existing token, component, or
-design-system rule can be reused.
-
-Visual changes should be checked at relevant canonical breakpoints. Update
-screenshots only after confirming that the visual change is intentional.
+design-system rule can be reused. Check visual changes in the Chromium check
+and, when possible, in the real window.
 
 ## Project structure
 
 Respect existing boundaries:
 
-- `src/` — renderer and interface;
-- `electron/` — main process, preload, IPC, native services;
-- `shared/` — contracts, limits, and types shared across boundaries;
-- `tests/` — unit, integration, renderer, migration, and regression coverage;
-- `scripts/` — build, quality, smoke, release, and verification tooling;
+- `crates/noct-core/` — pure rules, contracts and limits (no I/O);
+- `crates/noct-app/` — the Tauri shell: commands, capabilities, services,
+  provider transport;
+- `crates/noct-ui/` — the interface (Leptos, WebAssembly);
+- `crates/noct-db/` — persistence and migrations;
+- `crates/noct-secrets/` — credential stores;
+- `crates/noct-native/` — native helpers;
+- `scripts/` — launcher, Chromium checks and release tooling;
 - `docs/` — architecture, protocols, security, and workflows.
 
 Before creating a module:
 
 1. Search for an existing responsibility.
-2. Reuse shared contracts and canonical limits.
+2. Reuse shared contracts and canonical limits (`noct_core::limits`).
 3. Avoid duplicate utilities and competing abstractions.
-4. Keep renderer, preload, and main-process responsibilities separate.
+4. Keep interface, shell and core responsibilities separate.
 
 Do not move or rename broad areas of the project without an explicit reason and
 a validation plan.
@@ -242,19 +236,11 @@ Before implementing a non-trivial task:
 2. Identify affected processes and trust boundaries.
 3. Check shared contracts and documentation.
 4. State assumptions and gaps.
-5. Present a short plan when the change crosses multiple modules.
+5. Present a short plan when the change crosses multiple crates.
 
-Prefer small, focused changes.
-
-Avoid:
-
-- speculative abstractions;
-- unrelated cleanup;
-- silent behavioral changes;
-- broad rewrites without evidence;
-- dependency additions when the platform or current stack already solves the
-  problem;
-- weakening a security boundary for convenience.
+Prefer small, focused changes. Avoid speculative abstractions, unrelated
+cleanup, silent behavioral changes, broad rewrites without evidence, and
+weakening a security boundary for convenience.
 
 Do not modify unrelated user changes in the working tree.
 
@@ -263,40 +249,41 @@ Do not modify unrelated user changes in the working tree.
 Before adding or replacing a dependency:
 
 - explain why existing platform or project capabilities are insufficient;
-- evaluate maintenance and security impact;
-- consider package size and native-build implications;
-- update the lockfile consistently;
-- verify Electron and Node compatibility;
-- verify cross-platform packaging when relevant.
-
-Native dependencies require special care because Electron ABI compatibility and
-packaged behavior may differ from regular Node.js execution.
+- evaluate maintenance and security impact, and keep `cargo deny check`
+  (`deny.toml`) passing;
+- prefer `default-features = false` and only the features needed;
+- consider binary and WebAssembly size and native-build implications;
+- update `Cargo.lock` consistently;
+- verify cross-platform builds when relevant.
 
 ## Validation
-
-Choose validation according to the affected area.
 
 Minimum source validation:
 
 ```bash
-npm run typecheck
-npm run lint
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings
+cargo test --workspace
+(cd crates/noct-ui && trunk build --release)
 npm test
-npm run build
+npm run check:csp
+npm run check:ui
 ```
+
+CI runs the same steps in `.github/workflows/rust-shell-validation.yml`.
 
 # Nocturne Philosophy
 
-When faced with multiple valid implementations:
-
-Prefer the solution that:
+When faced with multiple valid implementations, prefer the solution that:
 
 - keeps the architecture clean;
 - minimizes technical debt;
 - improves long-term maintainability;
 - respects existing project patterns.
 
-Avoid implementing features that conflict with the long-term vision of the project.
+Avoid implementing features that conflict with the long-term vision of the
+project.
 
 ## Git Workflow
 
@@ -307,6 +294,8 @@ Rules:
 - One logical change = one commit.
 - Group related code, tests and documentation together.
 - Use Conventional Commits.
+- Mark commits that change a trust boundary with `[security-review]` and record
+  the review in `docs/status.md`.
 - Run the relevant validations before each commit.
 - Do not mix unrelated fixes.
 - Do not create "miscellaneous" commits.

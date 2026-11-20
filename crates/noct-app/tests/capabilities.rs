@@ -82,7 +82,9 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "file_change_reject",
             "file_change_undo",
             "workspace_add",
-            "provider_chat_set_enabled"
+            "provider_chat_set_enabled",
+            "models_list",
+            "models_list_cancel"
         ]
     );
 }

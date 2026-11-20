@@ -2,10 +2,22 @@
 
 [English](README.md)
 
-> Este é o branch `migration/rust`. Ele reúne apenas o produto em Rust: o shell Tauri, a camada SQLite, o cofre de
-> credenciais dos provedores e a interface Leptos. Não é uma versão. O produto da `main` não é alterado por este branch.
+> Este repositório reúne apenas o produto em Rust: o shell Tauri, a camada SQLite, o cofre de credenciais dos provedores e
+> a interface Leptos. Ele é desenvolvido em `migration/rust` e mesclado na `main` por pull request; ainda não é uma versão.
 > O produto anterior, escrito em TypeScript com o shell Electron, fica preservado na tag `electron-final` (commit
-> `c8c378b`). Essa tag é o ponto de restauração de tudo o que foi removido deste branch.
+> `c8c378b`). Essa tag é o ponto de restauração de tudo o que foi removido do repositório.
+
+![NOCT em Revisar: uma pergunta sobre o projeto e a resposta desenhada como Markdown, no tema escuro com a camada de vidro](docs/images/noct-review-dark.png)
+
+<details>
+<summary>A mesma tela no tema claro</summary>
+
+![NOCT em Revisar, no tema claro](docs/images/noct-review-light.png)
+
+</details>
+
+As capturas vêm da checagem da interface no Chromium, com um shell simulado e projetos de demonstração; não são da janela
+real. [docs/images/README.md](docs/images/README.md) diz como foram feitas.
 
 Este arquivo descreve o branch depois da remoção do produto anterior. Cada afirmação diz no que se apoia. Os resultados
 das checagens locais e do CI do commit final estão em [docs/status.md](docs/status.md). A remoção, com a decisão para cada
@@ -21,11 +33,11 @@ aplicativo registra planos, aprovações e resultados de validação (`AGENTS.md
 
 | Caminho | Responsabilidade |
 | --- | --- |
-| `crates/noct-app` | O shell Tauri 2. Abre a pasta de dados e o log, registra os cinco comandos, define a política da janela e confere o acesso aos workspaces. |
+| `crates/noct-app` | O shell Tauri 2. Abre a pasta de dados e o log, registra seus 37 comandos, define a política da janela e confere o acesso aos workspaces. |
 | `crates/noct-core` | Os contratos, limites e tipos do produto, e a redação do log. |
 | `crates/noct-db` | Persistência SQLite: o runtime, as migrações 1 a 32, os repositórios, backups e instantâneos de recuperação, escritas atômicas, o log em arquivo e o observador de operações. |
 | `crates/noct-native` | Um binário separado, o worker de rollback de operações de arquivo. Tem backend só para Linux. |
-| `crates/noct-secrets` | O cofre de credenciais dos provedores: um documento cifrado, um índice sem segredos e uma chave-mestra no cofre de credenciais do sistema operacional. O shell ainda não o abre. |
+| `crates/noct-secrets` | O cofre de credenciais dos provedores: um documento cifrado, um índice sem segredos e uma chave-mestra no cofre de credenciais do sistema operacional. O shell o abre para guardar a chave do OpenRouter. |
 | `crates/noct-ui` | A interface Leptos, compilada para WebAssembly pelo Trunk. As fontes Geist estão incluídas no repositório sob a SIL Open Font License 1.1. |
 | `native/` | O código-fonte do worker de rollback em C++. O CI não o compila. |
 | `scripts/` | O lançador, as checagens de CSP e da interface no Chromium, o auxiliar de release do shell e os testes Node desses scripts. |
@@ -33,9 +45,9 @@ aplicativo registra planos, aprovações e resultados de validação (`AGENTS.md
 
 O que este branch ainda não faz:
 
-- chama um provedor de IA só pelo chat, e o chat está desligado nesta versão (seção 3);
-- não grava arquivo de projeto pela interface: aprovar, rejeitar e desfazer uma alteração de arquivo existem só como comandos (seção 3);
-- não mostra conversas na interface;
+- chama um único provedor de IA, o OpenRouter, e só pelo chat de Revisar (seção 3);
+- grava um arquivo do projeto só quando a pessoa aprova aquela alteração em Construir ou Documentar, uma de cada vez;
+- não lista as conversas salvas na interface;
 - não produz instalador nem pacote assinado;
 - nenhuma janela foi conferida no Windows nem no macOS (seção 6).
 
@@ -51,11 +63,14 @@ A tabela de fases da [ADR 0001](docs/adr/0001-rust-migration.md) é a referênci
   estão em [o documento dos backends](docs/rust-native-rollback-backends.md).
 - **Fase 4, serviços do workspace:** em parte. Os repositórios existem; os serviços, como `ProjectIndexService`, não foram
   portados.
-- **Fase 5, IA:** em parte. O cofre de credenciais, o transporte do OpenRouter e o chat estão prontos, e o chat está
-  desligado. Outros adaptadores de provedores e o laço de ferramentas não foram portados.
-- **Fase 6, IPC e shell:** em parte. 33 comandos, liberados só para a janela `main`.
-- **Fase 7, interface:** em parte. A área de configurações, a lista de projetos na barra lateral, a camada de vidro e os
-  temas. Conferida no Chromium com um shell simulado. Não conferida em janela real.
+- **Fase 5, IA:** em parte. O cofre de credenciais, a política de rede, o transporte do OpenRouter, a lista de modelos dele,
+  o chat e as alterações que uma resposta propõe estão prontos. Outros adaptadores de provedores e o laço de ferramentas não
+  foram portados.
+- **Fase 6, IPC e shell:** em parte. 37 comandos, liberados só para a janela `main`.
+- **Fase 7, interface:** em parte. Revisar (o chat, com respostas desenhadas como Markdown sem HTML), Construir e
+  Documentar (a aprovação de cada alteração proposta, com desfazer), Ajustes, a lista de projetos na barra lateral, o
+  seletor de modelo, a camada de vidro e os temas. Conferida no Chromium com um shell simulado; a janela real no Linux foi
+  vista pelo responsável pelo projeto, e o CI não a confere.
 - **Fase 8, atualizações e empacotamento:** não iniciada no lado Rust. Bloqueada (seção 4).
 - **Fase 9, aposentadoria:** o produto em TypeScript, o build com Vite e npm e o empacotamento Electron foram removidos
   deste branch. O requisito de Node continua para as checagens do Playwright. A tabela da ADR 0001 não foi alterada por
@@ -96,20 +111,24 @@ O que o código faz neste branch:
 
 - A chave é digitada uma vez na área de configurações. O shell confere o formato e a guarda no cofre de credenciais do
   sistema operacional. Nenhuma chamada de rede a confere. A resposta não leva a chave, e a interface nunca a lê de volta.
-- Cada projeto tem um consentimento e um modelo padrão. O modelo é digitado como identificador, e o shell confere a forma
-  dele. O shell não lista os modelos do provedor: nunca chama `GET /models`.
+- Cada projeto tem um consentimento e um modelo padrão. O modelo é escolhido na lista do OpenRouter, que o shell lê pela
+  mesma política de rede, ou digitado como identificador, e o shell confere a forma dele.
 - O chat responde a uma pergunta sobre o projeto. Ele envia os arquivos de texto do topo que as regras de contexto permitem,
   junto com a pergunta, para `https://openrouter.ai/api/v1/chat/completions`, e mostra a resposta conforme ela chega. O
   transporte aceita só HTTPS, não segue redirecionamento, confere cada endereço resolvido antes de conectar, e limita o
   tamanho e o tempo. Salvar guarda a resposta em uma conversa.
-- **O chat está desligado nesta versão.** `PROVIDER_CHAT_ENABLED` é `false` em `crates/noct-app/src/provider_chat.rs`. Com
-  ele desligado, uma pergunta é recusada antes de qualquer arquivo ser lido e antes de qualquer conexão. O responsável pelo
-  projeto o liga depois de testar.
+- **O chat vem ligado** desde que o responsável pelo projeto testou uma chave real (2026-11-18). Ajustes pode desligá-lo; a
+  escolha fica na configuração `providerChatEnabled`. Desligado, uma pergunta é recusada antes de qualquer arquivo ser lido e
+  antes de qualquer conexão.
 - **O que é testado.** A cadeia da pergunta até a resposta salva roda na suíte de testes contra um servidor falso local
   (`crates/noct-app/tests/provider_chat_flow.rs` e `provider_transport.rs`). Nenhum teste chama o OpenRouter, e nenhuma
-  execução usou uma chave real. As checagens da interface rodam no Chromium com um shell simulado, com o interruptor desligado.
+  execução usou uma chave real. As checagens da interface rodam no Chromium com um shell simulado.
 
-Não feito: a lista de modelos do provedor, outros provedores, a interface que aprova alterações de arquivos e as alterações que o assistente propõe.
+- **Alterações propostas.** Uma resposta pode propor alterações de arquivos. Elas esperam, pendentes, em Construir (ou em
+  Documentar, para arquivos Markdown) até a pessoa aprovar cada uma; as regras de caminho recusam arquivos do Git, do CI e
+  que rodam sozinhos, nomes de dispositivo e caminhos codificados (`noct_core::file_change`).
+
+Não feito: outros provedores e o laço de ferramentas.
 O estado de cada item está em [docs/status.md](docs/status.md), "Beta 1 OpenRouter: report of this round" e nas seções depois dela.
 
 ## 4. Verificação
@@ -192,7 +211,7 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 | `cargo build -p noct-app --release --features custom-protocol` | Compila o shell de release com a interface embutida. |
 | `npm test` | Roda os testes Node dos scripts (`scripts/*.test.mjs`). |
 | `npm run check:csp` | Confere a Content-Security-Policy no Chromium. |
-| `npm run check:ui` | Confere a área de configurações com um shell simulado no Chromium. |
+| `npm run check:ui` | Confere a interface (conversa, respostas em Markdown, escolha de modelo, Construir, Documentar, Ajustes) com um shell simulado no Chromium. |
 
 > **Nunca aponte o shell para uma pasta de dados que tenha dados reais.** Sem `--data-dir`, o shell usa a pasta de dados
 > padrão, e é ali que ficam os dados de um usuário real do shell em Rust. Para testes, use `--data-dir` com uma pasta vazia
@@ -206,7 +225,7 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 - **Política do webview.** `withGlobalTauri` é `false`. A Content-Security-Policy é
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   O Chromium a confere (`scripts/check-shell-csp.mjs`). Nenhum webview a aplica ainda em execução real.
-- **Comandos.** 33 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
+- **Comandos.** 37 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
   da aplicação. `crates/noct-app/capabilities/default.json` os libera só para a janela `main`. Os testes com o runtime de mock
   do Tauri recusam um comando não liberado e um pedido de uma segunda janela.
 - **Navegação.** A janela principal aceita navegação só para a interface empacotada, e para o servidor de desenvolvimento
@@ -215,8 +234,11 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 - **Permissões do navegador.** O webview não concede nada além de `core:default` (ADR 0001, tabela de segurança). Não
   verificado em webview em execução.
 - **Credenciais.** O banco guarda só uma referência UUID para cada configuração de provedor. O cofre cifra as credenciais
-  com XChaCha20-Poly1305 e guarda a chave-mestra no cofre de credenciais do sistema operacional (ADR 0002). O shell não
-  abre o cofre, então nenhuma credencial chega à interface.
+  com XChaCha20-Poly1305 e guarda a chave-mestra no cofre de credenciais do sistema operacional (ADR 0002). O shell abre
+  o cofre para a chave do OpenRouter; a chave nunca chega à interface nem aos logs.
+- **O webview não age como navegador numa build release.** Sem menu da página no botão direito (exceto em campos de texto e
+  sobre uma seleção), sem atalho de recarregar, navegar ou imprimir, sem navegar para um arquivo arrastado, e sem inspetor
+  (`crates/noct-ui/src/browser_guard.rs`, `crates/noct-app/src/window.rs`).
 - **Logs.** As linhas são redigidas antes de entrar na fila do log em arquivo (`crates/noct-core/src/log_redaction.rs`).
 - **Arquivos locais.** No Unix, o banco, seus backups, os logs e as escritas atômicas são criados com modo `0600`, e as
   pastas com `0700`. No Windows, nenhuma ACL é aplicada (veja a lista abaixo).
@@ -225,12 +247,9 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 
 ### Ainda faltando
 
-- **Lista de permissões de provedores.** Nenhuma está implementada. O repositório tem um desenho,
-  [`docs/provider-allowlist-design.md`](docs/provider-allowlist-design.md), com seis perguntas abertas e nenhum código. As
-  regras que o produto anterior aplicava aos endpoints de provedores (HTTPS para endpoints remotos, sem redirecionamentos,
-  verificação de cada endereço resolvido, HTTP simples só para serviços de loopback) estão registradas em `electron-final`,
-  em `docs/security.md`. Este branch não tem cliente de provedor, então nenhuma delas está em vigor aqui. Qual política vale
-  é uma decisão do responsável pelo projeto.
+- **Lista de permissões além do OpenRouter.** A política de rede (`crates/noct-core/src/ai/network.rs`) contém só o
+  OpenRouter, com as respostas restritivas às perguntas do desenho (`docs/provider-allowlist-design.md`, seção 13). Hosts
+  aprovados pelo usuário e endpoints locais não estão implementados.
 - **ACL do Windows.** A pasta de dados não recebe DACL. Definir uma exige `windows-sys` como dependência direta, o que o
   responsável pelo projeto não aprovou. Ele decidiu que isso espera a integração do cofre, com ele presente. A análise está
   em `docs/rust-windows-file-permissions.md`.
@@ -311,18 +330,17 @@ do shell em Rust.
   igualar, e o que falta.
 - [Permissões de arquivos no Windows](docs/rust-windows-file-permissions.md). A análise, o aviso e a ACL que não está
   implementada.
-- [Desenho da lista de permissões de provedores](docs/provider-allowlist-design.md). Uma proposta, com perguntas abertas.
-  Sem código.
+- [Desenho da lista de permissões de provedores](docs/provider-allowlist-design.md). O desenho e, na seção 13, as respostas
+  que a política de rede implementa para o OpenRouter.
 - [Triagem da auditoria npm](docs/npm-audit-triage.md). Os achados da árvore anterior, seu escopo e as opções. Nada foi
   corrigido.
 - [Índice da documentação](docs/README.md). Os outros documentos. Alguns descrevem o produto anterior; ficam como histórico.
-- [`AGENTS.md`](AGENTS.md). Regras para contribuidores e comandos de validação. Ainda descreve os invariantes do produto
-  anterior; veja as decisões do responsável pelo projeto abaixo.
+- [`AGENTS.md`](AGENTS.md). Regras para contribuidores, os invariantes de segurança do shell e os comandos de validação.
 
 ### Próximos passos
 
-1. **Responsável pelo projeto.** Decidir a lista de permissões de provedores, com base em
-   `docs/provider-allowlist-design.md`.
+1. **Responsável pelo projeto.** Decidir os provedores e os hosts aprovados pelo usuário depois do OpenRouter
+   (`docs/provider-allowlist-design.md`).
 2. **Responsável pelo projeto, com ele presente.** Decidir entre `windows-sys` ou declarações no repositório, e sobre a ACL
    do Windows, durante a integração do cofre (seção 6).
 3. **Janelas reais.** Abrir o shell no Windows (WebView2) e no macOS (WKWebView). No Linux, conferir o layout atual e a
@@ -335,9 +353,7 @@ do shell em Rust.
 7. **Decisões da fase 8.** Quem guarda as chaves de assinatura, e como as verificações de integridade do empacotamento são
    substituídas. A configuração de bundle para macOS ainda precisa ser escrita.
 8. **Decisões do repositório, do responsável pelo projeto.** Estão fora dos arquivos deste branch:
-   - o pull request #23 não deve ser mesclado na `main` como está, porque removeria o produto anterior da `main`;
    - o conjunto de linguagens do CodeQL contém `javascript-typescript`, e não resta produto em JavaScript neste branch;
-   - o `AGENTS.md` ainda descreve os invariantes do produto anterior;
    - se as checagens de paridade devem ser recriadas como testes só em Rust, contra dados congelados, em outro branch ou tag;
    - se a cobertura de paridade do row gate é aceita como encerrada neste branch.
 9. **Responsável pelo projeto.** Decidir a opção de auditoria npm da árvore anterior (`docs/npm-audit-triage.md`).
@@ -346,5 +362,5 @@ do shell em Rust.
 
 - A tabela de fases da ADR 0001 ainda descreve os caminhos TypeScript e Electron do produto anterior, e a fase 9 não está
   marcada como concluída. Este README registra a remoção; a ADR não foi alterada por ela.
-- O `AGENTS.md` ainda descreve os invariantes do produto anterior (decisões do responsável pelo projeto, seção 10).
-- Nenhuma lista de permissões de provedores está implementada. `docs/provider-allowlist-design.md` é só um desenho (seção 6).
+- O cabeçalho de `docs/provider-allowlist-design.md` ainda diz "Nothing is implemented"; a política de rede o implementa
+  para o OpenRouter (seção 6).

@@ -69,9 +69,9 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list', 'file_changes_list']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
-const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add']
+const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add', 'file_change_approve', 'file_change_reject', 'file_change_undo']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
 // The chat's commands. The question and the save are the only writes of the chat, and each is a command the person started.
 const CHAT_COMMANDS = ['provider_chat_send', 'provider_chat_cancel', 'conversations_create', 'ai_save_assistant']
@@ -90,6 +90,38 @@ const CHAT_PROJECT = '/work/alpha'
 const CHAT_QUESTION = 'Qual é o estado do projeto?'
 const delta = (text) => ({ kind: 'delta', text })
 const DONE = { kind: 'done' }
+// An answer in two pieces: the first ends inside an open code fence, so the page draws Markdown that is not complete yet;
+// the second closes it and brings a wide table and markup that must stay text, a link and a remote image.
+const MARKDOWN_HEAD = [
+  '## Visão geral',
+  '',
+  ...Array.from({ length: 40 }, (_, index) => `Parágrafo ${index + 1} com **negrito**, *itálico* e \`código\`.`),
+  '',
+  '- um',
+  '- dois',
+  '',
+  '> uma citação',
+  '',
+  '```rust',
+  'fn main() {',
+].join('\n')
+const MARKDOWN_TAIL = [
+  '',
+  '    println!("oi");',
+  '}',
+  '```',
+  '',
+  '| coluna com um nome longo | outra coluna bem larga | mais uma coluna | e outra | e a última coluna da tabela larga |',
+  '|---|:-:|--:|---|---|',
+  '| valor um bem comprido | valor dois | 3 | quatro | cinco cinco cinco cinco cinco cinco |',
+  '| só uma célula |',
+  '',
+  '<script>window.__noctInjected = true</script>',
+  '',
+  'Texto <img src="https://evil.invalid/x.png" onerror="window.__noctInjected = true"> e <a href="javascript:alert(1)">clique</a>.',
+  '',
+  'Veja [o site](javascript:alert(1)) e ![logo](https://evil.invalid/logo.png).',
+].join('\n')
 const MODEL_REFUSED = { code: 'invalid-input', message: 'O NOCT recusou o identificador do modelo.' }
 const SECURE_STORAGE_ERROR = {
   code: 'secure-storage-unavailable',
@@ -101,7 +133,21 @@ const TEST_KEY = 'sk-or-v1-check-only-0123456789'
 const CONSENT_PAYLOAD = /^\{"input":\{"workspace":"\/work\/[a-z]+"\}\}$/
 const EXAMPLE_NAMES = ['frx', 'ovra']
 // The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
-const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}' }
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}', file_changes_list: '{"input":"/work/alpha"}' }
+// The changes of the Construir scenario: one edit and one new file, both waiting for a decision.
+const CHANGES = [
+  { id: 'c1', workspace: '/work/alpha', path: 'src/main.rs', status: 'pending', base: 'título\nlinha antiga\nfim\n', content: 'título\nlinha nova\nfim\n' },
+  { id: 'c2', workspace: '/work/alpha', path: 'scripts/setup.sh', status: 'pending', base: null, content: 'nota\n' },
+  { id: 'c3', workspace: '/work/alpha', path: 'docs/guia.md', status: 'pending', base: '# Guia\nantes\n', content: '# Guia\ndepois\n' },
+]
+const CONFLICT = { code: 'change-conflict', message: 'O arquivo mudou desde a proposta. Nada foi escrito.' }
+// OpenRouter's list, as the shell sends it: two free models and a paid one.
+const CATALOG = [
+  { id: 'deepseek/deepseek-chat-v3:free', name: 'DeepSeek V3', contextLength: 131072, free: true },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', contextLength: 65536, free: true },
+  { id: 'openai/gpt-4o', name: 'GPT-4o', contextLength: 128000, free: false },
+]
+const MODELS_FAILURE = { code: 'models-network', message: 'Não foi possível buscar a lista de modelos do OpenRouter.' }
 
 // What the shell returns for `workspaces_list`, as the items of its page: one project of each kind the sidebar shows.
 const PROJECTS = [
@@ -150,7 +196,39 @@ function settingsSaved(theme) {
 const SCENARIOS = [
   { name: 'ready-light', mode: 'ready', theme: 'light', full: true, chatEnabled: false, expectTheme: 'light' },
   { name: 'ready-dark', mode: 'ready', theme: 'dark', full: true, chatEnabled: false, expectTheme: 'dark' },
-  { name: 'build-and-document-not-yet-available', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
+  { name: 'build-and-document-without-changes', mode: 'ready', theme: 'light', unavailableModes: true, expectTheme: 'light' },
+  { name: 'build-approves-rejects-and-undoes', mode: 'ready', theme: 'dark', changes: true, expectTheme: 'dark' },
+  {
+    name: 'chat-proposes-changes',
+    mode: 'chat',
+    theme: 'light',
+    keyConfigured: true,
+    chat: {
+      kind: 'proposes',
+      sequence: [
+        [0, delta('Sugiro:\n````noct-change path=src/x.rs\nfn x() {}\n````\n')],
+        [1, { kind: 'proposed', changes: [{ id: 'c9', path: 'src/x.rs' }], refused: 1 }],
+        [2, DONE],
+      ],
+    },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-renders-markdown-without-html',
+    mode: 'chat',
+    theme: 'dark',
+    keyConfigured: true,
+    chat: {
+      kind: 'markdown',
+      sequence: [
+        [0, delta(MARKDOWN_HEAD)],
+        'hold',
+        [1, delta(MARKDOWN_TAIL)],
+        [2, DONE],
+      ],
+    },
+    expectTheme: 'dark',
+  },
   { name: 'ready-without-a-saved-theme-follows-the-system', mode: 'ready', theme: undefined, scheme: 'dark', expectTheme: 'dark' },
   { name: 'slow-then-ready', mode: 'slow', theme: 'light', expectTheme: 'light' },
   { name: 'error-then-retry', mode: 'error-then-retry', theme: 'light', expectTheme: 'light' },
@@ -166,7 +244,7 @@ const SCENARIOS = [
   { name: 'projects-with-more-to-come', mode: 'ready', theme: 'light', projects: 'ready', more: true, expectTheme: 'light' },
   { name: 'theme-not-saved-says-so', mode: 'ready', theme: 'light', saveFails: true, expectTheme: 'light' },
   { name: 'provider-key-not-configured', mode: 'ready', theme: 'light', provider: true, expectTheme: 'light' },
-  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, granted: ['/work/alpha'], expectTheme: 'light' },
+  { name: 'provider-key-configured', mode: 'ready', theme: 'light', keyConfigured: true, provider: true, granted: ['/work/alpha'], modelsFail: true, expectTheme: 'light' },
   { name: 'provider-key-save-refused', mode: 'ready', theme: 'light', keyFails: SECURE_STORAGE_ERROR, provider: true, expectTheme: 'light' },
   { name: 'provider-reply-outside-the-contract', mode: 'invalid', theme: 'light', provider: true, expectTheme: 'light' },
   { name: 'chat-turned-off-in-ajustes', mode: 'chat', theme: 'light', chatEnabled: false, expectTheme: 'light' },
@@ -260,6 +338,17 @@ function installMock(config) {
         ? { '/work/alpha': { workspaceId: '/work/alpha', defaultBinding: { providerId: 'openrouter', modelId: config.chatModel } } }
         : {},
   }
+  // The journal of changes: the scenario's own, and the change an answer proposed.
+  const journal = config.scenario.changes
+    ? config.changes.map((change) => ({ ...change }))
+    : config.scenario.chat?.kind === 'proposes'
+      ? [{ id: 'c9', workspace: '/work/alpha', path: 'src/x.rs', status: 'pending', base: null, content: 'fn x() {}\n' }]
+      : []
+  const decide = (id, status) => {
+    const change = journal.find((entry) => entry.id === id)
+    change.status = status
+    return { ...change }
+  }
   // The chat is on unless the scenario turned it off; Ajustes and the line over the composer change it.
   const chatState = { enabled: config.scenario.chatEnabled !== false }
   // The projects the folder picker added.
@@ -295,6 +384,11 @@ function installMock(config) {
     }
     if (command === 'models_bindings_get') return providerState.models[payload.input.workspace] ?? null
     if (command === 'provider_chat_status') return { enabled: chatState.enabled }
+    if (command === 'models_list') return config.catalog
+    if (command === 'file_changes_list') return journal.filter((change) => change.workspace === payload.input).map((change) => ({ ...change }))
+    if (command === 'file_change_approve') return decide(payload.input, 'applied')
+    if (command === 'file_change_reject') return decide(payload.input, 'rejected')
+    if (command === 'file_change_undo') return decide(payload.input, 'undone')
     if (command === 'provider_chat_set_enabled') {
       chatState.enabled = payload.input.enabled === true
       return { enabled: chatState.enabled }
@@ -344,6 +438,11 @@ function installMock(config) {
     chatRun.end = chat.sequence.filter((item) => item !== 'hold').length
     return new Promise((resolve) => setTimeout(() => { resolve(null); emitUntilHold() }, 0))
   }
+  // Lets a held answer go on, as the next pieces of a stream that was only slow.
+  window.__noctChatResume = () => {
+    if (chatRun.pending[0] === 'hold') chatRun.pending.shift()
+    emitUntilHold()
+  }
   const cancelChat = () => {
     // A stale event after the cancel is sent on purpose: the page must ignore it.
     chatRun.pending = (config.scenario.chat?.afterCancel ?? []).map((item) => ({ index: item[0], frame: item[1] }))
@@ -367,6 +466,9 @@ function installMock(config) {
       // A save the scenario refuses gets the shell's own error, as a refused read does.
       if (command === 'settings_set' && config.scenario.saveFails) return Promise.reject(config.shellError)
       if (command === 'provider_key_save' && config.scenario.keyFails) return Promise.reject(config.scenario.keyFails)
+      if (command === 'models_list' && config.scenario.modelsFail) return Promise.reject(config.modelsFailure)
+      // The first approval of the Construir scenario meets a file that changed since the proposal.
+      if (command === 'file_change_approve' && config.scenario.changes && attempt === 1) return Promise.reject(config.conflict)
       if (command === 'provider_chat_send') return startChat(payload)
       if (command === 'provider_chat_cancel') return cancelChat()
       if (command === 'ai_save_assistant' && config.scenario.chat?.saveFails) return Promise.reject(config.scenario.chat.saveFails)
@@ -482,26 +584,60 @@ async function providerFlow(page, scenario, check) {
   )
   check(!(await calls()).some((call) => call.command === 'provider_consent_grant'), 'Ajustes never grants a permission')
 
-  // The default model of the current project: a refused identifier is shown and not kept; a valid one stays in the field;
-  // clearing sends null. Every write names the project.
-  const modelField = page.getByLabel('Id do modelo padrão', { exact: true })
-  check((await modelField.getAttribute('autocomplete')) === 'off', 'the model field turns off browser autocompletion')
-  await modelField.fill('gpt-4o')
-  await page.getByTestId('model-save').click()
-  await page.getByTestId('model-error').getByText(MODEL_REFUSED.message, { exact: true }).waitFor({ timeout: 8000 })
-  await modelField.fill('openai/gpt-4o:free')
-  await page.getByTestId('model-save').click()
-  await page.waitForFunction(() => !document.querySelector('[data-testid="model-error"]'))
-  await page.waitForFunction(() => (window.__noctCalls ?? []).filter((call) => call.command === 'models_set_default_model').length === 2)
-  check((await modelField.inputValue()) === 'openai/gpt-4o:free', 'the saved identifier stays in the field')
-  await page.getByTestId('model-clear').click()
-  await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
-  check((await modelField.inputValue()) === '', 'clearing empties the field')
+  // The default model of the current project. With the list, it is chosen from it; without it, the id is typed. Every write
+  // names the project, and clearing sends null.
+  if (scenario.modelsFail) {
+    const fallback = page.getByTestId('models-fallback')
+    await fallback.waitFor({ timeout: 8000 })
+    check((await fallback.textContent())?.includes('Digite o id do modelo'), 'without the list, the group says why and offers the typed id')
+    const modelField = page.getByLabel('Id do modelo padrão', { exact: true })
+    check((await modelField.getAttribute('autocomplete')) === 'off', 'the model field turns off browser autocompletion')
+    await modelField.fill('gpt-4o')
+    await page.getByTestId('model-save').click()
+    await page.getByTestId('model-error').getByText(MODEL_REFUSED.message, { exact: true }).waitFor({ timeout: 8000 })
+    await modelField.fill('openai/gpt-4o:free')
+    await page.getByTestId('model-save').click()
+    await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
+    check((await page.getByTestId('model-current').textContent())?.trim() === 'openai/gpt-4o:free', 'the saved identifier is shown as the current model')
+    await page.getByTestId('model-clear').click()
+    await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
+  } else {
+    const picker = page.getByTestId('model-picker')
+    await picker.waitFor({ timeout: 8000 })
+    const options = picker.getByRole('option')
+    await options.first().waitFor({ timeout: 8000 })
+    const search = picker.getByRole('combobox', { name: 'Buscar modelo por nome ou id' })
+    check((await picker.getByTestId('free-only').getAttribute('aria-pressed')) === 'true', '"Só gratuitos" is on by default')
+    check((await options.count()) === 2, 'the free filter shows the two free models')
+    const first = (await options.first().textContent()) ?? ''
+    check(first.includes('DeepSeek V3') && first.includes('deepseek/deepseek-chat-v3:free') && first.includes('131k') && first.includes('Grátis'), 'a model shows its name, id, context and the free tag')
+    await search.fill('gpt')
+    await picker.getByTestId('models-empty').waitFor({ timeout: 8000 })
+    await picker.getByTestId('free-only').click()
+    await options.first().waitFor({ timeout: 8000 })
+    check((await options.count()) === 1 && !((await options.first().textContent()) ?? '').includes('Grátis'), 'without the filter, a paid model is found by its name')
+    await search.fill('')
+    await search.press('ArrowDown')
+    check((await search.getAttribute('aria-activedescendant')) === 'settings-models-option-1', 'the arrows move through the list')
+    await search.press('ArrowUp')
+    await search.fill('openai/')
+    await search.press('Enter')
+    await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
+    check((await page.getByTestId('model-current').textContent())?.trim() === 'openai/gpt-4o', 'Enter saves the chosen model')
+    check((await page.getByTestId('model-picker').count()) === 0, 'the picker closes once a model is saved')
+    await page.getByTestId('model-choose').click()
+    await page.getByTestId('model-picker').waitFor({ timeout: 8000 })
+    await page.getByRole('combobox', { name: 'Buscar modelo por nome ou id' }).press('Escape')
+    check((await page.getByTestId('model-picker').count()) === 0, 'Esc closes the picker')
+    await page.getByTestId('model-clear').click()
+    await page.waitForFunction(() => !document.querySelector('[data-testid="model-clear"]'))
+  }
 
   const modelWrites = (await calls()).filter((call) => call.command === 'models_set_default_model')
   check(
-    modelWrites.map((call) => String(call.payload.input.modelId)).join('|') === 'gpt-4o|openai/gpt-4o:free|null',
-    'the identifiers are sent as typed, and clearing sends null',
+    modelWrites.map((call) => String(call.payload.input.modelId)).join('|') ===
+      (scenario.modelsFail ? 'gpt-4o|openai/gpt-4o:free|null' : 'openai/gpt-4o|null'),
+    'the chosen or typed identifiers are sent as they are, and clearing sends null',
   )
   check(
     modelWrites.every(
@@ -557,15 +693,30 @@ async function chatFlow(page, scenario, check) {
     check(await send.isDisabled(), 'nothing can be sent without a model')
     await need.getByRole('button', { name: 'Escolher modelo', exact: true }).click()
     await page.getByTestId('provider').waitFor({ timeout: 8000 })
-    check(await page.getByLabel('Id do modelo padrão', { exact: true }).isEnabled(), 'the model field is enabled once a project is chosen')
-    await page.getByLabel('Id do modelo padrão', { exact: true }).fill(CHAT_MODEL)
-    await page.getByTestId('model-save').click()
+    // The picker is open while the project has no model; the first free model is chosen with Enter.
+    const search = page.getByRole('combobox', { name: 'Buscar modelo por nome ou id' })
+    await search.waitFor({ timeout: 8000 })
+    await page.getByTestId('model-picker').getByRole('option').first().waitFor({ timeout: 8000 })
+    await search.press('Enter')
     await page.getByTestId('model-saved').waitFor({ timeout: 8000 })
     check((await page.getByTestId('model-card-name').textContent())?.trim() === CHAT_MODEL, 'the sidebar card shows the saved model')
     await page.getByRole('button', { name: 'Revisar', exact: true }).click()
     check((await page.getByTestId('composer-model').textContent())?.trim() === CHAT_MODEL, 'the composer pill shows the saved model')
     await need.getByText(NEED_PERMISSION, { exact: true }).waitFor({ timeout: 8000 })
     check(await send.isEnabled(), 'with a project, a key and a model, the question can be sent')
+    // The pill opens the same picker over the composer; Esc closes it and gives the focus back to the pill.
+    const pill = page.getByTestId('composer-model')
+    await pill.click()
+    const popover = page.getByTestId('composer-picker')
+    await popover.waitFor({ timeout: 8000 })
+    check((await pill.getAttribute('aria-expanded')) === 'true', 'the pill says the picker is open')
+    await popover.getByRole('combobox').press('Escape')
+    check((await popover.count()) === 0, 'Esc closes the picker over the composer')
+    check(await pill.evaluate((element) => document.activeElement === element), 'the focus goes back to the pill')
+    await pill.click()
+    await popover.getByRole('option', { name: /Llama 3.3 70B/ }).click()
+    await popover.waitFor({ state: 'detached', timeout: 8000 })
+    check((await pill.textContent())?.trim() === 'meta-llama/llama-3.3-70b-instruct:free', 'a model chosen over the composer is the one the pill shows')
     return
   }
   // The project is the one the sidebar has chosen: there is no project control in the chat.
@@ -608,6 +759,69 @@ async function chatFlow(page, scenario, check) {
   check(!JSON.stringify(sent?.payload ?? {}).includes('sk-or'), 'no key is in the question')
 
   const { chat } = scenario
+  if (chat.kind === 'proposes') {
+    const proposals = page.getByTestId('chat-proposals')
+    await proposals.waitFor({ timeout: 8000 })
+    const text = (await proposals.textContent()) ?? ''
+    check(text.includes('1 alteração proposta') && text.includes('src/x.rs'), 'the answer names the change it proposed')
+    check((await page.getByTestId('chat-proposals-refused').textContent())?.includes('1 bloco'), 'a refused block is counted')
+    check((await answer.textContent())?.includes('[alteração proposta: src/x.rs]'), 'the block is shown as one line, not the whole file')
+    check(!((await answer.textContent()) ?? '').includes('fn x()'), 'the text of the file is not in the conversation')
+    check(!(await calls()).some((call) => call.command.startsWith('file_change_')), 'nothing is approved from the conversation')
+    await page.getByTestId('open-build').click()
+    await page.getByRole('heading', { name: 'Construir', level: 1 }).waitFor({ timeout: 8000 })
+    await page.getByTestId('change').filter({ hasText: 'src/x.rs' }).waitFor({ timeout: 8000 })
+    check((await page.getByTestId('change').filter({ hasText: 'src/x.rs' }).count()) === 1, 'the proposed change waits in Construir')
+    return
+  }
+  if (chat.kind === 'markdown') {
+    const requests = []
+    page.on('request', (request) => requests.push(request.url()))
+    // The first piece ends inside an open code fence: the block is drawn as code up to the end, and nothing breaks.
+    await answer.getByTestId('answer-code').waitFor({ timeout: 8000 })
+    check((await answer.locator('h4', { hasText: 'Visão geral' }).count()) === 1, 'a heading of the answer is drawn as a heading')
+    check((await answer.locator('strong').count()) >= 40 && (await answer.locator('em').count()) >= 40, 'bold and italic are drawn')
+    check((await answer.getByTestId('answer-code').textContent())?.includes('fn main() {'), 'an open code fence is drawn as code while it streams')
+    // The person scrolls up to read; the rest of the answer and its end do not move the view.
+    const main = page.locator('.main')
+    await page.waitForFunction(() => {
+      const area = document.querySelector('.main')
+      return area.scrollTop > 0 && area.scrollTop + area.clientHeight >= area.scrollHeight - 2
+    })
+    await main.evaluate((element) => { element.scrollTop = 0 })
+    await page.evaluate(() => window.__noctChatResume())
+    await page.getByTestId('chat-status').getByText(COMPLETE, { exact: true }).waitFor({ timeout: 8000 })
+    await page.waitForTimeout(150)
+    const top = await main.evaluate((element) => element.scrollTop)
+    check(top === 0, `an answer that ends does not scroll a person who went up to read (at ${top})`)
+    const code = answer.getByTestId('answer-code')
+    check((await code.locator('pre code').textContent()) === 'fn main() {\n    println!("oi");\n}', 'the closed code block holds the code, and only it')
+    check((await code.getByRole('button', { name: 'Copiar o código' }).count()) === 1, 'a code block has its own copy button')
+    check((await code.locator('pre').evaluate((element) => getComputedStyle(element).fontFamily)).includes('monospace'), 'code is in a monospace font')
+    const table = answer.getByTestId('answer-table')
+    check((await table.locator('th').count()) === 5 && (await table.locator('tbody tr').count()) === 2, 'the table has its head and its rows')
+    check(await table.evaluate((element) => element.scrollWidth > element.clientWidth && getComputedStyle(element).overflowX === 'auto'), 'a wide table scrolls sideways inside the answer')
+    check(await answer.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), 'the answer itself does not get wider than the conversation')
+    check((await answer.locator('script, img, a, iframe, [onerror], [href], [src], [style]').count()) === 0, 'no markup of the answer becomes an element: no script, image, link or inline style')
+    const text = (await answer.textContent()) ?? ''
+    check(text.includes('<script>window.__noctInjected = true</script>'), 'raw HTML is shown as text')
+    check(text.includes('<img src="https://evil.invalid/x.png"') && text.includes('<a href="javascript:alert(1)">'), 'inline HTML is shown as text')
+    check(text.includes('o site (javascript:alert(1))'), 'a link is its text and its address, written out')
+    check(text.includes('[imagem: logo]') && !text.includes('logo.png'), 'an image is its description, and its address is not used')
+    check((await page.evaluate(() => window.__noctInjected)) === undefined, 'nothing in the answer ran')
+    check(!requests.some((url) => url.includes('evil.invalid')), 'the answer makes no request')
+    check((await answer.locator('.md-code, .md-table, .md-list, .md-quote').count()) === 4, 'lists, quotes, code and tables are drawn with their classes')
+    // The room under the last line does not depend on the fade: it is padding of the conversation itself.
+    check((await page.locator('.thread').evaluate((element) => getComputedStyle(element).paddingBottom)) === '28px', 'the conversation keeps room under its last line')
+    await main.evaluate((element) => { element.scrollTop = element.scrollHeight })
+    const gap = await page.evaluate(() => {
+      const last = document.querySelector('.thread > .msg-ai:last-of-type .msg-tools').getBoundingClientRect()
+      const composer = document.querySelector('.composer').getBoundingClientRect()
+      return composer.top - last.bottom
+    })
+    check(gap >= 20, `at the end, the last line is clear of the composer (${gap}px)`)
+    return
+  }
   if (chat.kind === 'refused') {
     const alert = page.getByTestId('chat-error')
     await alert.waitFor({ timeout: 8000 })
@@ -662,6 +876,152 @@ async function chatFlow(page, scenario, check) {
   check(!(await save.isEnabled()), 'a saved answer is saved once')
 }
 
+// Opens the app's select named by its label with the mouse and clicks the option with a value.
+async function chooseOption(page, label, value) {
+  await page.getByLabel(label, { exact: true }).click()
+  await page.locator(`.sel__list [role="option"][data-value="${value}"]`).click()
+  await page.locator('.sel__list').waitFor({ state: 'detached', timeout: 8000 })
+}
+
+// The app's select: its popup, the mouse, the keyboard, Esc, a click outside, the theme, and the list opening upward.
+async function selectChecks(page, check, theme) {
+  const button = page.getByLabel('Diagnóstico', { exact: true })
+  const list = page.locator('.sel__list[role="listbox"]')
+  check((await button.getAttribute('role')) === 'combobox' && (await button.getAttribute('aria-expanded')) === 'false', 'a select is a closed combobox')
+  check((await page.locator('select').count()) === 0, 'no system select is left in the window')
+  // The mouse opens it; a click outside closes it and chooses nothing.
+  await button.click()
+  await list.waitFor({ timeout: 8000 })
+  check((await button.getAttribute('aria-expanded')) === 'true', 'the button says the list is open')
+  check((await list.getByRole('option').count()) === 2, 'the list holds the options')
+  check((await list.getByRole('option', { selected: true }).getAttribute('data-value')) === 'off', 'the saved option is marked as selected')
+  check(await list.locator('[aria-selected="true"] .sel__check').isVisible(), 'the selected option has its mark')
+  const box = await list.boundingBox()
+  const opener = await button.boundingBox()
+  check(Math.abs(box.y - (opener.y + opener.height + 6)) <= 2 && Math.abs(box.x - opener.x) <= 2, `the list opens under its button (${box.x},${box.y} for ${opener.x},${opener.y + opener.height})`)
+  const viewport = page.viewportSize()
+  check(box && box.y >= 0 && box.y + box.height <= viewport.height && box.x >= 0 && box.x + box.width <= viewport.width, 'the list is whole on the screen')
+  const colours = await list.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { background: style.backgroundColor, color: style.color }
+  })
+  const textColour = theme === 'dark' ? 'rgb(244, 244, 245)' : 'rgb(29, 29, 31)'
+  check(colours.color === textColour && colours.background !== 'rgba(0, 0, 0, 0)', `the list takes the ${theme} theme (${colours.color} on ${colours.background})`)
+  check((await list.evaluate((element) => element.getAttribute('style'))) === null, 'the list has no style attribute')
+  await page.getByTestId('select-backdrop').click({ position: { x: 5, y: 5 } })
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  check((await button.getAttribute('aria-expanded')) === 'false', 'a click outside closes the list')
+  const calls = () => page.evaluate(() => window.__noctCalls.filter((call) => call.command === 'settings_set').length)
+  const saves = await calls()
+  check(saves === (await calls()), 'closing chooses nothing')
+  // The keyboard: the arrow opens on the saved option, Home and End move, Esc closes and keeps the focus.
+  await button.focus()
+  await page.keyboard.press('ArrowDown')
+  await list.waitFor({ timeout: 8000 })
+  const active = () => button.getAttribute('aria-activedescendant')
+  const optionId = async (value) => list.locator(`[data-value="${value}"]`).getAttribute('id')
+  check((await active()) === (await optionId('off')), 'the arrow opens on the saved option')
+  await page.keyboard.press('Home')
+  check((await active()) === (await optionId('on')), 'Home moves to the first option')
+  await page.keyboard.press('End')
+  check((await active()) === (await optionId('off')), 'End moves to the last option')
+  await page.keyboard.press('ArrowUp')
+  check((await active()) === (await optionId('on')), 'the up arrow moves up')
+  await page.keyboard.press('Escape')
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  check(await button.evaluate((element) => document.activeElement === element), 'Esc closes and keeps the focus on the button')
+  check((await calls()) === saves, 'Esc chooses nothing')
+  // Enter chooses the active option; a typed letter jumps to the option that starts with it; Space chooses.
+  await page.keyboard.press('Enter')
+  await list.waitFor({ timeout: 8000 })
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('Enter')
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  await page.waitForFunction(() => document.getElementById('setting-diagnostic')?.dataset.value === 'on')
+  check((await button.getAttribute('data-value')) === 'on', 'Enter chooses the active option, and the shell keeps it')
+  await page.keyboard.press('i')
+  await list.waitFor({ timeout: 8000 })
+  check((await active()) === (await optionId('off')), 'a letter jumps to the option that starts with it (Inativo)')
+  await page.keyboard.press(' ')
+  await list.waitFor({ state: 'detached', timeout: 8000 })
+  await page.waitForFunction(() => document.getElementById('setting-diagnostic')?.dataset.value === 'off')
+  check(await button.evaluate((element) => document.activeElement === element), 'after a choice the focus stays on the button')
+  // With no room below, the list opens over the button.
+  const size = page.viewportSize()
+  await button.scrollIntoViewIfNeeded()
+  const buttonBox = await button.boundingBox()
+  await page.setViewportSize({ width: size.width, height: Math.ceil(buttonBox.y + buttonBox.height + 40) })
+  await button.click()
+  await list.waitFor({ timeout: 8000 })
+  const upBox = await list.boundingBox()
+  const nowButton = await button.boundingBox()
+  check(upBox.y + upBox.height <= nowButton.y + 1 && upBox.y >= 0, 'without room below, the list opens upward and stays whole')
+  await page.keyboard.press('Escape')
+  await page.setViewportSize(size)
+}
+
+// In a release build (the one checked here) the page does not act as a browser: the right click keeps the system menu only
+// in text boxes, editable elements and over a selection; reload, navigation and print shortcuts and a dropped file do
+// nothing. The events are dispatched to the page, so what is checked is that the page cancels them.
+async function browserGuardChecks(page, check) {
+  const result = await page.evaluate(() => {
+    const menu = (target) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      target.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const key = (init) => {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const drag = (type) => {
+      const event = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    const box = document.createElement('textarea')
+    const field = document.createElement('input')
+    const editable = document.createElement('div')
+    editable.contentEditable = 'true'
+    editable.textContent = 'editável'
+    document.body.append(box, field, editable)
+    const brand = document.querySelector('.brand')
+    const out = {
+      plain: menu(brand),
+      textarea: menu(box),
+      input: menu(field),
+      editable: menu(editable.firstChild),
+    }
+    const range = document.createRange()
+    range.selectNodeContents(brand)
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(range)
+    out.selection = menu(brand)
+    window.getSelection().removeAllRanges()
+    box.remove()
+    field.remove()
+    editable.remove()
+    out.keys = {
+      F5: key({ key: 'F5' }),
+      ctrlR: key({ key: 'r', ctrlKey: true }),
+      ctrlShiftR: key({ key: 'R', ctrlKey: true, shiftKey: true }),
+      altLeft: key({ key: 'ArrowLeft', altKey: true }),
+      altRight: key({ key: 'ArrowRight', altKey: true }),
+      ctrlP: key({ key: 'p', ctrlKey: true }),
+    }
+    out.allowed = { ctrlC: key({ key: 'c', ctrlKey: true }), ctrlV: key({ key: 'v', ctrlKey: true }), r: key({ key: 'r' }) }
+    out.drop = { over: drag('dragover'), drop: drag('drop') }
+    return out
+  })
+  check(result.plain === true, 'a right click on the page shows no browser menu')
+  check(result.textarea === false && result.input === false && result.editable === false, 'a right click in a text box or an editable element keeps the system menu')
+  check(result.selection === false, 'a right click over selected text keeps the system menu')
+  for (const [name, prevented] of Object.entries(result.keys)) check(prevented === true, `${name} does not reload, navigate or print`)
+  for (const [name, prevented] of Object.entries(result.allowed)) check(prevented === false, `${name} still works`)
+  check(result.drop.over === true && result.drop.drop === true, 'a file dropped on the window is not opened by the page')
+}
+
 const browser = await chromium.launch()
 const server = await serve()
 const results = []
@@ -688,6 +1048,10 @@ try {
       modelRefused: MODEL_REFUSED,
       chatModel: CHAT_MODEL,
       addedProject: ADDED_PROJECT,
+      catalog: CATALOG,
+      modelsFailure: MODELS_FAILURE,
+      changes: CHANGES,
+      conflict: CONFLICT,
     })
     page.on('pageerror', (error) => result.pageErrors.push(error.message))
     const check = (condition, message) => { if (!condition) result.failures.push(message) }
@@ -730,11 +1094,11 @@ try {
         // The theme select shows the theme of the page. Pandoc is read from its row. Idioma, Segurança do agente and
         // Diagnóstico are selects, and carry their values.
         const pageTheme = await html.getAttribute('data-theme')
-        check((await page.getByLabel('Tema', { exact: true }).inputValue()) === pageTheme, 'the theme select shows the theme of the page')
+        check((await page.getByLabel('Tema', { exact: true }).getAttribute('data-value')) === pageTheme, 'the theme select shows the theme of the page')
         const pandoc = page.locator('.item', { has: page.getByText('Pandoc', { exact: true }) }).locator('.body')
         check((await pandoc.textContent())?.trim() === '3.1.2', 'Pandoc shows 3.1.2')
         for (const [label, value] of [['Idioma', 'en'], ['Segurança do agente', 'untrusted'], ['Diagnóstico', 'on']]) {
-          check((await page.getByLabel(label).inputValue()) === value, `${label} selects ${value}`)
+          check((await page.getByLabel(label).getAttribute('data-value')) === value, `${label} selects ${value}`)
         }
       }
 
@@ -827,37 +1191,86 @@ try {
       await glassSwitch.click()
       check((await html.getAttribute('data-glass')) === 'on', 'the glass switch turns the layer back on')
 
-      // Construir shows its three steps, with no note that it is unavailable and no control for the work. Documentar says
-      // it is not available yet, and offers no control for the work either.
+      // Construir with changes: each pending change shows its file and diff; Aprovar writes nothing when the file changed since
+      // the proposal and says so; a second Aprovar applies it; Desfazer undoes it; Recusar closes the other one.
+      if (scenario.changes) {
+        await page.getByRole('button', { name: 'Construir', exact: true }).click()
+        const cards = page.getByTestId('change')
+        await cards.first().waitFor({ timeout: 8000 })
+        check((await cards.count()) === 2, 'each pending change has its card')
+        const main = cards.filter({ hasText: 'src/main.rs' })
+        check((await main.locator('.diff__line--del').textContent())?.includes('linha antiga'), 'the diff shows the removed line')
+        check((await main.locator('.diff__line--add').textContent())?.includes('linha nova'), 'the diff shows the added line')
+        check((await main.textContent())?.includes('+1 −1'), 'the card counts the lines it adds and removes')
+        check((await cards.filter({ hasText: 'scripts/setup.sh' }).textContent())?.includes('Arquivo novo'), 'a new file says so')
+        check((await main.getByTestId('change-overwrites').count()) === 1 && (await main.getByRole('note').count()) === 1, 'a change to a file that exists says it overwrites it')
+        check((await cards.filter({ hasText: 'scripts/setup.sh' }).getByTestId('change-overwrites').count()) === 0, 'a new file is not marked as an overwrite')
+        const script = cards.filter({ hasText: 'scripts/setup.sh' })
+        check(
+          (await script.getByTestId('change-runs-on-build').textContent())?.trim() === 'Este arquivo roda código quando você compila ou instala. Leia o diff com atenção.',
+          'a file that runs on build or install carries the warning',
+        )
+        check(await script.getByTestId('change-runs-on-build').isVisible(), 'the build warning is visible')
+        check(await script.getByRole('button', { name: 'Aprovar a alteração em scripts/setup.sh', exact: true }).isEnabled(), 'the build warning does not block the approval')
+        check((await main.getByTestId('change-runs-on-build').count()) === 0, 'an ordinary source file has no build warning')
+        check((await cards.filter({ hasText: 'scripts/setup.sh' }).getByTestId('change-path').textContent()) === 'scripts/setup.sh', 'the card shows the whole path')
+        check(await main.getByTestId('change-path').evaluate((element) => getComputedStyle(element).textOverflow !== 'ellipsis' && element.scrollWidth <= element.clientWidth + 1), 'the path is never cut')
+        await page.getByRole('button', { name: 'Aprovar a alteração em src/main.rs', exact: true }).click()
+        await page.getByTestId('change-error').getByText(CONFLICT.message, { exact: true }).waitFor({ timeout: 8000 })
+        check((await cards.count()) === 2, 'a refused approval leaves the change waiting')
+        await page.getByRole('button', { name: 'Aprovar a alteração em src/main.rs', exact: true }).click()
+        await page.getByTestId('changes-applied').waitFor({ timeout: 8000 })
+        check((await page.getByTestId('change-error').count()) === 0, 'an approval that worked clears the error')
+        await page.getByRole('button', { name: 'Desfazer a alteração em src/main.rs', exact: true }).click()
+        await page.getByRole('button', { name: 'Recusar a alteração em scripts/setup.sh', exact: true }).click()
+        await page.getByTestId('changes-closed').waitFor({ timeout: 8000 })
+        await page.waitForFunction(() => document.querySelectorAll('[data-testid="changes-closed"] .item').length === 2)
+        check((await cards.count()) === 0, 'nothing waits once both are decided')
+        const decisions = (await page.evaluate(() => window.__noctCalls ?? []))
+          .filter((call) => call.command.startsWith('file_change_'))
+          .map((call) => `${call.command}:${call.payload.input}`)
+        check(
+          decisions.join() === 'file_change_approve:c1,file_change_approve:c1,file_change_undo:c1,file_change_reject:c2',
+          `each decision is one call that names its change (${decisions.join()})`,
+        )
+        check((await page.getByText('docs/guia.md').count()) === 0, 'Construir does not show a Markdown change')
+        // Documentar shows the Markdown change, with the same approval.
+        await page.getByRole('button', { name: 'Documentar', exact: true }).click()
+        await page.getByRole('heading', { name: 'Documentar', level: 1 }).waitFor({ timeout: 8000 })
+        await cards.first().waitFor({ timeout: 8000 })
+        check((await cards.count()) === 1 && (await cards.getByTestId('change-path').textContent()) === 'docs/guia.md', 'Documentar shows only the Markdown change')
+        check((await cards.getByTestId('change-overwrites').count()) === 1, 'Documentar marks an overwrite too')
+        await page.getByRole('button', { name: 'Aprovar a alteração em docs/guia.md', exact: true }).click()
+        await page.getByTestId('changes-applied').waitFor({ timeout: 8000 })
+        check((await cards.count()) === 0, 'an approved Markdown change is applied')
+      }
+
+      // With no change proposed, Construir and Documentar show their three steps and no control for the work.
       if (scenario.unavailableModes) {
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Construir', level: 1 }).isVisible(), 'Construir shows its heading')
         const stepsBox = page.getByTestId('build-steps')
+        await stepsBox.waitFor({ timeout: 8000 })
         check((await stepsBox.locator('.step').count()) === 3, 'Construir shows the three steps')
         const stepWords = (await stepsBox.textContent()) ?? ''
         check(
-          ['Você descreve', 'O NOCT mostra o diff', 'Você aprova ou recusa'].every((words) => stepWords.includes(words)),
+          ['Você pede', 'O NOCT mostra o diff', 'Você aprova ou recusa'].every((words) => stepWords.includes(words)),
           'the steps say what the person does and what the window shows',
         )
         check(await page.getByTestId('unavailable').count() === 0, 'Construir does not say it is not available')
-        check(await page.getByText('Chega na próxima versão.', { exact: true }).isVisible(), 'Construir says when it arrives')
+        check(await page.getByTestId('changes-empty').isVisible(), 'Construir says that no change was proposed yet')
         for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
           check(await page.getByRole('button', { name: control, exact: true }).count() === 0, 'Construir offers no ' + control + ' control')
         }
         check(await page.locator('.diff, .prose, .cmd').count() === 0, 'Construir shows no example diff or command')
-        for (const name of ['Documentar']) {
-          await page.getByRole('button', { name, exact: true }).click()
-          check(await page.getByRole('heading', { name, level: 1 }).isVisible(), `${name} shows its heading`)
-          check(await page.getByTestId('unavailable').count() === 1, `${name} says it is not available yet`)
-          check(
-            (await page.getByTestId('unavailable').textContent())?.includes('Ainda não disponível nesta versão'),
-            `${name} gives the note`,
-          )
-          for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
-            check(await page.getByRole('button', { name: control, exact: true }).count() === 0, `${name} offers no ${control} control`)
-          }
-          check(await page.locator('.diff, .prose, .cmd').count() === 0, `${name} shows no example diff or command`)
+        await page.getByRole('button', { name: 'Documentar', exact: true }).click()
+        check(await page.getByRole('heading', { name: 'Documentar', level: 1 }).isVisible(), 'Documentar shows its heading')
+        await page.getByTestId('changes-empty').getByText('Nenhuma alteração de documentação proposta ainda.', { exact: true }).waitFor({ timeout: 8000 })
+        check(await page.getByTestId('unavailable').count() === 0, 'Documentar does not say it is not available')
+        for (const control of ['Aprovar', 'Negar', 'Reverter', 'Confirmar alteração']) {
+          check(await page.getByRole('button', { name: control, exact: true }).count() === 0, `Documentar offers no ${control} control`)
         }
+        check(await page.locator('.diff, .prose, .cmd').count() === 0, 'Documentar shows no example diff or command')
       }
 
       // The full scenario reloads the page, which clears the recorded calls; the saves made before the reload are kept here.
@@ -871,11 +1284,11 @@ try {
         check((await html.getAttribute('data-theme')) === 'dark', 'the theme still changes on screen when the save is refused')
         // A setting the shell does not save says so, and its control goes back to the saved value.
         await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
-        await page.getByLabel('Idioma').selectOption('pt-BR')
+        await chooseOption(page, 'Idioma', 'pt-BR')
         const refused = page.getByTestId('settings-save-error')
         await refused.waitFor({ timeout: 8000 })
         check((await refused.textContent())?.includes(SHELL_ERROR.message), 'a setting that is not saved says so with the shell message')
-        check((await page.getByLabel('Idioma').inputValue()) === 'en', 'the language goes back to the saved value')
+        check((await page.getByLabel('Idioma').getAttribute('data-value')) === 'en', 'the language goes back to the saved value')
       }
 
       if (scenario.full) {
@@ -892,6 +1305,7 @@ try {
         const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
         await page.getByRole('button', { name: 'Construir', exact: true }).click()
         check((await pressed('Construir')) === 'true' && (await pressed('Revisar')) === 'false', 'Construir is the pressed mode')
+        await page.getByTestId('build-steps').waitFor({ timeout: 8000 })
         check(await page.getByTestId('build-steps').isVisible(), 'the build mode shows its three steps')
         await page.getByRole('button', { name: 'Documentar', exact: true }).click()
         check(await page.getByRole('heading', { name: 'Documentar', level: 1 }).isVisible(), 'the document mode is shown')
@@ -906,14 +1320,16 @@ try {
           ['Diagnóstico', 'off', '{"input":{"diagnosticMode":false}}'],
         ]) {
           const before = await page.evaluate(() => window.__noctCalls.length)
-          await page.getByLabel(label).selectOption(value)
+          await chooseOption(page, label, value)
           await page.waitForFunction((count) => window.__noctCalls.length > count, before)
           await page.waitForFunction(() => !document.querySelector('[data-testid="settings-saving"]'))
           const last = await page.evaluate(() => window.__noctCalls.filter((call) => call.command === 'settings_set').at(-1))
           check(JSON.stringify(last?.payload) === expected, `${label} is saved alone`)
-          check((await page.getByLabel(label).inputValue()) === value, `${label} shows the value the shell replied with`)
+          check((await page.getByLabel(label).getAttribute('data-value')) === value, `${label} shows the value the shell replied with`)
         }
         check((await page.getByTestId('settings-save-error').count()) === 0, 'a saved change shows no error')
+        await selectChecks(page, check, scenario.expectTheme)
+        await browserGuardChecks(page, check)
         await page.getByRole('button', { name: 'Revisar', exact: true }).click()
         check((await pressed('Revisar')) === 'true', 'a mode leaves Ajustes')
 
@@ -1024,7 +1440,8 @@ try {
         )
         const settingSaves = saves.length - themeSaves.length
         check(
-          settingSaves === (scenario.full ? 3 : scenario.saveFails ? 1 : 0),
+          // The full scenario saves three settings, then the select checks choose Diagnóstico twice by keyboard.
+          settingSaves === (scenario.full ? 5 : scenario.saveFails ? 1 : 0),
           `each change in Ajustes is saved once (saves: ${settingSaves})`,
         )
         check(count('settings_get') === (scenario.mode === 'error-then-retry' ? 2 : 1), 'settings_get is called once, or once more after a retry')
@@ -1034,8 +1451,15 @@ try {
         check(count('provider_key_status') === 1, `provider_key_status is read once, on load (reads: ${count('provider_key_status')})`)
       }
 
-      const inline = await page.evaluate(() => document.querySelectorAll('[style], style').length)
-      check(inline === 0, 'no inline style is set in the page')
+      // The only inline style allowed is the place of the select's popup: custom properties `--select-*` that the code sets
+      // on <html> through the CSS object model (the page policy allows it; no markup carries a style attribute).
+      const inline = await page.evaluate(() =>
+        [...document.querySelectorAll('[style], style')].filter((element) => {
+          if (element !== document.documentElement) return true
+          return [...element.style].some((name) => !name.startsWith('--select-'))
+        }).length,
+      )
+      check(inline === 0, 'no inline style is set in the page, other than the place of the select popup')
       result.violations = await page.evaluate(() => window.__cspViolations)
       check(result.violations.length === 0, 'the policy reports no violation')
     } catch (error) {

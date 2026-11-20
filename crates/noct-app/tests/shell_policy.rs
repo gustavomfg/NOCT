@@ -63,8 +63,24 @@ fn the_interface_sets_no_inline_style() {
     );
 
     const INLINE_STYLE: [&str; 5] = ["style=", "<style", "attr:style", "style:", ".style("];
+    // The one allowed use: `dom::set_root_property` sets CSS custom properties (`--select-*`, the place of the select's
+    // popup) on <html> through the CSS object model, which the policy does not refuse; it ignores any other name.
+    const CUSTOM_PROPERTY: &str =
+        "DOCUMENT_ELEMENT.with(|root| root.style().set_property(name, value));";
     for file in &files {
-        let text = fs::read_to_string(file).expect("the interface source is readable");
+        let mut text = fs::read_to_string(file).expect("the interface source is readable");
+        if file.ends_with("dom.rs") {
+            assert_eq!(
+                text.matches(CUSTOM_PROPERTY).count(),
+                1,
+                "dom.rs sets custom properties in one place"
+            );
+            assert!(
+                text.contains("if !name.starts_with(\"--\") {"),
+                "dom.rs sets only custom properties"
+            );
+            text = text.replace(CUSTOM_PROPERTY, "");
+        }
         for pattern in INLINE_STYLE {
             assert!(
                 !text.contains(pattern),

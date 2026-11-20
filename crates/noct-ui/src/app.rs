@@ -1,14 +1,16 @@
 //! The window: the sidebar (`sidebar.rs`), the three modes, the settings (Ajustes) and, in Revisar, the conversation with
 //! the chat (`chat_panel.rs`), laid out as in docs/New_Design/mockup-v2.html. The sidebar's projects come from
-//! `workspaces_list` (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). The build and document modes
-//! are not available yet: they say so and offer no control for the work, so nothing in this window runs a command or
-//! writes a file.
+//! `workspaces_list` (`workspaces.rs`) and the settings from `settings_get` (`settings.rs`). Construir and Documentar show
+//! the proposed changes (`changes_panel.rs`): a file is written only when the person approves its change there.
 
 use leptos::prelude::*;
 
+use crate::browser_guard;
+use crate::changes_panel;
 use crate::chat_panel;
 use crate::dom;
 use crate::ipc;
+use crate::model_picker;
 use crate::provider::ProviderView;
 use crate::settings::{self, SettingsView};
 use crate::settings_panel;
@@ -26,6 +28,9 @@ enum Mode {
 
 #[component]
 pub fn App() -> impl IntoView {
+    // In a release build the webview does not act as a browser: no page menu, reload or navigation shortcuts.
+    browser_guard::install();
+
     // The theme starts as the system prefers, and takes the saved setting when the settings arrive. A theme the
     // person changed in this session is kept over the saved one.
     let system_dark = dom::system_prefers_dark();
@@ -38,6 +43,9 @@ pub fn App() -> impl IntoView {
     // changes what the page shows.
     let glass = RwSignal::new(dom::stored_glass().unwrap_or(true));
     Effect::new(move |_| dom::set_glass(glass.get()));
+    // The "bordas sem camadas" test: off unless this viewer turned it on.
+    let flat_layers = RwSignal::new(dom::stored_flat_layers());
+    Effect::new(move |_| dom::set_flat_layers(flat_layers.get()));
 
     let (mode, set_mode) = signal(Mode::Review);
     let shared = Shared {
@@ -50,6 +58,10 @@ pub fn App() -> impl IntoView {
         adding: RwSignal::new(false),
         add_error: RwSignal::new(None),
         reload: RwSignal::new(0),
+        catalog: RwSignal::new(model_picker::CatalogView::Idle),
+        changes_version: RwSignal::new(0),
+        build_requests: RwSignal::new(0),
+        docs_requests: RwSignal::new(0),
     };
     let settings_open = shared.settings_open;
 
@@ -127,6 +139,24 @@ pub fn App() -> impl IntoView {
         Theme::Light => "Usar tema escuro",
         Theme::Dark => "Usar tema claro",
     };
+
+    // An answer that proposed changes can open Construir, or Documentar for its Markdown files.
+    Effect::new(move |previous: Option<u64>| {
+        let count = shared.build_requests.get();
+        if previous.is_some_and(|previous| previous != count) {
+            set_mode.set(Mode::Build);
+            shared.close_settings();
+        }
+        count
+    });
+    Effect::new(move |previous: Option<u64>| {
+        let count = shared.docs_requests.get();
+        if previous.is_some_and(|previous| previous != count) {
+            set_mode.set(Mode::Docs);
+            shared.close_settings();
+        }
+        count
+    });
 
     let pressed = move |target: Mode| (!settings_open.get() && mode.get() == target).to_string();
     let open_mode = move |chosen: Mode| {
@@ -216,20 +246,25 @@ pub fn App() -> impl IntoView {
                     </div>
                 </header>
 
-                <main class="main" id="main">
+                <main
+                    class=move || {
+                        if mode.get() == Mode::Review && !settings_open.get() {
+                            "main main--chat"
+                        } else {
+                            "main"
+                        }
+                    }
+                    id="main"
+                >
                     <div class="stack">
                         {move || {
                             if settings_open.get() {
-                                settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass).into_any()
+                                settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass, flat_layers).into_any()
                             } else {
                                 match mode.get() {
                                     Mode::Review => chat_panel::thread(chat).into_any(),
-                                    Mode::Build => build_panel().into_any(),
-                                    Mode::Docs => unavailable_panel(
-                                        "Documentar",
-                                        "Atualizações incrementais em Markdown, só depois da sua confirmação.",
-                                    )
-                                    .into_any(),
+                                    Mode::Build => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
+                                    Mode::Docs => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
                                 }
                             }
                         }}
@@ -240,52 +275,6 @@ pub fn App() -> impl IntoView {
                         .then(|| chat_panel::composer(chat))
                 }}
             </div>
-        </div>
-    }
-}
-
-/// A mode the shell does not run yet. It says so, and offers no control for the work, so that nothing in it can be
-/// approved, reverted or confirmed.
-fn unavailable_panel(heading: &'static str, lead: &'static str) -> impl IntoView {
-    view! {
-        <div class="stack" data-testid="unavailable">
-            <div>
-                <h1 class="h1">{heading}</h1>
-                <p class="lead">{lead}</p>
-            </div>
-            <section class="card">
-                <p class="body" role="status">
-                    "Ainda não disponível nesta versão. Nada é executado nem gravado nesta tela."
-                </p>
-            </section>
-        </div>
-    }
-}
-
-/// The steps of Build, as the product will run them. Nothing here runs or writes anything, and no control approves, refuses
-/// or reverts a change, so the steps are only a description.
-fn build_panel() -> impl IntoView {
-    view! {
-        <div class="stack" data-testid="build">
-            <div>
-                <h1 class="h1">"Construir"</h1>
-                <p class="lead">"Cada comando espera a sua aprovação. Toda alteração pode ser revertida."</p>
-            </div>
-            <section class="card" data-testid="build-steps">
-                <div class="step">
-                    <span class="step__n">"1"</span>
-                    <p><b>"Você descreve"</b>" a mudança que quer fazer."</p>
-                </div>
-                <div class="step">
-                    <span class="step__n">"2"</span>
-                    <p><b>"O NOCT mostra o diff"</b>" de cada arquivo antes de gravar."</p>
-                </div>
-                <div class="step">
-                    <span class="step__n">"3"</span>
-                    <p><b>"Você aprova ou recusa"</b>" cada arquivo. Nada é gravado sem a sua aprovação."</p>
-                </div>
-            </section>
-            <p class="lead">"Chega na próxima versão."</p>
         </div>
     }
 }
