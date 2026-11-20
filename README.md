@@ -7,12 +7,12 @@
 > The previous product, written in TypeScript with its Electron shell, is kept at the tag `electron-final` (commit
 > `c8c378b`). That tag is the restore point for everything removed from the repository.
 
-![NOCT in Revisar: a question about the project and the answer drawn as Markdown, in the dark theme with the glass layer](docs/images/noct-review-dark.png)
+![NOCT in Revisar: a question about the project and the answer drawn as Markdown, in the light theme with the glass layer](docs/images/noct-review-light.png)
 
 <details>
-<summary>The same view in the light theme</summary>
+<summary>The same view in the dark theme</summary>
 
-![NOCT in Revisar, in the light theme](docs/images/noct-review-light.png)
+![NOCT in Revisar, in the dark theme](docs/images/noct-review-dark.png)
 
 </details>
 

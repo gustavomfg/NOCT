@@ -7,8 +7,8 @@ account, key or private project was used. They are not captures of the real wind
 
 | Image | View |
 | --- | --- |
-| `noct-review-dark.png` | Revisar in the dark theme: a question about the project and the answer drawn as Markdown |
-| `noct-review-light.png` | The same view in the light theme |
+| `noct-review-light.png` | Revisar in the light theme: a question about the project and the answer drawn as Markdown (the README opens with it) |
+| `noct-review-dark.png` | The same view in the dark theme |
 
 The images have no edits. Only the screenshots used by the current READMEs are kept here. The captures of the previous
 product remain in Git history and at the tag `electron-final`.
