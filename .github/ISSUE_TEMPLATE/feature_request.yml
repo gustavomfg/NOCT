@@ -16,4 +16,4 @@ body:
     attributes: { label: Alternativas consideradas }
   - type: dropdown
     id: area
-    attributes: { label: Área, options: [Review, Agente, Workspace, Git, Documentos, Interface, Segurança] }
+    attributes: { label: Área, options: [Revisar, Construir, Documentar, Projetos, Provedores e modelos, Ajustes, Interface, Instalação, Segurança] }

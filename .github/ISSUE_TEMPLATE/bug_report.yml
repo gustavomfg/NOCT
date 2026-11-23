@@ -7,11 +7,11 @@ body:
     attributes: { value: "Remova tokens, paths privados e conteúdo sensível dos logs." }
   - type: input
     id: version
-    attributes: { label: Versão, placeholder: "0.5.0-beta" }
+    attributes: { label: Versão do NOCT, placeholder: "0.1.0 (o nome do instalador traz a versão)" }
     validations: { required: true }
   - type: input
     id: platform
-    attributes: { label: Sistema, versão do Nocturne e Provider de IA usado (sem chaves) }
+    attributes: { label: "Sistema (Linux e distribuição, Windows ou macOS, com a versão), instalador usado (.deb, AppImage, .exe, .dmg) e modelo do OpenRouter (sem chaves)" }
     validations: { required: true }
   - type: textarea
     id: steps
