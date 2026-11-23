@@ -17,6 +17,6 @@
     "check:csp": "node scripts/check-shell-csp.mjs"
   },
   "devDependencies": {
-    "playwright": "^1.61.1"
+    "playwright": "^1.65.1"
   }
 }
