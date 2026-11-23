@@ -1,0 +1,159 @@
+name: build-installers
+
+# Builds the NOCT installers for Linux, Windows and macOS, and keeps them as artifacts of the run, with a SHA256SUMS file.
+# It runs only when someone starts it by hand. It publishes nothing: no tag, no release, no updater feed.
+#
+# The installers are not signed by the operating system: there is no Windows code-signing certificate and no Apple
+# Developer ID or notarization. `--no-sign` also leaves out the updater signature; no secret is read by this workflow,
+# and the token it receives can only read the repository. The release with signed updater artifacts is shell-release.yml.
+#
+# What each job builds:
+# - Linux, on Ubuntu 22.04 (the oldest supported Linux, so the packages run on it and on newer systems): .deb and AppImage.
+# - Windows: the NSIS installer (.exe).
+# - macOS: a .dmg for Apple silicon (aarch64) and one for Intel (x86_64), both built on the Apple silicon runner.
+#
+# The interface is compiled by `beforeBuildCommand` in crates/noct-app/tauri.conf.json (`trunk build --release`), and the
+# Tauri CLI builds the shell with `custom-protocol`, so each installer holds the built interface.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-installers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Installers for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            bundles: deb,appimage
+            target: ''
+          - name: windows-x86_64
+            os: windows-latest
+            bundles: nsis
+            target: ''
+          - name: macos-aarch64
+            os: macos-latest
+            bundles: dmg
+            target: aarch64-apple-darwin
+          - name: macos-x86_64
+            os: macos-latest
+            bundles: dmg
+            target: x86_64-apple-darwin
+    env:
+      # The AppImage tooling runs without FUSE on hosted runners.
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install the Linux packages that Tauri needs
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libxdo-dev librsvg2-dev libayatana-appindicator3-dev file
+
+      - name: Add the targets and check the pinned toolchain
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup target add wasm32-unknown-unknown
+          if [ -n "$TARGET" ]; then rustup target add "$TARGET"; fi
+          pinned="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          test -n "$pinned"
+          test "$(rustc --version | cut -d' ' -f2)" = "$pinned"
+
+      - name: Install trunk and the Tauri CLI at pinned versions
+        shell: bash
+        run: |
+          cargo install --locked trunk@0.22.1
+          cargo install --locked tauri-cli@2.12.4
+
+      - name: Build the installers without signing them
+        # The committed configuration keeps bundle.active false, so ordinary builds make no installer; it is turned on
+        # for this build only. The targets and the icons come from tauri.conf.json.
+        shell: bash
+        working-directory: crates/noct-app
+        env:
+          BUNDLES: ${{ matrix.bundles }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          args=(--ci --no-sign --bundles "$BUNDLES" --config '{"bundle":{"active":true}}')
+          if [ -n "$TARGET" ]; then args+=(--target "$TARGET"); fi
+          cargo tauri build "${args[@]}"
+
+      - name: Collect the installers
+        shell: bash
+        env:
+          NAME: ${{ matrix.name }}
+        run: |
+          mkdir -p installers
+          while IFS= read -r file; do
+            cp "$file" installers/
+          done < <(find target -path '*/release/bundle/*' -type f \
+            \( -name '*.deb' -o -name '*.AppImage' -o -name '*-setup.exe' -o -name '*.dmg' \))
+          # The two macOS builds name their .dmg by architecture already; the check below catches a missing installer.
+          case "$NAME" in
+            linux-*) test -n "$(find installers -name '*.deb')" && test -n "$(find installers -name '*.AppImage')" ;;
+            windows-*) test -n "$(find installers -name '*-setup.exe')" ;;
+            macos-*) test "$(find installers -name '*.dmg' | wc -l)" -eq 1 ;;
+          esac
+          ls -l installers
+
+      - name: Keep the installers of this system
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: installer-${{ matrix.name }}
+          path: installers/*
+          if-no-files-found: error
+          retention-days: 14
+
+  checksums:
+    name: SHA256SUMS of every installer
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download the installers
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: installer-*
+          path: installers
+          merge-multiple: true
+
+      - name: Write SHA256SUMS
+        shell: bash
+        working-directory: installers
+        run: |
+          # The names are unique across systems; two files with one name would have overwritten each other.
+          test "$(find . -type f | wc -l)" -ge 5
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Keep the installers with their checksums
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: noct-installers
+          path: installers/*
+          if-no-files-found: error
+          retention-days: 14

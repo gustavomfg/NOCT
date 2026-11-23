@@ -1440,6 +1440,9 @@ shortcut list, Chromium checks of the menu, the shortcuts, the allowed copy and 
 
 ## Pending: merge of `migration/rust` into `main`
 
+> **Resolved.** `migration/rust` was merged into `main` by PR #23 (2026-11-18), #26 and #27 (2026-11-20). The
+> Electron checks named below no longer exist. The note is kept as history.
+
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
 commits that `main` does not have, and `main` has the two merge commits that `migration/rust` does not have. Neither merge changed
 `README.md`, so `main` keeps the product README and this branch keeps its own.
@@ -1465,3 +1468,49 @@ Only `verify:release-metadata` was run for this note. The other Electron checks 
 
 The blockers before a merge, the checks on PR #23, and the rules for both products to coexist until the TypeScript cleanup are in
 [`rust-merge-plan.md`](rust-merge-plan.md).
+
+## First release and repository cleanup (2026-11-23)
+
+### Installers (`[security-review]`: a new workflow)
+
+- `.github/workflows/build-installers.yml`, started by hand only (`workflow_dispatch`). Jobs: Linux on Ubuntu 22.04 (.deb,
+  AppImage), Windows (NSIS .exe), macOS aarch64 and x86_64 (.dmg, both on the Apple silicon runner). A last job writes
+  `SHA256SUMS` and keeps everything as the `noct-installers` artifact for 14 days.
+- **Review of the trust boundary.** Token: `contents: read` at the top and in each job; no `write` permission, no
+  `environment`, no `secrets.` reference, `persist-credentials: false`, every action pinned by commit, `--no-sign` (no
+  updater key, no code signing). It pushes nothing and publishes nothing. `crates/noct-app/tests/installers.rs` locks
+  these properties, the bundle targets and icons, the release interface build and the identifier.
+- **Defect found and fixed.** The Tauri CLI runs `beforeBuildCommand` and `beforeDevCommand` from `crates/` (the folder
+  above `crates/noct-app`), so `cd ../noct-ui` failed: `cargo tauri build` had never worked, and `shell-release.yml`
+  would have failed at its build step. Both commands are now `cd noct-ui && ...`; a local `cargo tauri build --bundles
+  deb,appimage` was run to confirm (result in the commit message).
+- **Config.** `bundle.active` stays `false`; the workflow turns it on for its build. `bundle.targets` is deb, appimage,
+  nsis, dmg; `bundle.icon` is `icons/icon.png` (512 px, used for Linux and for the macOS .icns the bundler makes) and
+  `icons/icon.ico` (16 and 32 px only: the Windows installer icon is small; a larger .ico is a follow-up).
+- **Identifier.** `com.nocturne.codex` is kept: Tauri names the data folder after it, and the credential store's service
+  starts with it. Changing it would orphan installed data and keys.
+- **Version.** The configuration says `1.0.5` (Cargo.toml, tauri.conf.json, package.json). The installers will be named
+  `NOCT_1.0.5_*`. The release notes are `docs/release-notes-0.1.0.md`, as asked. Publishing as 0.1.0 needs the version
+  changed in those three files (owner's decision, below).
+- **Not verified:** no run of the workflow (a `workflow_dispatch` workflow can be started only once it is on the default
+  branch); the Windows and macOS bundles; the AppImage on a hosted runner; an install on any system.
+
+### What `shell-release.yml` needs from the owner (nothing here was changed)
+
+1. **The `release` environment.** The `sign` job uses `environment: release`. The repository has `copilot`, `realese`
+   (misspelled) and `stable-release`; there is no `release`. Create `release` (or rename `realese`), with deployments
+   limited to tags `rust-v*`, and preferably a required reviewer.
+2. **Two secrets in that environment:** `TAURI_SIGNING_PRIVATE_KEY` (the minisign private key whose public key is in
+   `plugins.updater.pubkey`, `40503B624D87D646`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Who holds the key is ADR 0001,
+   open decision 1.
+3. **The tag rule.** The tag is `rust-vX.Y.Z` and must equal `rust-v` + the `version` of `tauri.conf.json`, which must
+   equal the workspace `Cargo.toml` version; the tag must point at the commit that runs; for `rust-v0.1.0` the version
+   must first be set to `0.1.0` in `Cargo.toml`, `crates/noct-app/tauri.conf.json` (and `package.json`, for consistency).
+4. **Release notes at `docs/releases/<tag>.md`** (for example `docs/releases/rust-v0.1.0.md`); the gate fails without
+   it. `docs/release-notes-0.1.0.md` can be copied there.
+5. **The shell CI of the tag** must pass on Linux, Windows and macOS (the tag starts it; the gate waits up to 110 min).
+6. **No release with that tag may exist**; the workflow never replaces one. It publishes a pre-release, never "latest",
+   and moves the `updater-feed` pre-release to it.
+7. What it does not do: it uploads only the updater artifacts (AppImage, NSIS .exe, `.app.tar.gz`) and `latest.json`,
+   not the .deb or the .dmg; the installers for people come from `build-installers.yml`. The window still has no updater
+   permission (`docs/shell-updater.md`, "Activation"), so no installed copy checks for updates yet.
