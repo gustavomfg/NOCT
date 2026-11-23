@@ -10,7 +10,12 @@ use std::path::Path;
 use serde_json::Value;
 
 const CONFIG: &str = include_str!("../tauri.conf.json");
-const WORKFLOW: &str = include_str!("../../../.github/workflows/build-installers.yml");
+const WORKFLOW_FILE: &str = include_str!("../../../.github/workflows/build-installers.yml");
+
+/// The workflow with LF line ends: a Windows checkout can turn them into CRLF, and the checks below match on `\n`.
+fn workflow() -> String {
+    WORKFLOW_FILE.replace("\r\n", "\n")
+}
 
 fn config() -> Value {
     serde_json::from_str(CONFIG).expect("tauri.conf.json is JSON")
@@ -74,18 +79,19 @@ fn the_installers_hold_the_release_interface_and_keep_the_data_folder() {
 
 #[test]
 fn the_installer_workflow_runs_by_hand_reads_no_secret_and_cannot_write() {
-    let on = WORKFLOW
+    let workflow = workflow();
+    let on = workflow
         .split("\non:\n")
         .nth(1)
         .and_then(|rest| rest.split("\npermissions:").next())
         .expect("the workflow has an `on` block before its permissions");
     assert_eq!(on.trim(), "workflow_dispatch:", "it starts only by hand");
-    assert!(!WORKFLOW.contains("secrets."), "no secret is read");
+    assert!(!workflow.contains("secrets."), "no secret is read");
     assert!(
-        !WORKFLOW.contains("environment:"),
+        !workflow.contains("environment:"),
         "no environment, and so no environment secret"
     );
-    for line in WORKFLOW.lines().map(str::trim) {
+    for line in workflow.lines().map(str::trim) {
         assert!(!line.ends_with(": write"), "no permission to write: {line}");
         assert!(!line.contains("TAURI_SIGNING"), "no signing key: {line}");
         if let Some(action) = line
@@ -99,13 +105,13 @@ fn the_installer_workflow_runs_by_hand_reads_no_secret_and_cannot_write() {
             );
         }
     }
-    assert!(WORKFLOW.contains("permissions:\n  contents: read\n"));
-    assert!(WORKFLOW.contains("persist-credentials: false"));
-    assert!(WORKFLOW.contains("--no-sign"));
+    assert!(workflow.contains("permissions:\n  contents: read\n"));
+    assert!(workflow.contains("persist-credentials: false"));
+    assert!(workflow.contains("--no-sign"));
     assert!(
-        !WORKFLOW.contains("gh release")
-            && !WORKFLOW.contains("git push")
-            && !WORKFLOW.contains("git tag")
+        !workflow.contains("gh release")
+            && !workflow.contains("git push")
+            && !workflow.contains("git tag")
     );
     for installer in [
         "deb,appimage",
@@ -114,6 +120,6 @@ fn the_installer_workflow_runs_by_hand_reads_no_secret_and_cannot_write() {
         "x86_64-apple-darwin",
         "SHA256SUMS",
     ] {
-        assert!(WORKFLOW.contains(installer), "{installer}");
+        assert!(workflow.contains(installer), "{installer}");
     }
 }
