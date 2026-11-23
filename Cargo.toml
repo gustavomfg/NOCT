@@ -17,7 +17,7 @@ tauri-build = "2.7.4"
 # Pinned: the updater is configured and not active (docs/shell-updater.md); its version moves only with a reviewed change.
 tauri-plugin-updater = "=2.14.1"
 # The native folder picker of "Adicionar projeto". Only the shell calls it; the window has no dialog permission.
-tauri-plugin-dialog = "=2.8.3"
+tauri-plugin-dialog = "=2.8.4"
 rusqlite = { version = "0.42.0", features = ["bundled", "backup"] }
 thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }
