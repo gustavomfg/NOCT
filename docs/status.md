@@ -1514,3 +1514,39 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 7. What it does not do: it uploads only the updater artifacts (AppImage, NSIS .exe, `.app.tar.gz`) and `latest.json`,
    not the .deb or the .dmg; the installers for people come from `build-installers.yml`. The window still has no updater
    permission (`docs/shell-updater.md`, "Activation"), so no installed copy checks for updates yet.
+
+### Repository cleanup
+
+- **Templates.** The pull request checklist is Rust-only (fmt, clippy, test, trunk, the two Chromium checks) and accepts
+  "não se aplica"; its security lines name the key vault, writes inside the project after approval, the command boundary
+  and the CSP. The issue templates ask for the installer and the system, and list the current areas.
+- **Dependabot.** Cargo (workspace) and GitHub Actions, weekly, minor and patch grouped, majors left out. npm is kept for
+  `playwright` alone, since it runs the Chromium checks.
+- **CodeQL** is the repository's default setup, not a file here: languages actions, c-cpp, javascript-typescript, rust.
+  Each still has code: `.github/workflows`, the C++ worker in `native/`, `scripts/*.mjs`, the crates. Nothing to remove;
+  `javascript` and `typescript` in the list are aliases of `javascript-typescript`.
+- **Security · dependencies** (`dependency-security.yml`) now audits only the Playwright tree (there is no production npm
+  tree) and pins its actions by commit. The Rust tree is audited by `rust-audit.yml`.
+- **Workflow with no remaining function, proposed for removal (not removed):** `build-provenance-dry-run.yml`. Its dry
+  run verified the attestation action that `shell-release.yml` now uses at the same pin.
+- **Removed as dead:** `build/icon.png` (a copy of the app icon for electron-builder), `.impeccable/surfaces/src-app-tsx.md`
+  (the React surface), the Electron/Vite/TS lines of `.gitignore` and `.editorconfig`. Updated: `assets/README.md`,
+  `PRODUCT.md`, `IDENTITY-MIGRATION.md`, `CONTRIBUTING*`, `SECURITY*`, `CHANGELOG.md`.
+
+### Leftovers of the previous product that stay (not clearly dead)
+
+- **Documents that describe the Electron product:** `docs/architecture*.md`, `docs/installation*.md`,
+  `docs/development*.md`, `docs/updates*.md`, `docs/providers*.md`, `docs/privacy*.md`, `docs/security*.md`,
+  `docs/code-intelligence*.md`, `docs/compatibility*.md` (the platform floors are current), `docs/github-actions.md`,
+  `docs/ipc-inventory.md`, `docs/release-readiness-1.0*.md`, `docs/security-audit-1.0.md`, `docs/releases/v*.md`,
+  `docs/New_Design/*.html`. They are history or need a rewrite, not a deletion; `docs/README.md` already says some
+  describe the previous product.
+- **Stale references:** `docs/shell-updater.md` named `tests/shellRelease.test.ts` and `tests/shellLatestJson.test.ts`;
+  they now name `scripts/shell-release.test.mjs` and `scripts/shell-latest-json.test.mjs`. `shell-release.yml` comments name
+  `stable-release.yml`, which no longer exists (the rule they explain, never marking a shell release "latest", still
+  holds for Electron installs that read it).
+- **Fixtures kept on purpose:** `scripts/fixtures/electron-tag-patterns.json` (the release test reads it),
+  `crates/noct-db/tests/fixtures/typescript-observer-names.json` and the schema hashes (parity data).
+- **Code comments:** about 100 files under `crates/` name the TypeScript module they were ported from. They are
+  provenance, not dead code.
+- **Owner:** private vulnerability reporting is off on the repository (`SECURITY.md` points to it).

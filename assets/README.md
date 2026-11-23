@@ -6,8 +6,9 @@ Use this image as the only source of the mark. Do not redraw its contours in SVG
 
 ## Application copies
 
-- `../public/nocturne.png`: 128px transparent renderer copy used in navigation and assistant identity.
-- `../public/favicon.png`: small mark on the charcoal app tile, used by `index.html`.
-- `../build/icon.png`: 512px application tile, used by Electron and electron-builder.
+- `../crates/noct-app/icons/icon.png`: 512px application tile, used by the installers (Linux, macOS) and the window.
+- `../crates/noct-app/icons/icon.ico`: the Windows icon (16 and 32 px), used by the executable and the installer.
+
+The interface itself shows no raster logo: the sidebar writes the name in text.
 
 The tile keeps the pale artwork visible in browser tabs and launchers. These are the copies consumed by the application and packaging; unused size exports and duplicate tiles have been removed. Raster exports only resize or place the original image on its background; they do not alter the illustration. Each PNG embeds its prompt or source origin. Keep the logo small in navigation and assistant identity; no large decorative illustration is used in the application.
