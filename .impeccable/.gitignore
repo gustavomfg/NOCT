@@ -1,4 +1,4 @@
-# Local visual review evidence; regression fixtures live under tests/renderer.
+# Local visual review evidence; the interface check lives in scripts/check-shell-ui.mjs.
 /review/
 /mocks/
 /build/

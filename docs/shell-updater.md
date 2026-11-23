@@ -103,7 +103,7 @@ Until step 1 is done, the window cannot reach the plugin, and the shell makes no
 `.github/workflows/shell-release.yml` builds, signs and publishes the shell's updater artifacts. It is written and has
 not run. Its only trigger is a `rust-v*` tag, and nothing in this change pushes one. A `rust-v` tag starts no Electron
 workflow: `stable-release.yml` matches `v[0-9]*` and `package-validation.yml` matches `v*`, and
-`tests/shellRelease.test.ts` checks that neither pattern matches a shell tag.
+`scripts/shell-release.test.mjs` checks that neither pattern matches a shell tag.
 
 | Job | Runs on | Secrets | What it does |
 | --- | --- | --- | --- |
@@ -118,12 +118,12 @@ The release channels, and what each one is for:
 - **`updater-feed`** (one, permanent): the pre-release whose only asset is `latest.json`. The shell's endpoint points here,
   so the endpoint never changes with the version.
 - **`vX.Y.Z`** (the Electron application): unchanged. It is the release marked latest, which the Electron updater reads.
-  The release workflow never marks a shell release latest, and `tests/shellRelease.test.ts` fails if it does.
+  The release workflow never marks a shell release latest, and `scripts/shell-release.test.mjs` fails if it does.
 
 Every action is pinned to a commit SHA. The attestation action is the one the build provenance dry run verified, at the
-same pin. The workflow tests (`tests/shellRelease.test.ts`) lock the trigger, the permissions, the pins, the one job
+same pin. The workflow tests (`scripts/shell-release.test.mjs`) lock the trigger, the permissions, the pins, the one job
 that reads the secrets, the signing order, the tag the gate and the publish job compare, and the job that publishes.
-`tests/shellLatestJson.test.ts` covers the manifest builder, which refuses any tag that is not `rust-v` plus the version.
+`scripts/shell-latest-json.test.mjs` covers the manifest builder, which refuses any tag that is not `rust-v` plus the version.
 
 Before the first tag, the maintainer must:
 

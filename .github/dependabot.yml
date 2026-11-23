@@ -1,6 +1,9 @@
 version: 2
+# The product is a Rust workspace. Cargo and the GitHub Actions are updated weekly; minor and patch updates come grouped,
+# one pull request per ecosystem, and major updates are left out (they go through a compatibility task).
+# npm holds only Playwright, which runs the interface checks in Chromium; it is kept here for that one package.
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
@@ -12,12 +15,29 @@ updates:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
     groups:
-      tooling-maintenance:
-        dependency-type: development
+      cargo-minor-and-patch:
         update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
       day: monday
+      time: '08:00'
+      timezone: America/Sao_Paulo
     open-pull-requests-limit: 3
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 1
+    allow:
+      - dependency-name: playwright
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]

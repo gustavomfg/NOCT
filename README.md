@@ -23,6 +23,58 @@ This file describes the branch after the removal of the previous product. Each s
 results of the local checks and of CI for the final commit are in [docs/status.md](docs/status.md). The removal, with
 the decision for each group of files, is in [docs/ts-removal-plan.md](docs/ts-removal-plan.md).
 
+## Install
+
+> **The installers are not signed by the operating system.** NOCT has no Windows code-signing certificate and no Apple
+> Developer ID, and it is not notarized. Windows and macOS warn before the first start; the steps below get past the
+> warning. Check the SHA256 of the file first: it is the only proof that the file is the one the project built.
+
+Download the installer for your system, and the `SHA256SUMS` file, from the release page (or from the `noct-installers`
+artifact of a run of the `build-installers` workflow). The file names carry the version, for example
+`NOCT_<version>_amd64.deb`.
+
+### Check the SHA256
+
+```bash
+# Linux and macOS, in the folder with the downloads
+sha256sum --ignore-missing -c SHA256SUMS      # Linux
+shasum -a 256 --ignore-missing -c SHA256SUMS  # macOS
+```
+
+```powershell
+# Windows (PowerShell): compare the result with the line of the file in SHA256SUMS
+Get-FileHash .\NOCT_<version>_x64-setup.exe -Algorithm SHA256
+```
+
+Each line must say `OK` (or, on Windows, the two hashes must be equal). If one does not, do not open the file.
+
+### Linux
+
+- **.deb** (Debian, Ubuntu 22.04 or later): `sudo apt install ./NOCT_<version>_amd64.deb`
+- **AppImage** (other distributions): make it executable, then run it.
+
+  ```bash
+  chmod +x NOCT_<version>_amd64.AppImage
+  ./NOCT_<version>_amd64.AppImage
+  ```
+
+### Windows
+
+Run `NOCT_<version>_x64-setup.exe`. SmartScreen shows "Windows protected your PC": click **More info**, then **Run
+anyway**. Windows 10 or later.
+
+### macOS
+
+Open the `.dmg` for your Mac (`aarch64` for Apple silicon, `x64` for Intel) and drag NOCT to Applications. Gatekeeper
+refuses the first start of an app that is not notarized. Either right-click NOCT in Applications, choose **Open**, and
+confirm; or remove the quarantine flag in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/NOCT.app
+```
+
+macOS 10.15 or later.
+
 ## 1. What NOCT is
 
 NOCT is a local desktop engineering workspace. It keeps the state of a developer's project and coordinates the developer
@@ -48,7 +100,7 @@ What this branch does not do yet:
 - it calls one AI provider, OpenRouter, and only from the chat of Revisar (section 3);
 - it writes a project file only when the person approves that change in Construir or Documentar, one change at a time;
 - it does not list the saved conversations in the interface;
-- it produces no installer or signed package;
+- its installers are not signed by the operating system, and its updater has not published a release;
 - no window has been checked on Windows or on macOS (section 6).
 
 ## 3. Status
@@ -89,7 +141,8 @@ Their evidence and their runnable form are at `electron-final`. Nothing in this 
 
 The ADR's criterion for phase 8 is "signed packages validated on three platforms". In the repository:
 
-- **No packaging is configured.** `bundle.active` is `false` in `crates/noct-app/tauri.conf.json`.
+- **Packaging is configured, not signed.** `crates/noct-app/tauri.conf.json` names the targets (deb, AppImage, NSIS,
+  dmg) and the icons; `build-installers.yml` builds them by hand, unsigned. No run of it is recorded yet.
 - **No updater.** No updater crate is in `Cargo.lock`.
 - **No signing configuration** exists in the Rust crates or in `tauri.conf.json`.
 - **No holder for the signing keys.** ADR 0001, open decision 1, is not decided.
@@ -296,8 +349,11 @@ caching of the Rust shell workflow.
 
 ## 9. Code signing and installers
 
-- This branch has no code signing: no certificate, no notarization and no signed updater artifact.
-- `bundle.active` is `false`, so this branch produces no installer.
+- NOCT has no operating-system code signing: no certificate and no notarization.
+- `bundle.active` is `false` in the committed configuration, so an ordinary build makes no installer. The
+  `build-installers` workflow, started by hand, turns it on and builds the unsigned installers of the three systems with
+  a `SHA256SUMS` file (section "Install"). It reads no secret.
+- The signed updater artifacts are made only by `shell-release.yml`, on a `rust-v*` tag, with the owner's key.
 - A binary built from this branch is unsigned. Windows and macOS have no publisher identity to check for it. The only way
   to check where it came from is to build it from the commit yourself.
 - The product on `main` has its own release policy. It is not described here, and this branch does not change it. The

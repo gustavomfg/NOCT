@@ -1440,6 +1440,9 @@ shortcut list, Chromium checks of the menu, the shortcuts, the allowed copy and 
 
 ## Pending: merge of `migration/rust` into `main`
 
+> **Resolved.** `migration/rust` was merged into `main` by PR #23 (2026-11-18), #26 and #27 (2026-11-20). The
+> Electron checks named below no longer exist. The note is kept as history.
+
 `main` holds two merges of this branch: `eaff240` (PR #19) and `f8d2801` (PR #22). At `6fd041e`, `migration/rust` has 73
 commits that `main` does not have, and `main` has the two merge commits that `migration/rust` does not have. Neither merge changed
 `README.md`, so `main` keeps the product README and this branch keeps its own.
@@ -1465,3 +1468,85 @@ Only `verify:release-metadata` was run for this note. The other Electron checks 
 
 The blockers before a merge, the checks on PR #23, and the rules for both products to coexist until the TypeScript cleanup are in
 [`rust-merge-plan.md`](rust-merge-plan.md).
+
+## First release and repository cleanup (2026-11-23)
+
+### Installers (`[security-review]`: a new workflow)
+
+- `.github/workflows/build-installers.yml`, started by hand only (`workflow_dispatch`). Jobs: Linux on Ubuntu 22.04 (.deb,
+  AppImage), Windows (NSIS .exe), macOS aarch64 and x86_64 (.dmg, both on the Apple silicon runner). A last job writes
+  `SHA256SUMS` and keeps everything as the `noct-installers` artifact for 14 days.
+- **Review of the trust boundary.** Token: `contents: read` at the top and in each job; no `write` permission, no
+  `environment`, no `secrets.` reference, `persist-credentials: false`, every action pinned by commit, `--no-sign` (no
+  updater key, no code signing). It pushes nothing and publishes nothing. `crates/noct-app/tests/installers.rs` locks
+  these properties, the bundle targets and icons, the release interface build and the identifier.
+- **Defect found and fixed.** The Tauri CLI runs `beforeBuildCommand` and `beforeDevCommand` from `crates/` (the folder
+  above `crates/noct-app`), so `cd ../noct-ui` failed: `cargo tauri build` had never worked, and `shell-release.yml`
+  would have failed at its build step. Both commands are now `cd noct-ui && ...`; a local `cargo tauri build --bundles
+  deb,appimage` was run to confirm (result in the commit message).
+- **Config.** `bundle.active` stays `false`; the workflow turns it on for its build. `bundle.targets` is deb, appimage,
+  nsis, dmg; `bundle.icon` is `icons/icon.png` (512 px, used for Linux and for the macOS .icns the bundler makes) and
+  `icons/icon.ico` (16 and 32 px only: the Windows installer icon is small; a larger .ico is a follow-up).
+- **Identifier.** `com.nocturne.codex` is kept: Tauri names the data folder after it, and the credential store's service
+  starts with it. Changing it would orphan installed data and keys.
+- **Version.** The configuration says `1.0.5` (Cargo.toml, tauri.conf.json, package.json). The installers will be named
+  `NOCT_1.0.5_*`. The release notes are `docs/release-notes-0.1.0.md`, as asked. Publishing as 0.1.0 needs the version
+  changed in those three files (owner's decision, below).
+- **Not verified:** no run of the workflow (a `workflow_dispatch` workflow can be started only once it is on the default
+  branch); the Windows and macOS bundles; the AppImage on a hosted runner; an install on any system.
+
+### What `shell-release.yml` needs from the owner (nothing here was changed)
+
+1. **The `release` environment.** The `sign` job uses `environment: release`. The repository has `copilot`, `realese`
+   (misspelled) and `stable-release`; there is no `release`. Create `release` (or rename `realese`), with deployments
+   limited to tags `rust-v*`, and preferably a required reviewer.
+2. **Two secrets in that environment:** `TAURI_SIGNING_PRIVATE_KEY` (the minisign private key whose public key is in
+   `plugins.updater.pubkey`, `40503B624D87D646`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Who holds the key is ADR 0001,
+   open decision 1.
+3. **The tag rule.** The tag is `rust-vX.Y.Z` and must equal `rust-v` + the `version` of `tauri.conf.json`, which must
+   equal the workspace `Cargo.toml` version; the tag must point at the commit that runs; for `rust-v0.1.0` the version
+   must first be set to `0.1.0` in `Cargo.toml`, `crates/noct-app/tauri.conf.json` (and `package.json`, for consistency).
+4. **Release notes at `docs/releases/<tag>.md`** (for example `docs/releases/rust-v0.1.0.md`); the gate fails without
+   it. `docs/release-notes-0.1.0.md` can be copied there.
+5. **The shell CI of the tag** must pass on Linux, Windows and macOS (the tag starts it; the gate waits up to 110 min).
+6. **No release with that tag may exist**; the workflow never replaces one. It publishes a pre-release, never "latest",
+   and moves the `updater-feed` pre-release to it.
+7. What it does not do: it uploads only the updater artifacts (AppImage, NSIS .exe, `.app.tar.gz`) and `latest.json`,
+   not the .deb or the .dmg; the installers for people come from `build-installers.yml`. The window still has no updater
+   permission (`docs/shell-updater.md`, "Activation"), so no installed copy checks for updates yet.
+
+### Repository cleanup
+
+- **Templates.** The pull request checklist is Rust-only (fmt, clippy, test, trunk, the two Chromium checks) and accepts
+  "não se aplica"; its security lines name the key vault, writes inside the project after approval, the command boundary
+  and the CSP. The issue templates ask for the installer and the system, and list the current areas.
+- **Dependabot.** Cargo (workspace) and GitHub Actions, weekly, minor and patch grouped, majors left out. npm is kept for
+  `playwright` alone, since it runs the Chromium checks.
+- **CodeQL** is the repository's default setup, not a file here: languages actions, c-cpp, javascript-typescript, rust.
+  Each still has code: `.github/workflows`, the C++ worker in `native/`, `scripts/*.mjs`, the crates. Nothing to remove;
+  `javascript` and `typescript` in the list are aliases of `javascript-typescript`.
+- **Security · dependencies** (`dependency-security.yml`) now audits only the Playwright tree (there is no production npm
+  tree) and pins its actions by commit. The Rust tree is audited by `rust-audit.yml`.
+- **Workflow with no remaining function, proposed for removal (not removed):** `build-provenance-dry-run.yml`. Its dry
+  run verified the attestation action that `shell-release.yml` now uses at the same pin.
+- **Removed as dead:** `build/icon.png` (a copy of the app icon for electron-builder), `.impeccable/surfaces/src-app-tsx.md`
+  (the React surface), the Electron/Vite/TS lines of `.gitignore` and `.editorconfig`. Updated: `assets/README.md`,
+  `PRODUCT.md`, `IDENTITY-MIGRATION.md`, `CONTRIBUTING*`, `SECURITY*`, `CHANGELOG.md`.
+
+### Leftovers of the previous product that stay (not clearly dead)
+
+- **Documents that describe the Electron product:** `docs/architecture*.md`, `docs/installation*.md`,
+  `docs/development*.md`, `docs/updates*.md`, `docs/providers*.md`, `docs/privacy*.md`, `docs/security*.md`,
+  `docs/code-intelligence*.md`, `docs/compatibility*.md` (the platform floors are current), `docs/github-actions.md`,
+  `docs/ipc-inventory.md`, `docs/release-readiness-1.0*.md`, `docs/security-audit-1.0.md`, `docs/releases/v*.md`,
+  `docs/New_Design/*.html`. They are history or need a rewrite, not a deletion; `docs/README.md` already says some
+  describe the previous product.
+- **Stale references:** `docs/shell-updater.md` named `tests/shellRelease.test.ts` and `tests/shellLatestJson.test.ts`;
+  they now name `scripts/shell-release.test.mjs` and `scripts/shell-latest-json.test.mjs`. `shell-release.yml` comments name
+  `stable-release.yml`, which no longer exists (the rule they explain, never marking a shell release "latest", still
+  holds for Electron installs that read it).
+- **Fixtures kept on purpose:** `scripts/fixtures/electron-tag-patterns.json` (the release test reads it),
+  `crates/noct-db/tests/fixtures/typescript-observer-names.json` and the schema hashes (parity data).
+- **Code comments:** about 100 files under `crates/` name the TypeScript module they were ported from. They are
+  provenance, not dead code.
+- **Owner:** private vulnerability reporting is off on the repository (`SECURITY.md` points to it).

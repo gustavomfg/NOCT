@@ -1,3 +1,37 @@
+## Unreleased — Rust rewrite (Reescrita em Rust)
+
+NOCT is rewritten in Rust. The TypeScript and Electron product is removed from the repository and kept at the tag
+`electron-final`. The first release of the rewrite is described in
+[docs/release-notes-0.1.0.md](docs/release-notes-0.1.0.md); the step-by-step record of the migration is in
+[docs/status.md](docs/status.md) and [ADR 0001](docs/adr/0001-rust-migration.md).
+
+### Changed
+
+- **Shell.** Tauri 2 (`crates/noct-app`) replaces Electron. The window reaches native code only through 37 declared
+  commands, granted to the main window alone and covered by an ACL test. The webview has a strict
+  Content-Security-Policy (no inline script or style), and a release build has no page menu, reload shortcut or
+  inspector.
+- **Interface.** Leptos compiled to WebAssembly (`crates/noct-ui`) replaces React and Vite: Revisar, Construir,
+  Documentar and Ajustes, the project sidebar, light and dark themes, the glass layer, and the app's own select.
+- **Persistence.** The SQLite layer is ported to Rust (`crates/noct-db`) with the same schema (32), transactional
+  migrations, backups before a migration, atomic writes and restrictive file modes.
+- **Credentials.** Provider keys live in an encrypted vault whose master key is in the operating system's credential
+  store (`crates/noct-secrets`, ADR 0002). Keys from the Electron product are not migrated; type them again.
+- **Provider.** OpenRouter is the only provider of this line, behind a network policy (HTTPS only, no redirects, every
+  resolved address checked, no proxy, bounded time and size) and a consent per project. The model is chosen from
+  OpenRouter's list.
+- **Changes.** The assistant proposes file changes as pending blocks; each one is approved, rejected or undone in
+  Construir (Documentar for Markdown). The path rules refuse anything outside the project, Git and CI files,
+  self-running files, device names and encoded paths.
+- **Answers** are drawn as Markdown without HTML: links are not clickable and images are not loaded.
+- **Installers.** The `build-installers` workflow builds unsigned .deb, AppImage, NSIS and .dmg installers with a
+  `SHA256SUMS` file.
+
+### Removed
+
+- The Electron shell, the preload bridge, the React renderer, the Vite and npm build and the electron-builder packaging.
+- Local runtimes (Ollama, LM Studio), the other API presets and the tool loop of 1.0.5; they are not ported yet.
+
 ## 1.0.5 — 2026-10-21
 
 ### Changed

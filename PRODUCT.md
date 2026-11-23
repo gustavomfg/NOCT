@@ -6,7 +6,8 @@
 
 web
 
-React renderer inside a local Electron desktop application.
+Leptos interface compiled to WebAssembly, inside a local Tauri 2 desktop application (WebKitGTK on Linux, WebView2 on
+Windows, WKWebView on macOS).
 
 ## Users
 
@@ -34,4 +35,4 @@ Visible keyboard focus, dialog focus containment and restoration, reduced-motion
 
 ## Evidence on Hand
 
-Existing product implementation in src/, bilingual interface copy, and renderer regression captures in tests/renderer/__screenshots__/. These fixtures are test data, not customer claims.
+Existing product implementation in crates/noct-ui/, the interface check in Chromium (scripts/check-shell-ui.mjs), and the README captures in docs/images/. These captures use demonstration data, not customer claims.

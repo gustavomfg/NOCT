@@ -1,5 +1,9 @@
 name: Security · dependencies
 
+# The npm tree of this repository is Playwright alone: it runs the interface checks in Chromium and is never part of the
+# application. This workflow audits that tree and keeps its SBOM. The Rust dependencies are audited by rust-audit.yml
+# (cargo deny and cargo audit).
+
 on:
   push:
     branches:
@@ -26,29 +30,29 @@ concurrency:
 
 jobs:
   audit-and-sbom:
-    name: Audit production dependencies and generate SBOM
+    name: Audit the Playwright tree and generate its SBOM
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       - name: Set up the minimum supported Node.js version
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
           cache: npm
       - name: Install dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
-      - name: Audit build tooling
+      - name: Audit the check tooling
         run: npm audit --include=dev --audit-level=high
       - name: Generate CycloneDX SBOM
-        run: npm sbom --sbom-format cyclonedx > nocturne-studio.cdx.json
+        run: npm sbom --sbom-format cyclonedx > noct-check-tooling.cdx.json
       - name: Upload SBOM
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dependency-sbom-${{ github.sha }}
-          path: nocturne-studio.cdx.json
+          path: noct-check-tooling.cdx.json
           if-no-files-found: error
           retention-days: 30

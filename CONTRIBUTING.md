@@ -23,7 +23,7 @@ Before opening a Pull Request, please:
 
 ## Architecture
 
-The product on this branch is written in Rust. It is a Tauri shell (`crates/noct-app`), a Leptos interface compiled to
+NOCT is written in Rust. It is a Tauri shell (`crates/noct-app`), a Leptos interface compiled to
 WebAssembly (`crates/noct-ui`) and a SQLite layer (`crates/noct-db`).
 
 Please preserve the separation between:
@@ -46,7 +46,9 @@ Never commit:
 - Logs containing sensitive information
 - Personal credentials
 
-Authentication data must never be exposed through the renderer.
+The provider key lives only in the operating system's credential store: it must never reach the interface, the logs or
+the repository. Files of a project are written only inside that project, and only after the person approves the change.
+A change to a trust boundary is marked `[security-review]` in its commit and recorded in `docs/status.md`.
 
 ---
 
@@ -57,13 +59,18 @@ Before submitting a Pull Request, run:
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --no-fail-fast
+cargo clippy -p noct-ui --target wasm32-unknown-unknown -- -D warnings
+cargo test --workspace
 (cd crates/noct-ui && trunk build --release)
-npm ci
-npm test
-npm run check:csp
-npm run check:ui
+npm ci                              # once: installs Playwright for the two checks below
+node scripts/check-shell-ui.mjs     # the interface in Chromium, with a mocked shell
+node scripts/check-shell-csp.mjs    # the Content-Security-Policy in Chromium
 ```
+
+The two Chromium checks read the build from `crates/noct-ui/dist`, so run them after `trunk build --release`. CI runs the
+same steps (`.github/workflows/rust-shell-validation.yml`) and, on Linux, also the Node tests of the scripts. To try the
+app in a window, use `node scripts/run-rust-shell.mjs dev --data-dir <empty temporary folder>`; never point it at a data
+folder that holds real data.
 
 Describe in the Pull Request the commands you ran and any manual validation.
 
@@ -78,7 +85,7 @@ Examples:
 ```text
 feat(provider): add provider registry
 
-fix(ipc): validate renderer origin
+fix(files): refuse a path that leaves the project
 
 docs(readme): update architecture overview
 
@@ -105,12 +112,12 @@ Small and focused Pull Requests are preferred over large changes.
 
 Recommended environment:
 
-- WebStorm
 - Rust 1.97.1, which `rust-toolchain.toml` pins, with the `wasm32-unknown-unknown` target
 - trunk 0.22.1 (`cargo install --locked trunk@0.22.1`)
 - Node.js 24 LTS and npm 11+, for the Playwright checks and the Node tests of the scripts
+- On Linux, the Tauri system packages listed in the README (section 5)
 
-The `webstorm` launcher should be available in your system `PATH`.
+Any editor works: WebStorm (the maintainer's), or any editor with `rust-analyzer`.
 
 ---
 

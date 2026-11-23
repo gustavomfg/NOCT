@@ -4,7 +4,8 @@ Keep package name nocturne-studio, app ID com.nocturne.codex, current user-data 
 
 Historical release notes, screenshots and archived plans may retain earlier branding.
 
-Renderer test selectors derive the display name from `shared/product-identity.json`.
-When changing visible branding, update the tests and visually review regenerated
-baselines in the same change. Keep screenshot comparison thresholds unchanged and
-run `npm run test:renderer` without snapshot updates before committing.
+The Rust product keeps the app ID `com.nocturne.codex` as the Tauri `identifier`: it names the data folder and the
+credential store's service (`crates/noct-app/tests/installers.rs` locks both). Tauri derives the data folder from the
+identifier, so it is not the Electron folder `Nocturne Studio`; data of the Electron product is not opened
+automatically. When changing visible branding, update the interface check (`scripts/check-shell-ui.mjs`) and the README
+captures in the same change.
