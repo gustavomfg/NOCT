@@ -23,6 +23,57 @@ Este arquivo descreve o branch depois da remoção do produto anterior. Cada afi
 das checagens locais e do CI do commit final estão em [docs/status.md](docs/status.md). A remoção, com a decisão para cada
 grupo de arquivos, está em [docs/ts-removal-plan.md](docs/ts-removal-plan.md).
 
+## Instalar
+
+> **Os instaladores não são assinados pelo sistema operacional.** O NOCT não tem certificado de assinatura de código do
+> Windows nem Apple Developer ID, e não é notarizado. Windows e macOS avisam antes da primeira abertura; os passos abaixo
+> passam pelo aviso. Confira antes o SHA256 do arquivo: é a única prova de que o arquivo é o que o projeto gerou.
+
+Baixe o instalador do seu sistema e o arquivo `SHA256SUMS` na página da release (ou no artefato `noct-installers` de uma
+execução do workflow `build-installers`). Os nomes dos arquivos trazem a versão, por exemplo `NOCT_<versão>_amd64.deb`.
+
+### Conferir o SHA256
+
+```bash
+# Linux e macOS, na pasta dos downloads
+sha256sum --ignore-missing -c SHA256SUMS      # Linux
+shasum -a 256 --ignore-missing -c SHA256SUMS  # macOS
+```
+
+```powershell
+# Windows (PowerShell): compare o resultado com a linha do arquivo em SHA256SUMS
+Get-FileHash .\NOCT_<versão>_x64-setup.exe -Algorithm SHA256
+```
+
+Cada linha deve dizer `OK` (ou, no Windows, os dois hashes devem ser iguais). Se alguma não disser, não abra o arquivo.
+
+### Linux
+
+- **.deb** (Debian, Ubuntu 22.04 ou mais novo): `sudo apt install ./NOCT_<versão>_amd64.deb`
+- **AppImage** (outras distribuições): torne o arquivo executável e rode.
+
+  ```bash
+  chmod +x NOCT_<versão>_amd64.AppImage
+  ./NOCT_<versão>_amd64.AppImage
+  ```
+
+### Windows
+
+Rode `NOCT_<versão>_x64-setup.exe`. O SmartScreen mostra "O Windows protegeu o computador": clique em **Mais
+informações** e depois em **Executar assim mesmo**. Windows 10 ou mais novo.
+
+### macOS
+
+Abra o `.dmg` do seu Mac (`aarch64` para Apple silicon, `x64` para Intel) e arraste o NOCT para Aplicativos. O Gatekeeper
+recusa a primeira abertura de um app não notarizado. Clique com o botão direito no NOCT em Aplicativos, escolha **Abrir**
+e confirme; ou remova a marca de quarentena no Terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/NOCT.app
+```
+
+macOS 10.15 ou mais novo.
+
 ## 1. O que é o NOCT
 
 O NOCT é um workspace desktop local de engenharia. Ele mantém o estado do projeto de um desenvolvedor e coordena o
@@ -48,7 +99,7 @@ O que este branch ainda não faz:
 - chama um único provedor de IA, o OpenRouter, e só pelo chat de Revisar (seção 3);
 - grava um arquivo do projeto só quando a pessoa aprova aquela alteração em Construir ou Documentar, uma de cada vez;
 - não lista as conversas salvas na interface;
-- não produz instalador nem pacote assinado;
+- seus instaladores não são assinados pelo sistema operacional, e o atualizador ainda não publicou nenhuma versão;
 - nenhuma janela foi conferida no Windows nem no macOS (seção 6).
 
 ## 3. Estado
@@ -92,7 +143,8 @@ A evidência delas e a forma executável estão em `electron-final`. Nada neste 
 
 O critério da ADR para a fase 8 é "pacotes assinados validados em três plataformas". No repositório:
 
-- **Nenhum empacotamento está configurado.** `bundle.active` é `false` em `crates/noct-app/tauri.conf.json`.
+- **O empacotamento está configurado, sem assinatura.** `crates/noct-app/tauri.conf.json` nomeia os alvos (deb, AppImage,
+  NSIS, dmg) e os ícones; o `build-installers.yml` os gera à mão, sem assinatura. Nenhuma execução dele está registrada.
 - **Nenhum atualizador.** Nenhum crate de atualizador está no `Cargo.lock`.
 - **Nenhuma configuração de assinatura** existe nos crates Rust nem no `tauri.conf.json`.
 - **Nenhum responsável pelas chaves de assinatura.** A decisão aberta 1 da ADR 0001 não foi tomada.
@@ -303,9 +355,11 @@ do shell em Rust.
 
 ## 9. Assinatura de código e instaladores
 
-- Este branch não tem assinatura de código: nenhum certificado, nenhuma notarização e nenhum artefato de atualizador
-  assinado.
-- `bundle.active` é `false`, então este branch não produz instalador.
+- O NOCT não tem assinatura de código do sistema operacional: nenhum certificado e nenhuma notarização.
+- `bundle.active` é `false` na configuração commitada, então um build comum não gera instalador. O workflow
+  `build-installers`, disparado à mão, liga o bundle e gera os instaladores não assinados dos três sistemas com um arquivo
+  `SHA256SUMS` (seção "Instalar"). Ele não lê nenhum segredo.
+- Os artefatos assinados do atualizador são gerados só pelo `shell-release.yml`, numa tag `rust-v*`, com a chave do dono.
 - Uma binária compilada deste branch não é assinada. Windows e macOS não têm identidade de editor para conferir. A única
   forma de verificar sua origem é compilá-la a partir do commit.
 - O produto da `main` tem política de release própria. Ela não é descrita aqui, e este branch não a altera. A escolha de quem
