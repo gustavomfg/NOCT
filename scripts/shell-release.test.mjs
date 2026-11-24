@@ -47,7 +47,7 @@ describe('shell release workflow', () => {
         expect(triggers).toBe("on:\n  push:\n    tags:\n      - 'rust-v*'\n");
         // A shell tag must match no Electron tag pattern, or both workflows would run and two releases could claim one tag.
         for (const pattern of electronTagPatterns()) {
-            expect(matchesGlob(pattern, 'rust-v1.0.5'), `Electron tag pattern ${pattern}`).toBe(false);
+            expect(matchesGlob(pattern, 'rust-v0.1.0'), `Electron tag pattern ${pattern}`).toBe(false);
         }
     });
     it('reads only contents at the top, and grants writes per job', () => {

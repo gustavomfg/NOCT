@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/noct-app", "crates/noct-core", "crates/noct-db", "crates/noct-native", "crates/noct-secrets", "crates/noct-ui"]
 
 [workspace.package]
-version = "1.0.5"
+version = "0.1.0"
 edition = "2024"
 license = "MIT"
 publish = false

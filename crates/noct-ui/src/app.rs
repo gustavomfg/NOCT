@@ -15,6 +15,7 @@ use crate::provider::ProviderView;
 use crate::settings::{self, SettingsView};
 use crate::settings_panel;
 use crate::sidebar::{self, Shared};
+use crate::suggestions_panel;
 use crate::theme::Theme;
 use crate::workspaces::{self, WorkspacesView};
 
@@ -84,6 +85,15 @@ pub fn App() -> impl IntoView {
     let chat = chat_panel::ChatState::new(shared);
     chat.read_status();
     chat.watch_consent();
+    // Revisar has two tabs: the conversation and the project's suggestions.
+    let suggestions = suggestions_panel::SuggestionsState::new(shared);
+    let review_tab = RwSignal::new(ReviewTab::Conversation);
+    suggestions.watch();
+    let in_chat = move || {
+        mode.get() == Mode::Review
+            && !settings_open.get()
+            && review_tab.get() == ReviewTab::Conversation
+    };
 
     // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
     // shell replied with. A refused save says so, and its controls go back to the settings the shell holds.
@@ -205,7 +215,10 @@ pub fn App() -> impl IntoView {
                             type="button"
                             class="seg"
                             aria-pressed=move || pressed(Mode::Review)
-                            on:click=move |_| open_mode(Mode::Review)
+                            on:click=move |_| {
+                                review_tab.set(ReviewTab::Conversation);
+                                open_mode(Mode::Review)
+                            }
                         >
                             "Revisar"
                         </button>
@@ -243,17 +256,38 @@ pub fn App() -> impl IntoView {
                         >
                             {pencil_icon()}
                         </button>
+                        <button
+                            class=move || {
+                                if review_tab.get() == ReviewTab::Suggestions {
+                                    "icon-btn row lamp is-active"
+                                } else {
+                                    "icon-btn row lamp"
+                                }
+                            }
+                            type="button"
+                            aria-label="Sugestões"
+                            title="Sugestões"
+                            data-testid="open-suggestions"
+                            aria-pressed=move || (review_tab.get() == ReviewTab::Suggestions).to_string()
+                            on:click=move |_| review_tab.update(|tab| {
+                                *tab = if *tab == ReviewTab::Suggestions {
+                                    ReviewTab::Conversation
+                                } else {
+                                    ReviewTab::Suggestions
+                                }
+                            })
+                        >
+                            {lamp_icon()}
+                            {move || suggestions.open_count().filter(|count| *count > 0).map(|count| {
+                                let shown = if count > 99 { "99+".to_string() } else { count.to_string() };
+                                view! { <span class="lamp__count" aria-hidden="true">{shown}</span> }
+                            })}
+                        </button>
                     </div>
                 </header>
 
                 <main
-                    class=move || {
-                        if mode.get() == Mode::Review && !settings_open.get() {
-                            "main main--chat"
-                        } else {
-                            "main"
-                        }
-                    }
+                    class=move || if in_chat() { "main main--chat" } else { "main" }
                     id="main"
                 >
                     <div class="stack">
@@ -262,7 +296,10 @@ pub fn App() -> impl IntoView {
                                 settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass, flat_layers).into_any()
                             } else {
                                 match mode.get() {
-                                    Mode::Review => chat_panel::thread(chat).into_any(),
+                                    Mode::Review => match review_tab.get() {
+                                        ReviewTab::Conversation => chat_panel::thread(chat).into_any(),
+                                        ReviewTab::Suggestions => suggestions_panel::panel(suggestions).into_any(),
+                                    },
                                     Mode::Build => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
                                     Mode::Docs => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
                                 }
@@ -270,12 +307,26 @@ pub fn App() -> impl IntoView {
                         }}
                     </div>
                 </main>
-                {move || {
-                    (mode.get() == Mode::Review && !settings_open.get())
-                        .then(|| chat_panel::composer(chat))
-                }}
+                {move || in_chat().then(|| chat_panel::composer(chat))}
             </div>
         </div>
+    }
+}
+
+/// What Revisar shows: the conversation, or the project's suggestions, which the lamp in the top bar opens.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReviewTab {
+    Conversation,
+    Suggestions,
+}
+
+fn lamp_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 18h6" />
+            <path d="M10 21h4" />
+            <path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z" />
+        </svg>
     }
 }
 

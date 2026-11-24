@@ -17,6 +17,7 @@ pub mod navigation;
 pub mod provider_chat;
 pub mod provider_transport;
 pub mod services;
+pub mod suggestion_analysis;
 pub mod updater;
 pub mod window;
 pub mod workspace_scope;
@@ -65,6 +66,9 @@ pub fn command_handler<R: Runtime>()
         commands::provider_chat_set_enabled,
         commands::models_list,
         commands::models_list_cancel,
+        commands::suggestions_list,
+        commands::suggestions_analyze,
+        commands::suggestion_generate_change,
     ]
 }
 

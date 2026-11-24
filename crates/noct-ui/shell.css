@@ -2233,3 +2233,126 @@ button {
     animation: none;
   }
 }
+
+/* Revisar › Sugestões: the lamp in the top bar opens the list, and shows how many suggestions are still open. */
+.lamp {
+  position: relative;
+}
+
+.lamp.is-active {
+  background: var(--sel);
+  color: var(--accent);
+}
+
+.lamp__count {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* The list of Sugestões, in the light rows of Ajustes. */
+.sugg {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sugg__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sugg__head-txt {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sugg__head-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* A small select with its label on the same line ("Foco: Livre"). */
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pick__label {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pick .sel__button {
+  min-width: 8.5rem;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.sugg__filter {
+  align-self: flex-end;
+}
+
+.sugg__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sugg-row__more {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sugg-row__more:empty {
+  display: none;
+}
+
+.sugg-row__list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.sugg-row__list .path {
+  overflow-wrap: anywhere;
+}
+
+.sugg-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .sugg__head {
+    flex-direction: column;
+  }
+
+  .sugg__head-actions {
+    justify-content: flex-start;
+  }
+}

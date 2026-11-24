@@ -7,7 +7,7 @@ Use this image as the only source of the mark. Do not redraw its contours in SVG
 ## Application copies
 
 - `../crates/noct-app/icons/icon.png`: 512px application tile, used by the installers (Linux, macOS) and the window.
-- `../crates/noct-app/icons/icon.ico`: the Windows icon (16 and 32 px), used by the executable and the installer.
+- `../crates/noct-app/icons/icon.ico`: the Windows icon (16, 24, 32, 48, 64, 128 and 256 px, made from `icon.png`), used by the executable and the installer.
 
 The interface itself shows no raster logo: the sidebar writes the name in text.
 

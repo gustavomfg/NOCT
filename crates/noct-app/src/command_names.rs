@@ -39,6 +39,9 @@ pub const WORKSPACE_ADD: &str = "workspace_add";
 pub const PROVIDER_CHAT_SET_ENABLED: &str = "provider_chat_set_enabled";
 pub const MODELS_LIST: &str = "models_list";
 pub const MODELS_LIST_CANCEL: &str = "models_list_cancel";
+pub const SUGGESTIONS_LIST: &str = "suggestions_list";
+pub const SUGGESTIONS_ANALYZE: &str = "suggestions_analyze";
+pub const SUGGESTION_GENERATE_CHANGE: &str = "suggestion_generate_change";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -78,4 +81,7 @@ pub const ALL: &[&str] = &[
     PROVIDER_CHAT_SET_ENABLED,
     MODELS_LIST,
     MODELS_LIST_CANCEL,
+    SUGGESTIONS_LIST,
+    SUGGESTIONS_ANALYZE,
+    SUGGESTION_GENERATE_CHANGE,
 ];

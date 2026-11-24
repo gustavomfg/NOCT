@@ -15,6 +15,7 @@ pub mod log_redaction;
 pub mod operation_recovery;
 pub mod proposal_block;
 pub mod semantic_index;
+pub mod suggestion_analysis;
 pub mod suggestions;
 pub mod text;
 pub mod validation;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggestions-analyze"
+description = "Enables the suggestions_analyze command without any pre-configured scope."
+commands.allow = ["suggestions_analyze"]
+
+[[permission]]
+identifier = "deny-suggestions-analyze"
+description = "Denies the suggestions_analyze command without any pre-configured scope."
+commands.deny = ["suggestions_analyze"]

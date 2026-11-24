@@ -43,6 +43,7 @@ use crate::provider_chat::{
 };
 use crate::provider_transport::{Limits, SystemResolver};
 use crate::services;
+use crate::suggestion_analysis::{self, SuggestionEvent};
 use crate::workspace_scope::default_blocked_roots;
 
 // The commands below are measured under the names the TypeScript runtime gives the same reads and writes
@@ -470,6 +471,170 @@ pub async fn provider_chat_send(
             let _ = on_event.send(ChatEvent::Done);
         }
     })
+}
+
+/// The suggestions of a project, in every status, for Revisar › Sugestões. The argument is `{ workspace }`.
+#[tauri::command]
+pub async fn suggestions_list(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<Vec<noct_core::suggestions::Suggestion>, CommandError> {
+    let request: suggestion_analysis::ListRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        suggestion_analysis::list(&guard, &default_blocked_roots(), &request)
+    })
+    .await
+}
+
+/// Starts an analysis of the project. The argument is `{ input: { workspace, focus }, onEvent }`. The checks, the context
+/// and the call are the chat's; `provider_chat_cancel` stops it. Only a complete reply with a valid snapshot is stored.
+#[tauri::command]
+pub async fn suggestions_analyze(
+    state: State<'_, Persistence>,
+    chat: State<'_, Arc<ChatControl>>,
+    input: serde_json::Value,
+    on_event: Channel<SuggestionEvent>,
+) -> Result<(), CommandError> {
+    let request: suggestion_analysis::AnalysisRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    if chat.is_running() {
+        return Err(CommandError::ChatBusy);
+    }
+    let store = state.store.clone();
+    let directory = state.data_directory.clone();
+    let prepared = blocking(move || {
+        let guard = lock(&store)?;
+        let enabled = provider_chat::is_enabled(&guard)?;
+        suggestion_analysis::prepare_analysis(&guard, &default_blocked_roots(), &request, enabled)
+    })
+    .await?;
+    let workspace = prepared.workspace.clone();
+    let (key, body) = blocking(move || {
+        let files = provider_chat::project_context(Path::new(&prepared.workspace))?;
+        let key = resolve_key(&directory, &prepared.key_reference)?;
+        Ok((
+            key,
+            suggestion_analysis::analysis_body(&prepared.model_id, &prepared.question, &files),
+        ))
+    })
+    .await?;
+    let store = state.store.clone();
+    chat.start(async move {
+        let Some(reply) = stream_reply(key, body, &on_event).await else {
+            return;
+        };
+        let event = tauri::async_runtime::spawn_blocking(move || {
+            let guard = lock(&store)?;
+            suggestion_analysis::store_reply(&guard, &default_blocked_roots(), &workspace, &reply)
+        })
+        .await
+        .unwrap_or(Err(CommandError::Internal))
+        .unwrap_or_else(|error| SuggestionEvent::Failed {
+            code: error.code().to_string(),
+        });
+        let _ = on_event.send(event);
+    })
+}
+
+/// Asks the model for the change of an accepted suggestion. The argument is `{ input: { conversationId, suggestionId },
+/// onEvent }`. The status is not changed and nothing is written to the project: the blocks for the suggestion's affected
+/// files become pending changes, which wait for approval in Construir.
+#[tauri::command]
+pub async fn suggestion_generate_change(
+    state: State<'_, Persistence>,
+    chat: State<'_, Arc<ChatControl>>,
+    input: serde_json::Value,
+    on_event: Channel<SuggestionEvent>,
+) -> Result<(), CommandError> {
+    let request: suggestion_analysis::GenerateRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    if chat.is_running() {
+        return Err(CommandError::ChatBusy);
+    }
+    let store = state.store.clone();
+    let directory = state.data_directory.clone();
+    let target = blocking(move || {
+        let guard = lock(&store)?;
+        let enabled = provider_chat::is_enabled(&guard)?;
+        suggestion_analysis::prepare_generate(&guard, &default_blocked_roots(), &request, enabled)
+    })
+    .await?;
+    let (key, body, target) = blocking(move || {
+        let body = suggestion_analysis::generate_body(&target)?;
+        let key = resolve_key(&directory, &target.prepared.key_reference)?;
+        Ok((key, body, target))
+    })
+    .await?;
+    let persistence = state.inner().clone();
+    chat.start(async move {
+        let Some(reply) = stream_reply(key, body, &on_event).await else {
+            return;
+        };
+        let recorded = tauri::async_runtime::spawn_blocking(move || {
+            let blocks = suggestion_analysis::only_affected(&reply, &target.files);
+            provider_chat::record_blocks(
+                &persistence,
+                &default_blocked_roots(),
+                &target.prepared.workspace,
+                blocks,
+            )
+        })
+        .await
+        .unwrap_or_default();
+        let _ = on_event.send(SuggestionEvent::Proposed {
+            changes: recorded.changes,
+            refused: recorded.refused,
+        });
+    })
+}
+
+/// The saved OpenRouter key, read in the main process.
+fn resolve_key(
+    directory: &Path,
+    reference: &str,
+) -> Result<noct_secrets::SecretString, CommandError> {
+    open_vault(directory)?
+        .resolve(reference)
+        .map_err(credentials::map_vault)?
+        .ok_or(CommandError::KeyNotConfigured)
+}
+
+/// Streams one call and returns the whole reply when it ends complete. Progress is sent as the count of characters
+/// received; a failure is sent as `Failed`, and then there is no reply. The reply text never goes to the window.
+async fn stream_reply(
+    key: noct_secrets::SecretString,
+    body: String,
+    on_event: &Channel<SuggestionEvent>,
+) -> Option<String> {
+    let run = ChatRun {
+        approvals: noct_core::ai::network::BUILTIN_APPROVALS.to_vec(),
+        resolver: Arc::new(SystemResolver),
+        source: noct_core::ai::ProviderSource::Remote,
+        url: OPENROUTER_CHAT_URL.to_string(),
+        key,
+        body,
+        limits: Limits::beta_one(),
+    };
+    let mut reply = String::new();
+    let mut characters = 0;
+    let mut complete = false;
+    provider_chat::run_chat(run, &mut |event| match event {
+        ChatEvent::Delta { text } => {
+            characters += text.chars().count();
+            reply.push_str(&text);
+            let _ = on_event.send(SuggestionEvent::Progress { characters });
+        }
+        ChatEvent::Done => complete = true,
+        ChatEvent::Failed { code } => {
+            let _ = on_event.send(SuggestionEvent::Failed { code });
+        }
+        ChatEvent::Proposed { .. } => {}
+    })
+    .await;
+    complete.then_some(reply)
 }
 
 /// Stops the question that is running. Nothing more is sent on its channel. Replies with nothing; a cancel with no

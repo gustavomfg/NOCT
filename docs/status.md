@@ -1489,9 +1489,8 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
   `icons/icon.ico` (16 and 32 px only: the Windows installer icon is small; a larger .ico is a follow-up).
 - **Identifier.** `com.nocturne.codex` is kept: Tauri names the data folder after it, and the credential store's service
   starts with it. Changing it would orphan installed data and keys.
-- **Version.** The configuration says `1.0.5` (Cargo.toml, tauri.conf.json, package.json). The installers will be named
-  `NOCT_1.0.5_*`. The release notes are `docs/release-notes-0.1.0.md`, as asked. Publishing as 0.1.0 needs the version
-  changed in those three files (owner's decision, below).
+- **Version.** The configuration says `0.1.0` (Cargo.toml, tauri.conf.json, package.json; changed 2026-11-24), so the
+  installers are named `NOCT_0.1.0_*`, matching `docs/release-notes-0.1.0.md`. The Electron history keeps `1.0.5`.
 - **Not verified:** no run of the workflow (a `workflow_dispatch` workflow can be started only once it is on the default
   branch); the Windows and macOS bundles; the AppImage on a hosted runner; an install on any system.
 
@@ -1550,3 +1549,19 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - **Code comments:** about 100 files under `crates/` name the TypeScript module they were ported from. They are
   provenance, not dead code.
 - **Owner:** private vulnerability reporting is off on the repository (`SECURITY.md` points to it).
+
+## Suggestions restored: analysis and generated change (2026-11-24) [security-review]
+
+- `suggestions_analyze` passes the chat's checks (switch, authorized project, consent, OpenRouter model, key), sends the
+  chat's context (sensitive and ignored files excluded, caps kept) and runs on the chat's `ChatControl`
+  (`provider_chat_cancel` stops it). The reply never reaches the window; only a character count does.
+- The reply is untrusted: `noct_core::suggestion_analysis::read_reply` refuses a missing, invalid or truncated snapshot (nothing
+  stored), keeps at most 10 suggestions, discards one over a bound or with a repeated identity, and drops any affected file
+  that fails `check_relative_path`, is sensitive or is ignored. Storage is the existing reconciliation (schema 32 unchanged).
+- `suggestions_status` only changes the status. `suggestion_generate_change` requires an accepted suggestion, reads its
+  affected files through `resolve_target`/`read_base`, and records only blocks for those files as pending changes through
+  the existing journal; nothing is written to the project before approval in Construir.
+- `suggestions_list` reads a project's suggestions (every status, at most 200) after the authorization check.
+- Interface: Revisar has the tabs Conversa and Sugestões. Model text is shown as text (affected files never as links;
+  reasoning and proposed changes through `markdown.rs`). Checked in Chromium with a mocked shell, light and dark: no page
+  error, no link, image or script in the tab, filter and failure states shown. Not checked in a real window.
