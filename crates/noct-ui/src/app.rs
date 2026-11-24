@@ -15,6 +15,7 @@ use crate::provider::ProviderView;
 use crate::settings::{self, SettingsView};
 use crate::settings_panel;
 use crate::sidebar::{self, Shared};
+use crate::suggestions_panel;
 use crate::theme::Theme;
 use crate::workspaces::{self, WorkspacesView};
 
@@ -84,6 +85,14 @@ pub fn App() -> impl IntoView {
     let chat = chat_panel::ChatState::new(shared);
     chat.read_status();
     chat.watch_consent();
+    // Revisar has two tabs: the conversation and the project's suggestions.
+    let suggestions = suggestions_panel::SuggestionsState::new(shared);
+    let review_tab = RwSignal::new(ReviewTab::Conversation);
+    let in_chat = move || {
+        mode.get() == Mode::Review
+            && !settings_open.get()
+            && review_tab.get() == ReviewTab::Conversation
+    };
 
     // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
     // shell replied with. A refused save says so, and its controls go back to the settings the shell holds.
@@ -247,13 +256,7 @@ pub fn App() -> impl IntoView {
                 </header>
 
                 <main
-                    class=move || {
-                        if mode.get() == Mode::Review && !settings_open.get() {
-                            "main main--chat"
-                        } else {
-                            "main"
-                        }
-                    }
+                    class=move || if in_chat() { "main main--chat" } else { "main" }
                     id="main"
                 >
                     <div class="stack">
@@ -262,7 +265,14 @@ pub fn App() -> impl IntoView {
                                 settings_panel::settings_panel(settings_view, saving, save_error, save_setting, read_settings, shared, theme, choose_theme, glass, flat_layers).into_any()
                             } else {
                                 match mode.get() {
-                                    Mode::Review => chat_panel::thread(chat).into_any(),
+                                    Mode::Review => view! {
+                                        {review_tabs(review_tab)}
+                                        {move || match review_tab.get() {
+                                            ReviewTab::Conversation => chat_panel::thread(chat).into_any(),
+                                            ReviewTab::Suggestions => suggestions_panel::panel(suggestions).into_any(),
+                                        }}
+                                    }
+                                    .into_any(),
                                     Mode::Build => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
                                     Mode::Docs => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
                                 }
@@ -270,11 +280,40 @@ pub fn App() -> impl IntoView {
                         }}
                     </div>
                 </main>
-                {move || {
-                    (mode.get() == Mode::Review && !settings_open.get())
-                        .then(|| chat_panel::composer(chat))
-                }}
+                {move || in_chat().then(|| chat_panel::composer(chat))}
             </div>
+        </div>
+    }
+}
+
+/// The tabs of Revisar.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReviewTab {
+    Conversation,
+    Suggestions,
+}
+
+fn review_tabs(tab: RwSignal<ReviewTab>) -> impl IntoView {
+    let pressed = move |target: ReviewTab| (tab.get() == target).to_string();
+    view! {
+        <div class="segmented review-tabs" role="group" aria-label="Revisar">
+            <button
+                type="button"
+                class="seg"
+                aria-pressed=move || pressed(ReviewTab::Conversation)
+                on:click=move |_| tab.set(ReviewTab::Conversation)
+            >
+                "Conversa"
+            </button>
+            <button
+                type="button"
+                class="seg"
+                data-testid="tab-suggestions"
+                aria-pressed=move || pressed(ReviewTab::Suggestions)
+                on:click=move |_| tab.set(ReviewTab::Suggestions)
+            >
+                "Sugestões"
+            </button>
         </div>
     }
 }

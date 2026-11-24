@@ -74,7 +74,10 @@ pub fn instructions() -> String {
 
 /// The user message of an analysis.
 pub fn request(focus: AnalysisFocus) -> String {
-    format!("Analise o projeto e publique as sugestões. {}", focus.line())
+    format!(
+        "Analise o projeto e publique as sugestões. {}",
+        focus.line()
+    )
 }
 
 /// Why an analysis stored nothing.

@@ -1,0 +1,672 @@
+//! Revisar › Sugestões: the analysis of the current project and its suggestions.
+//!
+//! "Analisar projeto" asks the shell for an analysis (`suggestions_analyze`), which runs with the chat's checks and context
+//! and stores only a valid reply; the tab sees a character count while it runs, then the project's list. The list is read
+//! from the shell (`suggestions_list`) when the tab opens and when the project changes, so saved suggestions come back when
+//! the project is opened again. Aceitar, Adiar and Recusar only change the status (`suggestions_status`). "Gerar alteração"
+//! on an accepted suggestion asks the shell for pending changes, which wait for approval in Construir.
+//!
+//! Everything the model wrote is shown as text: the affected files are plain text, never links, and the reasoning and the
+//! proposed changes go through the safe Markdown reader (`markdown.rs`).
+
+use leptos::prelude::*;
+use noct_core::suggestion_analysis::AnalysisFocus;
+use noct_core::suggestions::{
+    Suggestion, SuggestionCategory, SuggestionLevel, SuggestionSeverity, SuggestionStatus,
+};
+use serde::Deserialize;
+use serde_json::json;
+
+use crate::chat::{self, ProposedChange};
+use crate::ipc;
+use crate::markdown;
+use crate::sidebar::{self, Shared};
+
+const LIST: &str = "suggestions_list";
+const ANALYZE: &str = "suggestions_analyze";
+const STATUS: &str = "suggestions_status";
+const GENERATE: &str = "suggestion_generate_change";
+
+/// One event of an analysis or of a generated change, as the shell sends it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum Event {
+    Progress {
+        characters: usize,
+    },
+    Saved {
+        suggestions: Vec<Suggestion>,
+        discarded: usize,
+    },
+    Proposed {
+        changes: Vec<ProposedChange>,
+        refused: usize,
+    },
+    Failed {
+        code: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ListView {
+    NoProject,
+    Loading,
+    Ready(Vec<Suggestion>),
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum RunView {
+    Idle,
+    /// The analysis (`None`) or the change of a suggestion (`Some(id)`) is running.
+    Running {
+        target: Option<String>,
+        characters: usize,
+    },
+    Note(String),
+    Failed(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Filter {
+    All,
+    New,
+    Accepted,
+    Deferred,
+    Rejected,
+}
+
+impl Filter {
+    const ALL: [Filter; 5] = [
+        Self::All,
+        Self::New,
+        Self::Accepted,
+        Self::Deferred,
+        Self::Rejected,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::All => "Todas",
+            Self::New => "Novas",
+            Self::Accepted => "Aceitas",
+            Self::Deferred => "Adiadas",
+            Self::Rejected => "Recusadas",
+        }
+    }
+
+    fn keeps(self, status: SuggestionStatus) -> bool {
+        match self {
+            Self::All => true,
+            Self::New => matches!(status, SuggestionStatus::New | SuggestionStatus::InAnalysis),
+            Self::Accepted => status == SuggestionStatus::Accepted,
+            Self::Deferred => status == SuggestionStatus::Deferred,
+            Self::Rejected => status == SuggestionStatus::Rejected,
+        }
+    }
+}
+
+const FOCI: [(AnalysisFocus, &str); 5] = [
+    (AnalysisFocus::Free, "Livre"),
+    (AnalysisFocus::Security, "Segurança"),
+    (AnalysisFocus::Quality, "Qualidade"),
+    (AnalysisFocus::Performance, "Desempenho"),
+    (AnalysisFocus::Testing, "Testes"),
+];
+
+/// The tab's state. It lives with the window, so a running analysis survives a switch to the conversation tab.
+#[derive(Clone, Copy)]
+pub struct SuggestionsState {
+    shared: Shared,
+    list: RwSignal<ListView>,
+    /// The project the list belongs to.
+    listed: RwSignal<Option<String>>,
+    focus: RwSignal<AnalysisFocus>,
+    filter: RwSignal<Filter>,
+    run: RwSignal<RunView>,
+    /// The project of the running call, and its number; an event of an older call is ignored.
+    run_of: RwSignal<(Option<String>, u64)>,
+    /// The suggestion whose status is being changed.
+    deciding: RwSignal<Option<String>>,
+    action_error: RwSignal<Option<String>>,
+}
+
+impl SuggestionsState {
+    pub fn new(shared: Shared) -> Self {
+        Self {
+            shared,
+            list: RwSignal::new(ListView::NoProject),
+            listed: RwSignal::new(None),
+            focus: RwSignal::new(AnalysisFocus::Free),
+            filter: RwSignal::new(Filter::All),
+            run: RwSignal::new(RunView::Idle),
+            run_of: RwSignal::new((None, 0)),
+            deciding: RwSignal::new(None),
+            action_error: RwSignal::new(None),
+        }
+    }
+
+    fn running(self) -> bool {
+        self.run
+            .with_untracked(|run| matches!(run, RunView::Running { .. }))
+    }
+
+    /// Reads the list of the current project, unless it is already the one on screen.
+    fn load(self, force: bool) {
+        let current = self.shared.current.get_untracked();
+        if !force && current == self.listed.get_untracked() {
+            return;
+        }
+        self.listed.set(current.clone());
+        self.action_error.set(None);
+        let Some(workspace) = current else {
+            self.list.set(ListView::NoProject);
+            return;
+        };
+        self.list.set(ListView::Loading);
+        let payload = json!({ "input": { "workspace": workspace } }).to_string();
+        ipc::call_with(LIST, &payload, move |outcome| {
+            if self.listed.get_untracked().as_deref() != Some(workspace.as_str()) {
+                return;
+            }
+            self.list.set(match ipc::reply(outcome) {
+                Ok(text) => match serde_json::from_str::<Vec<Suggestion>>(&text) {
+                    Ok(items) => ListView::Ready(items),
+                    Err(_) => ListView::Failed(ipc::UNEXPECTED_MESSAGE.to_string()),
+                },
+                Err(failure) => ListView::Failed(failure.message),
+            });
+        });
+    }
+
+    /// Starts a call on a new channel. `target` is `None` for an analysis, or the suggestion whose change is asked for.
+    fn start(self, command: &'static str, input: serde_json::Value, target: Option<String>) {
+        let Some(workspace) = self.shared.current.get_untracked() else {
+            return;
+        };
+        if self.running() {
+            return;
+        }
+        let number = self.run_of.get_untracked().1 + 1;
+        self.run_of.set((Some(workspace.clone()), number));
+        self.run.set(RunView::Running {
+            target: target.clone(),
+            characters: 0,
+        });
+        self.action_error.set(None);
+        let current = move || self.run_of.get_untracked().1 == number;
+        let Some(channel) = ipc::channel(move |text: String| {
+            if !current() {
+                return;
+            }
+            let Ok(event) = serde_json::from_str::<Event>(&text) else {
+                return;
+            };
+            self.event(&workspace, event);
+        }) else {
+            self.run.set(RunView::Failed(
+                "O NOCT não conseguiu abrir a resposta.".to_string(),
+            ));
+            return;
+        };
+        let payload = json!({ "input": input, "onEvent": channel }).to_string();
+        ipc::call_with(command, &payload, move |outcome| {
+            if let Err(failure) = ipc::reply(outcome)
+                && current()
+            {
+                self.run.set(RunView::Failed(failure.message));
+            }
+        });
+    }
+
+    fn event(self, workspace: &str, event: Event) {
+        match event {
+            Event::Progress { characters } => self.run.update(|run| {
+                if let RunView::Running {
+                    characters: seen, ..
+                } = run
+                {
+                    *seen = characters;
+                }
+            }),
+            Event::Saved {
+                suggestions,
+                discarded,
+            } => {
+                let words = match discarded {
+                    0 => "Análise concluída.".to_string(),
+                    1 => "Análise concluída. 1 sugestão inválida ou repetida foi descartada."
+                        .to_string(),
+                    n => format!(
+                        "Análise concluída. {n} sugestões inválidas ou repetidas foram descartadas."
+                    ),
+                };
+                self.run.set(RunView::Note(words));
+                if self.listed.get_untracked().as_deref() == Some(workspace) {
+                    self.list.set(ListView::Ready(suggestions));
+                }
+            }
+            Event::Proposed { changes, refused } => {
+                self.shared.changes_version.update(|n| *n += 1);
+                let mut words = match changes.len() {
+                    0 => "O modelo não propôs alteração para os arquivos da sugestão.".to_string(),
+                    1 => "1 alteração espera aprovação em Construir.".to_string(),
+                    n => format!("{n} alterações esperam aprovação em Construir."),
+                };
+                if refused > 0 {
+                    words.push_str(&format!(" {refused} bloco(s) recusado(s)."));
+                }
+                self.run.set(RunView::Note(words));
+            }
+            Event::Failed { code } => self.run.set(RunView::Failed(failure_words(&code))),
+        }
+    }
+
+    fn analyze(self) {
+        let Some(workspace) = self.shared.current.get_untracked() else {
+            return;
+        };
+        let focus = self.focus.get_untracked();
+        self.start(
+            ANALYZE,
+            json!({ "workspace": workspace, "focus": focus }),
+            None,
+        );
+    }
+
+    fn generate(self, suggestion: &Suggestion) {
+        self.start(
+            GENERATE,
+            json!({ "conversationId": suggestion.conversation_id, "suggestionId": suggestion.id }),
+            Some(suggestion.id.clone()),
+        );
+    }
+
+    fn cancel(self) {
+        if !self.running() {
+            return;
+        }
+        self.run_of.update(|(_, number)| *number += 1);
+        self.run
+            .set(RunView::Note("Cancelado. Nada foi salvo.".to_string()));
+        ipc::call(chat::CANCEL, |_| {});
+    }
+
+    /// Moves a suggestion to `status`. Only the status changes; nothing is written to the project.
+    fn decide(self, suggestion: &Suggestion, status: SuggestionStatus) {
+        if self.deciding.get_untracked().is_some() {
+            return;
+        }
+        let id = suggestion.id.clone();
+        self.deciding.set(Some(id.clone()));
+        self.action_error.set(None);
+        let payload = json!({ "input": {
+            "conversationId": suggestion.conversation_id,
+            "suggestionId": id,
+            "status": status.as_str(),
+        }})
+        .to_string();
+        ipc::call_with(STATUS, &payload, move |outcome| {
+            self.deciding.set(None);
+            match ipc::reply(outcome).and_then(|text| {
+                serde_json::from_str::<Suggestion>(&text).map_err(|_| ipc::invalid_response())
+            }) {
+                Ok(updated) => self.list.update(|list| {
+                    if let ListView::Ready(items) = list
+                        && let Some(item) = items.iter_mut().find(|item| item.id == updated.id)
+                    {
+                        *item = updated;
+                    }
+                }),
+                Err(failure) => self.action_error.set(Some(failure.message)),
+            }
+        });
+    }
+}
+
+fn failure_words(code: &str) -> String {
+    match code {
+        "analysis-absent" => {
+            "A resposta não trouxe o bloco de sugestões. Nada foi salvo.".to_string()
+        }
+        "analysis-invalid" => {
+            "As sugestões vieram inválidas ou incompletas. Nada foi salvo.".to_string()
+        }
+        other => chat::stream_failure_words(other).to_string(),
+    }
+}
+
+fn severity_of(severity: SuggestionSeverity) -> (&'static str, &'static str) {
+    match severity {
+        SuggestionSeverity::Critical => ("sev sev--high", "Crítica"),
+        SuggestionSeverity::High => ("sev sev--high", "Alta"),
+        SuggestionSeverity::Medium => ("sev sev--mid", "Média"),
+        SuggestionSeverity::Low => ("sev sev--low", "Baixa"),
+        SuggestionSeverity::Info => ("sev sev--low", "Informativa"),
+    }
+}
+
+fn category_word(category: SuggestionCategory) -> &'static str {
+    match category {
+        SuggestionCategory::Architecture => "Arquitetura",
+        SuggestionCategory::Security => "Segurança",
+        SuggestionCategory::Performance => "Desempenho",
+        SuggestionCategory::Bug => "Defeito",
+        SuggestionCategory::Cleanup => "Limpeza",
+        SuggestionCategory::Testing => "Testes",
+        SuggestionCategory::Documentation => "Documentação",
+        SuggestionCategory::Dependency => "Dependência",
+        SuggestionCategory::Accessibility => "Acessibilidade",
+    }
+}
+
+fn level_word(level: SuggestionLevel) -> &'static str {
+    match level {
+        SuggestionLevel::Low => "baixa",
+        SuggestionLevel::Medium => "média",
+        SuggestionLevel::High => "alta",
+    }
+}
+
+fn status_word(status: SuggestionStatus) -> &'static str {
+    match status {
+        SuggestionStatus::New => "Nova",
+        SuggestionStatus::InAnalysis => "Em análise",
+        SuggestionStatus::Accepted => "Aceita",
+        SuggestionStatus::Rejected => "Recusada",
+        SuggestionStatus::Resolved => "Resolvida",
+        SuggestionStatus::Deferred => "Adiada",
+        SuggestionStatus::Invalid => "Inválida",
+    }
+}
+
+/// The tab: the analysis bar, the filter and the cards.
+pub fn panel(state: SuggestionsState) -> impl IntoView {
+    // The list follows the current project.
+    Effect::new(move |_| {
+        state.shared.current.track();
+        state.load(false);
+    });
+    let has_project = move || state.shared.current.with(Option::is_some);
+    let analysis_running = move || {
+        state
+            .run
+            .with(|run| matches!(run, RunView::Running { target: None, .. }))
+    };
+    view! {
+        <div class="sugg" data-testid="suggestions">
+            <div class="card sugg__bar">
+                <div class="sugg__bar-head">
+                    <div>
+                        <h2 class="h2">"Analisar projeto"</h2>
+                        <p class="note">
+                            {move || format!(
+                                "O modelo lê os arquivos de texto do topo de {}, como no chat, e propõe até 10 sugestões. Nada é alterado.",
+                                sidebar::current_name(state.shared).unwrap_or_else(|| "um projeto".to_string())
+                            )}
+                        </p>
+                    </div>
+                    {move || {
+                        if analysis_running() {
+                            view! {
+                                <button class="btn" type="button" on:click=move |_| state.cancel()>"Cancelar"</button>
+                            }
+                            .into_any()
+                        } else {
+                            view! {
+                                <button
+                                    class="btn btn--primary"
+                                    type="button"
+                                    data-testid="analyze"
+                                    disabled=move || !has_project() || state.run.with(|run| matches!(run, RunView::Running { .. }))
+                                    on:click=move |_| state.analyze()
+                                >
+                                    "Analisar projeto"
+                                </button>
+                            }
+                            .into_any()
+                        }
+                    }}
+                </div>
+                <div class="segmented sugg__wrap" role="group" aria-label="Foco da análise">
+                    {FOCI
+                        .into_iter()
+                        .map(|(focus, label)| {
+                            view! {
+                                <button
+                                    class="seg"
+                                    type="button"
+                                    aria-pressed=move || (state.focus.get() == focus).to_string()
+                                    on:click=move |_| state.focus.set(focus)
+                                >
+                                    {label}
+                                </button>
+                            }
+                        })
+                        .collect_view()}
+                </div>
+                {move || match state.run.get() {
+                    RunView::Idle => ().into_any(),
+                    RunView::Running { target, characters } => {
+                        let what = if target.is_some() { "Gerando a alteração…" } else { "Analisando…" };
+                        view! {
+                            <p class="note" role="status">
+                                {format!("{what} {characters} caracteres recebidos.")}
+                            </p>
+                        }
+                        .into_any()
+                    }
+                    RunView::Note(words) => view! { <p class="note note--ok" role="status">{words}</p> }.into_any(),
+                    RunView::Failed(words) => view! { <p class="note" role="alert">{words}</p> }.into_any(),
+                }}
+            </div>
+            <div class="segmented sugg__wrap" role="group" aria-label="Filtrar por status">
+                {Filter::ALL
+                    .into_iter()
+                    .map(|filter| {
+                        view! {
+                            <button
+                                class="seg"
+                                type="button"
+                                aria-pressed=move || (state.filter.get() == filter).to_string()
+                                on:click=move |_| state.filter.set(filter)
+                            >
+                                {filter.label()}
+                            </button>
+                        }
+                    })
+                    .collect_view()}
+            </div>
+            {move || state.action_error.get().map(|message| view! { <p class="note" role="alert">{message}</p> })}
+            {move || list_view(state)}
+        </div>
+    }
+}
+
+fn list_view(state: SuggestionsState) -> AnyView {
+    match state.list.get() {
+        ListView::NoProject => view! {
+            <div class="empty">
+                <h2 class="empty__title">"Nenhum projeto escolhido"</h2>
+                <p class="empty__lead">"Escolha um projeto na barra lateral para ver as sugestões dele."</p>
+            </div>
+        }
+        .into_any(),
+        ListView::Loading => view! { <p class="note" role="status">"Carregando sugestões…"</p> }.into_any(),
+        ListView::Failed(message) => view! {
+            <div class="sugg__error">
+                <p class="note" role="alert">{format!("Não foi possível carregar as sugestões. {message}")}</p>
+                <button class="btn btn--sm" type="button" on:click=move |_| state.load(true)>"Tentar de novo"</button>
+            </div>
+        }
+        .into_any(),
+        ListView::Ready(items) if items.is_empty() => view! {
+            <div class="empty">
+                <h2 class="empty__title">"Nenhuma sugestão ainda"</h2>
+                <p class="empty__lead">"Peça uma análise do projeto. As sugestões ficam salvas e voltam quando você reabrir o projeto."</p>
+            </div>
+        }
+        .into_any(),
+        ListView::Ready(items) => {
+            let filter = state.filter.get();
+            let shown: Vec<Suggestion> = items
+                .into_iter()
+                .filter(|item| filter.keeps(item.status))
+                .collect();
+            if shown.is_empty() {
+                return view! { <p class="note">"Nenhuma sugestão com este status."</p> }.into_any();
+            }
+            shown
+                .into_iter()
+                .map(|suggestion| card(state, suggestion))
+                .collect_view()
+                .into_any()
+        }
+    }
+}
+
+fn card(state: SuggestionsState, suggestion: Suggestion) -> impl IntoView {
+    let (sev_class, sev_word) = severity_of(suggestion.severity);
+    let expanded = RwSignal::new(false);
+    let details_id = format!("sugg-more-{}", suggestion.id);
+    let reasoning = suggestion.reasoning.clone();
+    let proposed = suggestion.proposed_changes.clone();
+    let id = suggestion.id.clone();
+    let status = suggestion.status;
+    let busy = {
+        let id = id.clone();
+        move || {
+            state
+                .deciding
+                .with(|deciding| deciding.as_deref() == Some(id.as_str()))
+                || state.run.with(|run| matches!(run, RunView::Running { .. }))
+        }
+    };
+    let actions = {
+        let suggestion = suggestion.clone();
+        let busy = busy.clone();
+        move || {
+            let button = |label: &'static str, class: &'static str, next: SuggestionStatus| {
+                let suggestion = suggestion.clone();
+                let busy = busy.clone();
+                view! {
+                    <button class=class type="button" disabled=busy on:click=move |_| state.decide(&suggestion, next)>
+                        {label}
+                    </button>
+                }
+            };
+            let mut views = Vec::new();
+            if status == SuggestionStatus::Accepted {
+                let suggestion = suggestion.clone();
+                let busy = busy.clone();
+                views.push(
+                    view! {
+                        <button
+                            class="btn btn--sm btn--primary"
+                            type="button"
+                            disabled=busy
+                            on:click=move |_| state.generate(&suggestion)
+                        >
+                            "Gerar alteração"
+                        </button>
+                    }
+                    .into_any(),
+                );
+            }
+            if matches!(
+                status,
+                SuggestionStatus::New | SuggestionStatus::InAnalysis | SuggestionStatus::Deferred
+            ) {
+                views.push(
+                    button(
+                        "Aceitar",
+                        "btn btn--sm btn--primary",
+                        SuggestionStatus::Accepted,
+                    )
+                    .into_any(),
+                );
+            }
+            if matches!(
+                status,
+                SuggestionStatus::New | SuggestionStatus::InAnalysis | SuggestionStatus::Accepted
+            ) {
+                views.push(button("Adiar", "btn btn--sm", SuggestionStatus::Deferred).into_any());
+            }
+            if status.is_active() {
+                views.push(
+                    button(
+                        "Recusar",
+                        "btn btn--sm btn--ghost",
+                        SuggestionStatus::Rejected,
+                    )
+                    .into_any(),
+                );
+            }
+            views
+        }
+    };
+    let has_actions = status.is_active();
+    view! {
+        <article class="card card--flush sugg-card" data-testid="suggestion">
+            <div class="card__head">
+                <div class="sugg-card__title">
+                    <span class=sev_class>{sev_word}</span>
+                    <h3 class="h2">{suggestion.title.clone()}</h3>
+                </div>
+                <span class="tag">{status_word(status)}</span>
+            </div>
+            <div class="sugg-card__body">
+                <p class="note">
+                    {format!(
+                        "{} · complexidade {} · risco {} · confiança {}%",
+                        category_word(suggestion.category),
+                        level_word(suggestion.complexity),
+                        level_word(suggestion.risk),
+                        suggestion.confidence
+                    )}
+                </p>
+                <p class="body">{suggestion.description.clone()}</p>
+                {(!suggestion.expected_benefits.is_empty()).then(|| view! {
+                    <div>
+                        <div class="eyebrow">"Benefícios esperados"</div>
+                        <ul class="sugg-card__list">
+                            {suggestion.expected_benefits.iter().map(|benefit| view! { <li>{benefit.clone()}</li> }).collect_view()}
+                        </ul>
+                    </div>
+                })}
+                {(!suggestion.affected_files.is_empty()).then(|| view! {
+                    <div>
+                        <div class="eyebrow">"Arquivos afetados"</div>
+                        <ul class="sugg-card__list">
+                            {suggestion.affected_files.iter().map(|path| view! { <li class="path">{path.clone()}</li> }).collect_view()}
+                        </ul>
+                    </div>
+                })}
+                <button
+                    class="btn btn--sm btn--ghost sugg-card__more"
+                    type="button"
+                    aria-expanded=move || expanded.get().to_string()
+                    aria-controls=details_id.clone()
+                    on:click=move |_| expanded.update(|open| *open = !*open)
+                >
+                    {move || if expanded.get() { "Ocultar raciocínio e mudanças" } else { "Ver raciocínio e mudanças propostas" }}
+                </button>
+                <div id=details_id class="sugg-card__more-body">
+                    {move || expanded.get().then(|| {
+                        let reasoning = reasoning.clone();
+                        let proposed = proposed.clone();
+                        view! {
+                            <div class="eyebrow">"Raciocínio"</div>
+                            <div class="md">{markdown::parse(&reasoning).into_iter().map(markdown::view).collect_view()}</div>
+                            {(!proposed.trim().is_empty()).then(|| view! {
+                                <div class="eyebrow">"Mudanças propostas"</div>
+                                <div class="md">{markdown::parse(&proposed).into_iter().map(markdown::view).collect_view()}</div>
+                            })}
+                        }
+                    })}
+                </div>
+            </div>
+            {has_actions.then(|| view! { <div class="card__foot">{actions}</div> })}
+        </article>
+    }
+}

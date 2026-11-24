@@ -13,8 +13,8 @@
 use std::path::{Path, PathBuf};
 
 use noct_core::file_change::check_relative_path;
-use noct_core::proposal_block::{ProposedBlocks, read_blocks};
 use noct_core::limits::suggestion_analysis::MAXIMUM_CHANGE_FILES;
+use noct_core::proposal_block::{ProposedBlocks, read_blocks};
 use noct_core::suggestion_analysis::{
     AnalysisFocus, AnalysisReading, AnalysisRefusal, change_messages, instructions, project_file,
     read_reply, request,

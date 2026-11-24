@@ -1562,3 +1562,6 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
   affected files through `resolve_target`/`read_base`, and records only blocks for those files as pending changes through
   the existing journal; nothing is written to the project before approval in Construir.
 - `suggestions_list` reads a project's suggestions (every status, at most 200) after the authorization check.
+- Interface: Revisar has the tabs Conversa and Sugestões. Model text is shown as text (affected files never as links;
+  reasoning and proposed changes through `markdown.rs`). Checked in Chromium with a mocked shell, light and dark: no page
+  error, no link, image or script in the tab, filter and failure states shown. Not checked in a real window.

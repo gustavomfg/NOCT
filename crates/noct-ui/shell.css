@@ -2233,3 +2233,77 @@ button {
     animation: none;
   }
 }
+
+/* Revisar: the tabs Conversa and Sugestões, over the conversation or the suggestions. */
+.review-tabs {
+  align-self: flex-start;
+}
+
+/* Revisar › Sugestões: the analysis bar, the filter and one card per suggestion. */
+.sugg {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sugg__bar {
+  gap: 12px;
+}
+
+.sugg__bar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sugg__wrap {
+  flex-wrap: wrap;
+  align-self: flex-start;
+}
+
+.sugg__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sugg-card__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sugg-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+}
+
+.sugg-card__list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.sugg-card__list .path {
+  overflow-wrap: anywhere;
+}
+
+.sugg-card__more {
+  align-self: flex-start;
+}
+
+.sugg-card__more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .sugg__bar-head {
+    flex-direction: column;
+  }
+}

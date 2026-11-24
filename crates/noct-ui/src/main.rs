@@ -16,6 +16,7 @@ mod select;
 mod settings;
 mod settings_panel;
 mod sidebar;
+mod suggestions_panel;
 mod theme;
 mod workspaces;
 
