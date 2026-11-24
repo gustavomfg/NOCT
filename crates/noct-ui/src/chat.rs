@@ -109,7 +109,7 @@ pub fn question_is_sendable(question: &str) -> bool {
 /// The words for the switch.
 pub fn switch_words(enabled: bool) -> &'static str {
     if enabled {
-        "Ligado. Só os arquivos de texto do topo do projeto são lidos."
+        "Ligado. Vão os arquivos escolhidos e a lista de nomes do projeto."
     } else {
         "Desligado. Nada é enviado ao OpenRouter."
     }

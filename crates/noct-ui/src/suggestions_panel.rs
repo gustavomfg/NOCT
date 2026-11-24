@@ -18,8 +18,13 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::chat::{self, ProposedChange};
+use crate::context_picker::{self, ContextState};
+use crate::dom;
 use crate::ipc;
 use crate::markdown;
+use noct_core::suggestion_analysis::VERIFIED_SOURCE;
+
+const REASON_ID: &str = "sugg-reason";
 use crate::select::{self, Choice};
 use crate::sidebar::{self, Shared};
 
@@ -150,6 +155,9 @@ pub struct SuggestionsState {
     run_of: RwSignal<(Option<String>, u64)>,
     /// The suggestion whose status is being changed.
     deciding: RwSignal<Option<String>>,
+    /// The suggestion whose refusal asks for its optional reason, and the reason typed.
+    refusing: RwSignal<Option<String>>,
+    reason: RwSignal<String>,
     action_error: RwSignal<Option<String>>,
 }
 
@@ -164,6 +172,8 @@ impl SuggestionsState {
             run: RwSignal::new(RunView::Idle),
             run_of: RwSignal::new((None, 0)),
             deciding: RwSignal::new(None),
+            refusing: RwSignal::new(None),
+            reason: RwSignal::new(String::new()),
             action_error: RwSignal::new(None),
         }
     }
@@ -342,6 +352,16 @@ impl SuggestionsState {
 
     /// Moves a suggestion to `status`. Only the status changes; nothing is written to the project.
     fn decide(self, suggestion: &Suggestion, status: SuggestionStatus) {
+        self.decide_with(suggestion, status, None);
+    }
+
+    /// Moves a suggestion to `status` with the person's reason, kept in the decision's result.
+    fn decide_with(
+        self,
+        suggestion: &Suggestion,
+        status: SuggestionStatus,
+        result: Option<String>,
+    ) {
         if self.deciding.get_untracked().is_some() {
             return;
         }
@@ -352,10 +372,12 @@ impl SuggestionsState {
             "conversationId": suggestion.conversation_id,
             "suggestionId": id,
             "status": status.as_str(),
+            "result": result,
         }})
         .to_string();
         ipc::call_with(STATUS, &payload, move |outcome| {
             self.deciding.set(None);
+            self.refusing.set(None);
             match ipc::reply(outcome).and_then(|text| {
                 serde_json::from_str::<Suggestion>(&text).map_err(|_| ipc::invalid_response())
             }) {
@@ -430,7 +452,7 @@ fn status_word(status: SuggestionStatus) -> &'static str {
 
 /// The list of Sugestões: a head with the focus and "Analisar projeto", a status filter once there is a suggestion, and one
 /// row per suggestion, in the light list of Ajustes.
-pub fn panel(state: SuggestionsState) -> impl IntoView {
+pub fn panel(state: SuggestionsState, context: ContextState) -> impl IntoView {
     let has_project = move || state.shared.current.with(Option::is_some);
     let has_items = move || {
         state
@@ -450,10 +472,11 @@ pub fn panel(state: SuggestionsState) -> impl IntoView {
                     <h1 class="h1">"Sugestões"</h1>
                     <p class="lead">
                         {move || format!(
-                            "O modelo lê os arquivos de texto do topo de {}, como no chat, e propõe até 10 sugestões. Nada é alterado.",
+                            "O modelo lê os arquivos escolhidos de {}, a lista de nomes do projeto e as sugestões anteriores, e propõe até 10 sugestões. Nada é alterado.",
                             sidebar::current_name(state.shared).unwrap_or_else(|| "um projeto".to_string())
                         )}
                     </p>
+                    {context_picker::summary(context, "ctx-open-suggestions")}
                 </div>
                 <div class="sugg__head-actions">
                     <div class="pick">
@@ -610,6 +633,10 @@ fn row(state: SuggestionsState, suggestion: Suggestion) -> impl IntoView {
         suggestion.confidence
     );
     let title = suggestion.title.clone();
+    let verified = suggestion
+        .evidence
+        .iter()
+        .any(|item| item.source == VERIFIED_SOURCE);
     view! {
         <div class="item sugg-row" data-testid="suggestion">
             <div class="item__txt">
@@ -619,6 +646,7 @@ fn row(state: SuggestionsState, suggestion: Suggestion) -> impl IntoView {
                     {title}
                 </div>
                 <div class="item__desc">{meta}</div>
+                {(!verified).then(|| view! { <div class="item__desc sugg-row__unverified">"Evidência não verificada"</div> })}
             </div>
             <div class="item__control">
                 <span class="tag">{status_word(status)}</span>
@@ -685,12 +713,46 @@ fn details(
         actions.push(button("Adiar", "btn btn--sm", SuggestionStatus::Deferred));
     }
     if status.is_active() {
-        actions.push(button(
-            "Recusar",
-            "btn btn--sm btn--ghost",
-            SuggestionStatus::Rejected,
-        ));
+        let id = suggestion.id.clone();
+        let busy = busy.clone();
+        actions.push(
+            view! {
+                <button
+                    class="btn btn--sm btn--ghost"
+                    type="button"
+                    disabled=busy
+                    on:click=move |_| {
+                        state.reason.set(String::new());
+                        state.refusing.set(Some(id.clone()));
+                        dom::next_frame(|| dom::focus(REASON_ID));
+                    }
+                >
+                    "Recusar"
+                </button>
+            }
+            .into_any(),
+        );
     }
+    let refusing = {
+        let id = suggestion.id.clone();
+        move || {
+            state
+                .refusing
+                .with(|refusing| refusing.as_deref() == Some(id.as_str()))
+        }
+    };
+    let refused = suggestion.clone();
+    let refuse = move |with_reason: bool| {
+        let reason = state.reason.get_untracked().trim().to_string();
+        let result = (with_reason && !reason.is_empty()).then_some(reason);
+        state.decide_with(&refused, SuggestionStatus::Rejected, result);
+    };
+    let evidence: Vec<_> = suggestion
+        .evidence
+        .iter()
+        .filter(|item| item.source == VERIFIED_SOURCE)
+        .cloned()
+        .collect();
     let proposed = suggestion.proposed_changes.clone();
     view! {
         <p class="body">{suggestion.description.clone()}</p>
@@ -716,6 +778,68 @@ fn details(
             <div class="eyebrow">"Mudanças propostas"</div>
             <div class="md">{markdown::parse(&proposed).into_iter().map(markdown::view).collect_view()}</div>
         })}
-        {(!actions.is_empty()).then(|| view! { <div class="sugg-row__actions">{actions}</div> })}
+        <div class="eyebrow">"Evidência"</div>
+        {if evidence.is_empty() {
+            view! { <p class="note">"Evidência não verificada: nenhum trecho citado pelo modelo bateu com os arquivos enviados."</p> }.into_any()
+        } else {
+            evidence
+                .into_iter()
+                .map(|item| view! {
+                    <div class="sugg-evidence">
+                        <div class="path">{item.location.clone().unwrap_or_default()}</div>
+                        <pre class="sugg-evidence__lines">{item.detail.clone()}</pre>
+                    </div>
+                })
+                .collect_view()
+                .into_any()
+        }}
+        {let refusing = refusing.clone(); move || {
+            if refusing() {
+                let refuse_with = refuse.clone();
+                let refuse_without = refuse.clone();
+                view! {
+                    <div
+                        class="sugg-refuse"
+                        on:keydown=move |event: leptos::ev::KeyboardEvent| {
+                            if event.key() == "Escape" {
+                                event.prevent_default();
+                                state.refusing.set(None);
+                            }
+                        }
+                    >
+                        <label class="pick__label" for=REASON_ID>"Motivo da recusa (opcional)"</label>
+                        <input
+                            id=REASON_ID
+                            class="field"
+                            type="text"
+                            maxlength="200"
+                            prop:value=move || state.reason.get()
+                            on:input=move |event| state.reason.set(event_target_value(&event))
+                            on:keydown=move |event: leptos::ev::KeyboardEvent| {
+                                if event.key() == "Enter" {
+                                    event.prevent_default();
+                                    refuse_with(true);
+                                }
+                            }
+                        />
+                        <div class="sugg-row__actions">
+                            <button class="btn btn--sm" type="button" on:click=move |_| state.refusing.set(None)>"Voltar"</button>
+                            <button class="btn btn--sm btn--ghost" type="button" on:click=move |_| refuse_without(false)>"Pular e recusar"</button>
+                            <button class="btn btn--sm btn--primary" type="button" on:click={
+                                let refuse = refuse.clone();
+                                move |_| refuse(true)
+                            }>"Recusar"</button>
+                        </div>
+                    </div>
+                }
+                .into_any()
+            } else {
+                ().into_any()
+            }
+        }}
+        {(!actions.is_empty()).then(|| {
+            let refusing = refusing.clone();
+            view! { <div class="sugg-row__actions" hidden=refusing>{actions}</div> }
+        })}
     }
 }

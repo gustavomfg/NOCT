@@ -1573,3 +1573,16 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
   answer only (a failed or cancelled answer saves nothing) with `read_findings`: the analysis validator, at most 5, bounds,
   affected files confined to the project, duplicates by identity; an invalid block saves nothing. Storage is the existing
   reconciliation, so a new finding is "Nova" and a known one keeps its status. The window only gets the count.
+
+## Context, evidence and memory of Sugestões (2026-11-24) [security-review]
+
+- A call carries the project tree (names and sizes, at most 2,000, no sensitive or ignored file, no link followed) and the
+  chosen files (`context_tree`, `context_selection_set`; the choice is kept per project under the hidden `maintenance.`
+  prefix, default = the top level). The caps stay 32 KiB per file and 128 KiB in all. Consent is now `openrouter-v2`, so every
+  project is asked again; the card names the tree and the earlier suggestions.
+- Evidence: the model gives `path:start-end`; the shell keeps it only when the file's text was sent and the lines exist, reads
+  at most 12 lines from the disk with the change path rules (no link, no sensitive file), and stores that excerpt with the
+  source `noct:verificada` in the existing `evidence` column. Older rows show "evidência não verificada".
+- Memory: an analysis carries up to 30 earlier suggestions (title, status, last reason; at most 3 KiB) as data. A refusal may
+  carry a one-line reason in `result` through `suggestions_status`. Schema 32 is unchanged.
+- `check:ui` knew neither `suggestions_list` (the lamp's count, since `d5e1e01`) nor `context_tree`; its mock now answers both.

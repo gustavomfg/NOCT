@@ -850,7 +850,9 @@ pub fn consent_card(state: ChatState) -> impl IntoView {
                             <p class="body">"Para responder a esta pergunta, o NOCT envia:"</p>
                             <ul>
                                 <li>"Sua pergunta. As respostas anteriores desta janela não são enviadas."</li>
-                                <li>"Até 128 KiB de texto dos arquivos do topo do projeto, sem arquivos sensíveis, como .env, chaves e certificados."</li>
+                                <li>"Até 128 KiB de texto dos arquivos escolhidos (por padrão, os do topo do projeto), sem arquivos sensíveis, como .env, chaves e certificados."</li>
+                                <li>"A lista de nomes e tamanhos dos arquivos do projeto, até 2.000, sem conteúdo e sem os arquivos sensíveis."</li>
+                                <li>"Na análise de Sugestões, os títulos, o status e o motivo das sugestões anteriores do projeto."</li>
                             </ul>
                             <div class="actions">
                                 <button
@@ -1026,10 +1028,7 @@ fn suggestions_view(state: ChatState) -> impl IntoView {
             "Encontrar arquivos e funções",
         ),
         ("Riscos de segurança", "Pontos para revisar primeiro"),
-        (
-            "O que mudou recentemente",
-            "Pelos arquivos do topo do projeto",
-        ),
+        ("O que mudou recentemente", "Pelos arquivos escolhidos"),
     ];
     let title = match sidebar::current_name(state.shared) {
         Some(name) => format!("O que você quer entender em {name}?"),
