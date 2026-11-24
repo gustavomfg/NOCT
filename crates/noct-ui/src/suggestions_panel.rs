@@ -20,6 +20,7 @@ use serde_json::json;
 use crate::chat::{self, ProposedChange};
 use crate::ipc;
 use crate::markdown;
+use crate::select::{self, Choice};
 use crate::sidebar::{self, Shared};
 
 const LIST: &str = "suggestions_list";
@@ -85,6 +86,26 @@ impl Filter {
         Self::Rejected,
     ];
 
+    fn value(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::New => "new",
+            Self::Accepted => "accepted",
+            Self::Deferred => "deferred",
+            Self::Rejected => "rejected",
+        }
+    }
+
+    fn choices() -> Vec<Choice> {
+        Self::ALL
+            .iter()
+            .map(|filter| Choice {
+                value: filter.value(),
+                label: filter.label(),
+            })
+            .collect()
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::All => "Todas",
@@ -106,12 +127,13 @@ impl Filter {
     }
 }
 
-const FOCI: [(AnalysisFocus, &str); 5] = [
-    (AnalysisFocus::Free, "Livre"),
-    (AnalysisFocus::Security, "Segurança"),
-    (AnalysisFocus::Quality, "Qualidade"),
-    (AnalysisFocus::Performance, "Desempenho"),
-    (AnalysisFocus::Testing, "Testes"),
+/// The focus of an analysis: the value the select keeps, and the words shown.
+const FOCI: [(AnalysisFocus, &str, &str); 5] = [
+    (AnalysisFocus::Free, "free", "Livre"),
+    (AnalysisFocus::Security, "security", "Segurança"),
+    (AnalysisFocus::Quality, "quality", "Qualidade"),
+    (AnalysisFocus::Performance, "performance", "Desempenho"),
+    (AnalysisFocus::Testing, "testing", "Testes"),
 ];
 
 /// The tab's state. It lives with the window, so a running analysis survives a switch to the conversation tab.
@@ -398,10 +420,16 @@ fn status_word(status: SuggestionStatus) -> &'static str {
     }
 }
 
-/// The list of Sugestões: its head with "Analisar projeto", the focus and the filter, and one row per suggestion, in the
-/// light list of Ajustes.
+/// The list of Sugestões: a head with the focus and "Analisar projeto", a status filter once there is a suggestion, and one
+/// row per suggestion, in the light list of Ajustes.
 pub fn panel(state: SuggestionsState) -> impl IntoView {
     let has_project = move || state.shared.current.with(Option::is_some);
+    let has_items = move || {
+        state
+            .list
+            .with(|list| matches!(list, ListView::Ready(items) if !items.is_empty()))
+    };
+    let running = move || state.run.with(|run| matches!(run, RunView::Running { .. }));
     let analysis_running = move || {
         state
             .run
@@ -419,62 +447,37 @@ pub fn panel(state: SuggestionsState) -> impl IntoView {
                         )}
                     </p>
                 </div>
-                {move || {
-                    if analysis_running() {
-                        view! {
-                            <button class="btn" type="button" on:click=move |_| state.cancel()>"Cancelar"</button>
-                        }
-                        .into_any()
-                    } else {
-                        view! {
-                            <button
-                                class="btn btn--primary"
-                                type="button"
-                                data-testid="analyze"
-                                disabled=move || !has_project() || state.run.with(|run| matches!(run, RunView::Running { .. }))
-                                on:click=move |_| state.analyze()
-                            >
-                                "Analisar projeto"
-                            </button>
-                        }
-                        .into_any()
-                    }
-                }}
-            </div>
-            <div class="sugg__controls">
-                <div class="segmented sugg__wrap" role="group" aria-label="Foco da análise">
-                    {FOCI
-                        .into_iter()
-                        .map(|(focus, label)| {
+                <div class="sugg__head-actions">
+                    <div class="pick">
+                        <label class="pick__label" for="sugg-focus">"Foco:"</label>
+                        {select::select(
+                            "sugg-focus",
+                            FOCI.iter().map(|(_, value, label)| Choice { value, label }).collect(),
+                            Signal::derive(move || {
+                                let focus = state.focus.get();
+                                FOCI.iter().find(|(item, _, _)| *item == focus).map_or("free", |(_, value, _)| value).to_string()
+                            }),
+                            "",
+                            Signal::derive(move || running() || !has_project()),
+                            move |value| {
+                                if let Some((focus, _, _)) = FOCI.iter().find(|(_, item, _)| *item == value) {
+                                    state.focus.set(*focus);
+                                }
+                            },
+                        )}
+                    </div>
+                    {move || {
+                        if analysis_running() {
                             view! {
-                                <button
-                                    class="seg seg--sm"
-                                    type="button"
-                                    aria-pressed=move || (state.focus.get() == focus).to_string()
-                                    on:click=move |_| state.focus.set(focus)
-                                >
-                                    {label}
-                                </button>
+                                <button class="btn" type="button" on:click=move |_| state.cancel()>"Cancelar"</button>
                             }
-                        })
-                        .collect_view()}
-                </div>
-                <div class="segmented sugg__wrap" role="group" aria-label="Filtrar por status">
-                    {Filter::ALL
-                        .into_iter()
-                        .map(|filter| {
-                            view! {
-                                <button
-                                    class="seg seg--sm"
-                                    type="button"
-                                    aria-pressed=move || (state.filter.get() == filter).to_string()
-                                    on:click=move |_| state.filter.set(filter)
-                                >
-                                    {filter.label()}
-                                </button>
-                            }
-                        })
-                        .collect_view()}
+                            .into_any()
+                        } else if has_items() {
+                            analyze_button(state, has_project, running).into_any()
+                        } else {
+                            ().into_any()
+                        }
+                    }}
                 </div>
             </div>
             {move || match state.run.get() {
@@ -490,12 +493,51 @@ pub fn panel(state: SuggestionsState) -> impl IntoView {
                 RunView::Failed(words) => view! { <p class="note" role="alert">{words}</p> }.into_any(),
             }}
             {move || state.action_error.get().map(|message| view! { <p class="note" role="alert">{message}</p> })}
-            {move || list_view(state)}
+            {move || has_items().then(|| view! {
+                <div class="pick sugg__filter">
+                    <label class="pick__label" for="sugg-status">"Status:"</label>
+                    {select::select(
+                        "sugg-status",
+                        Filter::choices(),
+                        Signal::derive(move || state.filter.get().value().to_string()),
+                        "",
+                        Signal::derive(|| false),
+                        move |value| {
+                            if let Some(filter) = Filter::ALL.into_iter().find(|filter| filter.value() == value) {
+                                state.filter.set(filter);
+                            }
+                        },
+                    )}
+                </div>
+            })}
+            {move || list_view(state, has_project, running)}
         </div>
     }
 }
 
-fn list_view(state: SuggestionsState) -> AnyView {
+fn analyze_button(
+    state: SuggestionsState,
+    has_project: impl Fn() -> bool + Copy + Send + Sync + 'static,
+    running: impl Fn() -> bool + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <button
+            class="btn btn--primary"
+            type="button"
+            data-testid="analyze"
+            disabled=move || !has_project() || running()
+            on:click=move |_| state.analyze()
+        >
+            "Analisar projeto"
+        </button>
+    }
+}
+
+fn list_view(
+    state: SuggestionsState,
+    has_project: impl Fn() -> bool + Copy + Send + Sync + 'static,
+    running: impl Fn() -> bool + Copy + Send + Sync + 'static,
+) -> AnyView {
     match state.list.get() {
         ListView::NoProject => view! {
             <div class="empty">
@@ -516,6 +558,7 @@ fn list_view(state: SuggestionsState) -> AnyView {
             <div class="empty">
                 <h2 class="empty__title">"Nenhuma sugestão ainda"</h2>
                 <p class="empty__lead">"Peça uma análise do projeto. As sugestões ficam salvas e voltam quando você reabrir o projeto."</p>
+                {analyze_button(state, has_project, running)}
             </div>
         }
         .into_any(),
