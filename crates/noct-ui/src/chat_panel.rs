@@ -326,7 +326,8 @@ impl ChatState {
             (
                 session.run(),
                 session.workspace().to_string(),
-                session.answer().to_string(),
+                // Saved as the screen shows it: the findings block went to Sugestões.
+                noct_core::suggestion_analysis::without_findings(session.answer()),
             )
         });
         if !answer.with_untracked(Session::can_save) || self.save_busy.get_untracked() {
@@ -460,7 +461,7 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     let blocks = Memo::new(move |_| {
         session.with(|session| {
             markdown::keyed(&noct_core::proposal_block::shown_answer(
-                noct_core::suggestion_analysis::without_findings(session.answer()),
+                &noct_core::suggestion_analysis::without_findings(session.answer()),
             ))
         })
     });

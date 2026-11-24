@@ -121,14 +121,29 @@ pub fn findings_instructions() -> String {
     )
 }
 
-/// The answer as the chat shows it: without the findings block, which goes to Sugestões. Everything from the block's
-/// fence on is left out, so a block still arriving is not shown either.
-pub fn without_findings(answer: &str) -> &str {
-    let lower = answer.to_ascii_lowercase();
-    match lower.find("```nocturne-suggestions") {
-        Some(start) => answer[..start].trim_end(),
-        None => answer,
+/// The answer as the chat shows it and saves it: without the findings blocks, which go to Sugestões. A block runs from its
+/// fence to the closing fence; a block not yet closed (still arriving) runs to the end. The text around it is kept.
+pub fn without_findings(answer: &str) -> String {
+    const OPEN: &str = "```nocturne-suggestions";
+    let mut kept = String::new();
+    let mut rest = answer;
+    while let Some(start) = rest.to_ascii_lowercase().find(OPEN) {
+        kept.push_str(&rest[..start]);
+        let after = &rest[start + OPEN.len()..];
+        rest = match after.find("```") {
+            Some(end) => &after[end + 3..],
+            None => "",
+        };
     }
+    kept.push_str(rest);
+    if kept.len() == answer.len() {
+        return kept;
+    }
+    let mut cleaned = kept.trim().to_string();
+    while cleaned.contains("\n\n\n") {
+        cleaned = cleaned.replace("\n\n\n", "\n\n");
+    }
+    cleaned
 }
 
 fn read_at_most(reply: &str, maximum: usize) -> Result<AnalysisReading, AnalysisRefusal> {
@@ -333,11 +348,19 @@ mod tests {
     }
 
     #[test]
-    fn the_chat_hides_the_findings_block() {
+    fn the_findings_block_is_removed_from_what_the_chat_shows_and_saves() {
         assert_eq!(
-            without_findings("Texto.\n\n```nocturne-suggestions\n[]"),
+            without_findings("Texto.\n\n```nocturne-suggestions\n[{\"title\":\"A\"}]\n```\n"),
             "Texto."
         );
-        assert_eq!(without_findings("Só texto."), "Só texto.");
+        assert_eq!(
+            without_findings("Antes.\n\n```nocturne-suggestions\n[]\n```\n\nDepois."),
+            "Antes.\n\nDepois."
+        );
+        assert_eq!(
+            without_findings("Antes.\n```nocturne-suggestions\n[{\"ti"),
+            "Antes."
+        );
+        assert_eq!(without_findings("Só texto.\n"), "Só texto.\n");
     }
 }
