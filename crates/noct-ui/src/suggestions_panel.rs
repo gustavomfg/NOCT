@@ -174,6 +174,14 @@ impl SuggestionsState {
             self.shared.current.track();
             self.load(false);
         });
+        // Findings saved from the chat: the list is read again.
+        Effect::new(move |previous: Option<u64>| {
+            let count = self.shared.suggestions_version.get();
+            if previous.is_some_and(|previous| previous != count) {
+                self.load(true);
+            }
+            count
+        });
     }
 
     /// How many suggestions of the current project are still open, or `None` while the list is not read.

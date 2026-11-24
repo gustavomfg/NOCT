@@ -62,6 +62,30 @@ pub fn set_enabled(store: &Store, enabled: bool) -> Result<ChatStatus, CommandEr
     status(store)
 }
 
+/// The settings key of "Salvar achados do chat em Sugestões". Its value is `"true"` or `"false"`; any other value, or
+/// none, is on.
+pub const FINDINGS_KEY: &str = "chatFindingsEnabled";
+
+/// Whether the chat's findings are saved in Sugestões, as the person left it.
+pub fn findings_enabled(store: &Store) -> Result<bool, CommandError> {
+    let saved = store
+        .settings()
+        .value(FINDINGS_KEY)
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(saved.as_deref() != Some("false"))
+}
+
+/// Turns the saving of findings on or off, and returns the switches as they are stored afterwards.
+pub fn set_findings(store: &Store, enabled: bool) -> Result<ChatStatus, CommandError> {
+    let mut values = std::collections::BTreeMap::new();
+    values.insert(FINDINGS_KEY.to_string(), enabled.to_string());
+    store
+        .settings()
+        .set(&values)
+        .map_err(|_| CommandError::Persistence)?;
+    status(store)
+}
+
 /// The request that turns the chat on or off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -226,6 +250,10 @@ pub enum ChatEvent {
     Proposed {
         changes: Vec<ProposedChange>,
         refused: usize,
+    },
+    /// The findings of a complete answer saved in Sugestões. Sent once, before `Done`, only when at least one was saved.
+    Findings {
+        saved: usize,
     },
     Done,
     Failed {
@@ -426,10 +454,13 @@ fn lock(running: &Mutex<Option<Running>>) -> MutexGuard<'_, Option<Running>> {
 #[serde(rename_all = "camelCase")]
 pub struct ChatStatus {
     pub enabled: bool,
+    /// Whether the findings of an answer are saved in Sugestões.
+    pub findings: bool,
 }
 
 pub fn status(store: &Store) -> Result<ChatStatus, CommandError> {
     Ok(ChatStatus {
         enabled: is_enabled(store)?,
+        findings: findings_enabled(store)?,
     })
 }

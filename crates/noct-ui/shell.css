@@ -2356,3 +2356,19 @@ button {
     justify-content: flex-start;
   }
 }
+
+/* The line under an answer whose findings were saved in Sugestões: small, and a button that opens the list. */
+.findings-line {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.findings-line:hover {
+  color: var(--text);
+}

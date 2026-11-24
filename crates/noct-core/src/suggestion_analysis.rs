@@ -19,8 +19,9 @@ use serde::{Deserialize, Serialize};
 use crate::ai::context::{is_ignored_relative_path, is_potentially_sensitive_path};
 use crate::file_change::check_relative_path;
 use crate::limits::suggestion_analysis::{
-    MAXIMUM_AFFECTED_FILES, MAXIMUM_BENEFIT_CHARACTERS, MAXIMUM_BENEFITS, MAXIMUM_EVIDENCE,
-    MAXIMUM_PROPOSED_CHANGES_CHARACTERS, MAXIMUM_SUGGESTIONS, MAXIMUM_TEXT_CHARACTERS,
+    MAXIMUM_AFFECTED_FILES, MAXIMUM_BENEFIT_CHARACTERS, MAXIMUM_BENEFITS, MAXIMUM_CHAT_FINDINGS,
+    MAXIMUM_EVIDENCE, MAXIMUM_PROPOSED_CHANGES_CHARACTERS, MAXIMUM_SUGGESTIONS,
+    MAXIMUM_TEXT_CHARACTERS,
 };
 use crate::suggestions::{
     Suggestion, SuggestionInput, SuggestionSnapshot, extract_suggestions, suggestion_identity,
@@ -98,6 +99,39 @@ pub struct AnalysisReading {
 
 /// Reads the reply of an analysis. See the module documentation for the rules.
 pub fn read_reply(reply: &str) -> Result<AnalysisReading, AnalysisRefusal> {
+    read_at_most(reply, MAXIMUM_SUGGESTIONS)
+}
+
+/// Reads the findings block of a complete chat answer with the same rules as an analysis, keeping at most
+/// [`MAXIMUM_CHAT_FINDINGS`].
+pub fn read_findings(answer: &str) -> Result<AnalysisReading, AnalysisRefusal> {
+    read_at_most(answer, MAXIMUM_CHAT_FINDINGS)
+}
+
+/// The lines the chat's instructions get when findings are saved: a block only for a concrete problem.
+pub fn findings_instructions() -> String {
+    format!(
+        "\nSomente se você encontrar algo concreto no projeto (erro, risco, bug), termine a resposta com um único bloco \
+         ```nocturne-suggestions com no máximo {MAXIMUM_CHAT_FINDINGS} achados, em JSON válido, no formato: \
+         [{{\"title\":\"...\",\"description\":\"problema e impacto\",\"reasoning\":\"justificativa\",\
+         \"category\":\"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility\",\
+         \"severity\":\"info|low|medium|high|critical\",\"affectedFiles\":[\"caminho/relativo\"],\
+         \"proposedChanges\":\"descrição da solução\",\"expectedBenefits\":[\"benefício\"],\
+         \"complexity\":\"low|medium|high\",\"risk\":\"low|medium|high\"}}]. Sem achado concreto, não escreva o bloco.\n"
+    )
+}
+
+/// The answer as the chat shows it: without the findings block, which goes to Sugestões. Everything from the block's
+/// fence on is left out, so a block still arriving is not shown either.
+pub fn without_findings(answer: &str) -> &str {
+    let lower = answer.to_ascii_lowercase();
+    match lower.find("```nocturne-suggestions") {
+        Some(start) => answer[..start].trim_end(),
+        None => answer,
+    }
+}
+
+fn read_at_most(reply: &str, maximum: usize) -> Result<AnalysisReading, AnalysisRefusal> {
     let extracted = extract_suggestions(reply);
     match extracted.snapshot {
         SuggestionSnapshot::Valid => {}
@@ -111,10 +145,9 @@ pub fn read_reply(reply: &str) -> Result<AnalysisReading, AnalysisRefusal> {
     let mut identities = Vec::new();
     for suggestion in extracted.suggestions {
         let identity = suggestion_identity(suggestion.category, &suggestion.title);
-        let kept = (reading.suggestions.len() < MAXIMUM_SUGGESTIONS
-            && !identities.contains(&identity))
-        .then(|| bounded(suggestion))
-        .flatten();
+        let kept = (reading.suggestions.len() < maximum && !identities.contains(&identity))
+            .then(|| bounded(suggestion))
+            .flatten();
         match kept {
             Some(suggestion) => {
                 identities.push(identity);
@@ -272,5 +305,39 @@ mod tests {
             Err(AnalysisRefusal::Invalid)
         );
         assert_eq!(read_reply("sem bloco"), Err(AnalysisRefusal::Absent));
+    }
+
+    #[test]
+    fn chat_findings_keep_at_most_five() {
+        let items: Vec<_> = (0..7).map(|n| item(&format!("Achado {n}"), &[])).collect();
+        let reading = read_findings(&reply(&items)).expect("the block reads");
+        assert_eq!(reading.suggestions.len(), 5);
+        assert_eq!(reading.discarded, 2);
+    }
+
+    #[test]
+    fn chat_findings_are_checked_as_an_analysis() {
+        let malformed = "Resposta.\n```nocturne-suggestions\n[{\"title\": \"A\",]\n```";
+        assert_eq!(read_findings(malformed), Err(AnalysisRefusal::Invalid));
+        let mut large = item("Grande", &[]);
+        large["proposedChanges"] =
+            serde_json::json!("x".repeat(MAXIMUM_PROPOSED_CHANGES_CHARACTERS + 1));
+        let reading = read_findings(&reply(&[
+            large,
+            item("Fora", &["../fora.rs", "/etc/x", "src/ok.rs"]),
+        ]))
+        .expect("the block reads");
+        assert_eq!(reading.discarded, 1);
+        assert_eq!(reading.suggestions[0].affected_files, ["src/ok.rs"]);
+        assert_eq!(read_findings("Sem achados."), Err(AnalysisRefusal::Absent));
+    }
+
+    #[test]
+    fn the_chat_hides_the_findings_block() {
+        assert_eq!(
+            without_findings("Texto.\n\n```nocturne-suggestions\n[]"),
+            "Texto."
+        );
+        assert_eq!(without_findings("Só texto."), "Só texto.");
     }
 }

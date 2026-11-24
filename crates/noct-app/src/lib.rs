@@ -69,6 +69,7 @@ pub fn command_handler<R: Runtime>()
         commands::suggestions_list,
         commands::suggestions_analyze,
         commands::suggestion_generate_change,
+        commands::provider_chat_set_findings,
     ]
 }
 

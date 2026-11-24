@@ -31,7 +31,17 @@ pub const SAVE_ASSISTANT: &str = "ai_save_assistant";
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ChatStatus {
     pub enabled: bool,
+    /// Whether the findings of an answer are saved in Sugestões. On when the shell does not say.
+    #[serde(default = "on")]
+    pub findings: bool,
 }
+
+fn on() -> bool {
+    true
+}
+
+/// The command that turns the saving of findings on or off, from Ajustes.
+pub const SET_FINDINGS: &str = "provider_chat_set_findings";
 
 /// One event of an answer, as the shell sends it on the channel.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -44,6 +54,10 @@ pub enum Frame {
     Proposed {
         changes: Vec<ProposedChange>,
         refused: usize,
+    },
+    /// The findings of the answer the shell saved in Sugestões.
+    Findings {
+        saved: usize,
     },
     Done,
     Failed {
@@ -165,6 +179,8 @@ pub struct Session {
     saved: bool,
     /// The changes the answer proposed and the blocks refused, once the shell has recorded them.
     proposals: Option<(Vec<ProposedChange>, usize)>,
+    /// How many findings of the answer the shell saved in Sugestões.
+    findings: usize,
 }
 
 impl Session {
@@ -176,6 +192,7 @@ impl Session {
         self.workspace = workspace.to_string();
         self.answer.clear();
         self.proposals = None;
+        self.findings = 0;
         self.saved = false;
         self.run
     }
@@ -191,6 +208,7 @@ impl Session {
                 self.phase = Phase::Answering;
             }
             Frame::Proposed { changes, refused } => self.proposals = Some((changes, refused)),
+            Frame::Findings { saved } => self.findings = saved,
             Frame::Done => self.phase = Phase::Done,
             Frame::Failed { code } => {
                 self.phase = Phase::Failed(stream_failure_words(&code).to_string());
@@ -243,6 +261,11 @@ impl Session {
     /// The changes the answer proposed, and how many blocks were refused.
     pub fn proposals(&self) -> Option<&(Vec<ProposedChange>, usize)> {
         self.proposals.as_ref()
+    }
+
+    /// How many findings of the answer were saved in Sugestões.
+    pub fn findings(&self) -> usize {
+        self.findings
     }
 
     pub fn workspace(&self) -> &str {

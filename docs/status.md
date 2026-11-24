@@ -1565,3 +1565,11 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - Interface: Revisar has the tabs Conversa and Sugestões. Model text is shown as text (affected files never as links;
   reasoning and proposed changes through `markdown.rs`). Checked in Chromium with a mocked shell, light and dark: no page
   error, no link, image or script in the tab, filter and failure states shown. Not checked in a real window.
+
+## Chat findings saved in Sugestões (2026-11-24) [security-review]
+
+- While "Salvar achados do chat em Sugestões" is on (default; `chatFindingsEnabled`, `provider_chat_set_findings`), the chat's
+  instructions ask for a `nocturne-suggestions` block only for a concrete problem. The shell reads it from the complete
+  answer only (a failed or cancelled answer saves nothing) with `read_findings`: the analysis validator, at most 5, bounds,
+  affected files confined to the project, duplicates by identity; an invalid block saves nothing. Storage is the existing
+  reconciliation, so a new finding is "Nova" and a known one keeps its status. The window only gets the count.

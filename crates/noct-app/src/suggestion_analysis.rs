@@ -17,7 +17,7 @@ use noct_core::limits::suggestion_analysis::MAXIMUM_CHANGE_FILES;
 use noct_core::proposal_block::{ProposedBlocks, read_blocks};
 use noct_core::suggestion_analysis::{
     AnalysisFocus, AnalysisReading, AnalysisRefusal, change_messages, instructions, project_file,
-    read_reply, request,
+    read_findings, read_reply, request,
 };
 use noct_core::suggestions::{Suggestion, SuggestionStatus};
 use noct_db::store::Store;
@@ -175,6 +175,37 @@ pub fn store_reply(
         )?,
         discarded,
     })
+}
+
+/// Saves the findings of a complete chat answer in Sugestões, as new suggestions of the project, and returns how many
+/// were saved. The answer is untrusted and read by `read_findings`: an answer without a valid block saves nothing. A
+/// finding with the identity of an earlier suggestion keeps that suggestion's record and status.
+pub fn store_findings(
+    store: &Store,
+    blocked: &[PathBuf],
+    workspace: &str,
+    answer: &str,
+) -> Result<usize, CommandError> {
+    let Ok(AnalysisReading { suggestions, .. }) = read_findings(answer) else {
+        return Ok(0);
+    };
+    if suggestions.is_empty() {
+        return Ok(0);
+    }
+    services::authorized_workspace(store, blocked, workspace)?;
+    let conversation = match store
+        .suggestions()
+        .latest_conversation(workspace)
+        .map_err(|_| CommandError::Persistence)?
+    {
+        Some(id) => id,
+        None => services::conversation_create(store, blocked, workspace)?.id,
+    };
+    let reconciliation = store
+        .suggestions()
+        .reconcile(&conversation, workspace, &suggestions, false)
+        .map_err(|_| CommandError::Persistence)?;
+    Ok(reconciliation.suggestions.len())
 }
 
 fn failed(code: &str) -> SuggestionEvent {

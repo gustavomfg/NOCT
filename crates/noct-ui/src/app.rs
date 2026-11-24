@@ -63,6 +63,8 @@ pub fn App() -> impl IntoView {
         changes_version: RwSignal::new(0),
         build_requests: RwSignal::new(0),
         docs_requests: RwSignal::new(0),
+        suggestions_requests: RwSignal::new(0),
+        suggestions_version: RwSignal::new(0),
     };
     let settings_open = shared.settings_open;
 
@@ -89,6 +91,16 @@ pub fn App() -> impl IntoView {
     let suggestions = suggestions_panel::SuggestionsState::new(shared);
     let review_tab = RwSignal::new(ReviewTab::Conversation);
     suggestions.watch();
+    // The findings line under an answer opens Sugestões.
+    Effect::new(move |previous: Option<u64>| {
+        let count = shared.suggestions_requests.get();
+        if previous.is_some_and(|previous| previous != count) {
+            set_mode.set(Mode::Review);
+            review_tab.set(ReviewTab::Suggestions);
+            shared.close_settings();
+        }
+        count
+    });
     let in_chat = move || {
         mode.get() == Mode::Review
             && !settings_open.get()

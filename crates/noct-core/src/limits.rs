@@ -168,6 +168,8 @@ pub mod provider_chat {
 pub mod suggestion_analysis {
     /// The most suggestions one analysis stores. Those after it are discarded.
     pub const MAXIMUM_SUGGESTIONS: usize = 10;
+    /// The most findings one chat answer stores in Sugestões. Those after it are discarded.
+    pub const MAXIMUM_CHAT_FINDINGS: usize = 5;
     /// The most characters of the description and of the reasoning.
     pub const MAXIMUM_TEXT_CHARACTERS: usize = 4_000;
     /// The most characters of the proposed changes.

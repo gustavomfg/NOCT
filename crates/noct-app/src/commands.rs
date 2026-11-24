@@ -410,9 +410,12 @@ pub async fn provider_chat_send(
     let prepared = blocking(move || {
         let guard = lock(&store)?;
         let enabled = provider_chat::is_enabled(&guard)?;
+        let findings = provider_chat::findings_enabled(&guard)?;
         provider_chat::prepare(&guard, &default_blocked_roots(), request, enabled)
+            .map(|prepared| (prepared, findings))
     })
     .await?;
+    let (prepared, findings) = prepared;
     let key_reference = prepared.key_reference.clone();
     let model_id = prepared.model_id.clone();
     let question = prepared.question.clone();
@@ -424,7 +427,16 @@ pub async fn provider_chat_send(
             .resolve(&key_reference)
             .map_err(credentials::map_vault)?
             .ok_or(CommandError::KeyNotConfigured)?;
-        Ok((key, provider_chat::body(&model_id, &question, &files)))
+        let mut messages = provider_chat::messages(&question, &files);
+        if findings && let Some(system) = messages.first_mut() {
+            system
+                .content
+                .push_str(&noct_core::suggestion_analysis::findings_instructions());
+        }
+        Ok((
+            key,
+            noct_core::ai::openrouter::chat_body(&model_id, &messages),
+        ))
     })
     .await?;
     let run = ChatRun {
@@ -455,18 +467,37 @@ pub async fn provider_chat_send(
         })
         .await;
         if complete {
-            let recorded = tauri::async_runtime::spawn_blocking(move || {
-                provider_chat::record_proposals(
+            let (recorded, saved) = tauri::async_runtime::spawn_blocking(move || {
+                let recorded = provider_chat::record_proposals(
                     &persistence,
                     &default_blocked_roots(),
                     &workspace,
                     &answer,
-                )
+                );
+                // The findings go to Sugestões only from a complete answer, and only while the switch is on.
+                let saved = if findings {
+                    lock(&persistence.store)
+                        .and_then(|store| {
+                            suggestion_analysis::store_findings(
+                                &store,
+                                &default_blocked_roots(),
+                                &workspace,
+                                &answer,
+                            )
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                (recorded, saved)
             })
             .await
             .unwrap_or_default();
             if let Some(event) = recorded.event() {
                 let _ = on_event.send(event);
+            }
+            if saved > 0 {
+                let _ = on_event.send(ChatEvent::Findings { saved });
             }
             let _ = on_event.send(ChatEvent::Done);
         }
@@ -631,10 +662,27 @@ async fn stream_reply(
         ChatEvent::Failed { code } => {
             let _ = on_event.send(SuggestionEvent::Failed { code });
         }
-        ChatEvent::Proposed { .. } => {}
+        ChatEvent::Proposed { .. } | ChatEvent::Findings { .. } => {}
     })
     .await;
     complete.then_some(reply)
+}
+
+/// Turns the saving of the chat's findings in Sugestões on or off. The argument is `{ enabled }`; the reply is the
+/// switches as they are stored afterwards.
+#[tauri::command]
+pub async fn provider_chat_set_findings(
+    state: State<'_, Persistence>,
+    input: serde_json::Value,
+) -> Result<ChatStatus, CommandError> {
+    let request: ChatSwitchRequest =
+        serde_json::from_value(input).map_err(|_| CommandError::InvalidInput)?;
+    let store = state.store.clone();
+    blocking(move || {
+        let guard = lock(&store)?;
+        provider_chat::set_findings(&guard, request.enabled)
+    })
+    .await
 }
 
 /// Stops the question that is running. Nothing more is sent on its channel. Replies with nothing; a cancel with no
