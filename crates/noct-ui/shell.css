@@ -2234,32 +2234,64 @@ button {
   }
 }
 
-/* Revisar: the tabs Conversa and Sugestões, over the conversation or the suggestions. */
-.review-tabs {
-  align-self: flex-start;
+/* Revisar › Sugestões: the lamp in the top bar opens the list, and shows how many suggestions are still open. */
+.lamp {
+  position: relative;
 }
 
-/* Revisar › Sugestões: the analysis bar, the filter and one card per suggestion. */
+.lamp.is-active {
+  background: var(--sel);
+  color: var(--accent);
+}
+
+.lamp__count {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* The list of Sugestões, in the light rows of Ajustes. */
 .sugg {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.sugg__bar {
-  gap: 12px;
-}
-
-.sugg__bar-head {
+.sugg__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
+.sugg__head-txt {
+  min-width: 0;
+}
+
+.sugg__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .sugg__wrap {
   flex-wrap: wrap;
-  align-self: flex-start;
+}
+
+.seg--sm {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
 }
 
 .sugg__error {
@@ -2268,42 +2300,37 @@ button {
   gap: 12px;
 }
 
-.sugg-card__title {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.sugg-card__body {
+.sugg-row__more {
+  flex: 1 1 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 18px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.sugg-card__list {
+.sugg-row__more:empty {
+  display: none;
+}
+
+.sugg-row__list {
   margin: 4px 0 0;
   padding-left: 18px;
 }
 
-.sugg-card__list .path {
+.sugg-row__list .path {
   overflow-wrap: anywhere;
 }
 
-.sugg-card__more {
-  align-self: flex-start;
-}
-
-.sugg-card__more-body {
+.sugg-row__actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
 }
 
 @media (max-width: 640px) {
-  .sugg__bar-head {
+  .sugg__head {
     flex-direction: column;
   }
 }
