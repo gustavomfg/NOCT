@@ -12,8 +12,9 @@ use crate::ipc::workspaces::PATH_CHARACTERS_MAX;
 use crate::validation::ContractError;
 
 /// What the consent covers: OpenRouter, the built-in host, the rules of `ai::context` and the caps of
-/// `limits::provider_context`, all as they are in beta 1.
-pub const CONSENT_VERSION: &str = "openrouter-v1";
+/// `limits::provider_context`. Version 2 adds the project tree (names and sizes, no content), the files the person chooses,
+/// and the titles of the project's earlier suggestions; a project that consented to version 1 is asked again.
+pub const CONSENT_VERSION: &str = "openrouter-v2";
 
 /// A request about one project. The path is checked for its length; the app layer checks that the project is saved.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

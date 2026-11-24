@@ -13,7 +13,7 @@ fn request(workspace: &str) -> ProjectConsentRequest {
 
 #[test]
 fn the_consent_version_names_the_beta_one_scope() {
-    assert_eq!(CONSENT_VERSION, "openrouter-v1");
+    assert_eq!(CONSENT_VERSION, "openrouter-v2");
 }
 
 #[test]

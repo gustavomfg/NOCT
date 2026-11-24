@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-context-tree"
+description = "Enables the context_tree command without any pre-configured scope."
+commands.allow = ["context_tree"]
+
+[[permission]]
+identifier = "deny-context-tree"
+description = "Denies the context_tree command without any pre-configured scope."
+commands.deny = ["context_tree"]

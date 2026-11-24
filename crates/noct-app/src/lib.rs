@@ -8,6 +8,7 @@ pub mod bootstrap;
 pub mod command_names;
 pub mod commands;
 pub mod consent;
+pub mod context_files;
 pub mod credentials;
 pub mod error;
 pub mod file_changes;
@@ -70,6 +71,8 @@ pub fn command_handler<R: Runtime>()
         commands::suggestions_analyze,
         commands::suggestion_generate_change,
         commands::provider_chat_set_findings,
+        commands::context_tree,
+        commands::context_selection_set,
     ]
 }
 

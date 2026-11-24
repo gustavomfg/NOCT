@@ -88,7 +88,9 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "suggestions_list",
             "suggestions_analyze",
             "suggestion_generate_change",
-            "provider_chat_set_findings"
+            "provider_chat_set_findings",
+            "context_tree",
+            "context_selection_set"
         ]
     );
 }

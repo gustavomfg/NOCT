@@ -45,6 +45,8 @@
     "allow-suggestions-list",
     "allow-suggestions-analyze",
     "allow-suggestion-generate-change",
-    "allow-provider-chat-set-findings"
+    "allow-provider-chat-set-findings",
+    "allow-context-tree",
+    "allow-context-selection-set"
   ]
 }

@@ -141,6 +141,10 @@ pub mod provider_context {
     pub const MAXIMUM_CONTEXT_BYTES: u64 = 128 * 1024;
     /// The most bytes of one project file the context may carry.
     pub const MAXIMUM_FILE_BYTES: u64 = 32 * 1024;
+    /// The most entries of the project tree (names and sizes, no content) a call carries and the window lists.
+    pub const MAXIMUM_TREE_ENTRIES: usize = 2_000;
+    /// The most files a saved selection may name.
+    pub const MAXIMUM_SELECTED_FILES: usize = 2_000;
 }
 
 /// Limits of a provider key typed in the settings. The key is sent as an HTTP header, so only visible ASCII is
@@ -183,6 +187,11 @@ pub mod suggestion_analysis {
     pub const MAXIMUM_EVIDENCE: usize = 10;
     /// The most affected files whose text a generated change carries, as a chat answer proposes at most this many.
     pub const MAXIMUM_CHANGE_FILES: usize = 5;
+    /// The most lines of one evidence excerpt read from the disk.
+    pub const MAXIMUM_EVIDENCE_LINES: usize = 12;
+    /// The most earlier suggestions an analysis carries, and the most bytes of their list.
+    pub const MAXIMUM_PREVIOUS_SUGGESTIONS: usize = 30;
+    pub const MAXIMUM_PREVIOUS_BYTES: usize = 3 * 1024;
 }
 
 /// Limits of model descriptors. Port of `MODEL_LIMITS` in `shared/ai/model.ts`.

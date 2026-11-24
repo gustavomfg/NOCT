@@ -43,6 +43,8 @@ pub const SUGGESTIONS_LIST: &str = "suggestions_list";
 pub const SUGGESTIONS_ANALYZE: &str = "suggestions_analyze";
 pub const SUGGESTION_GENERATE_CHANGE: &str = "suggestion_generate_change";
 pub const PROVIDER_CHAT_SET_FINDINGS: &str = "provider_chat_set_findings";
+pub const CONTEXT_TREE: &str = "context_tree";
+pub const CONTEXT_SELECTION_SET: &str = "context_selection_set";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -86,4 +88,6 @@ pub const ALL: &[&str] = &[
     SUGGESTIONS_ANALYZE,
     SUGGESTION_GENERATE_CHANGE,
     PROVIDER_CHAT_SET_FINDINGS,
+    CONTEXT_TREE,
+    CONTEXT_SELECTION_SET,
 ];
