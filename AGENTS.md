@@ -24,7 +24,7 @@ implicit step when the existing product flow keeps them separate.
 
 ## Current release line
 
-Current release line: `1.0.5`. The historical `v1.0.1` tag and release assets
+Current release line: `0.1.0` (the Rust product; the Electron line ended at `1.0.5`). The historical `v1.0.1` tag and release assets
 must not be moved or modified. The previous TypeScript and Electron product is
 kept at the tag `electron-final`; nothing in this branch depends on it.
 

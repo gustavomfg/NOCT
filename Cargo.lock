@@ -2905,7 +2905,7 @@ dependencies = [
 
 [[package]]
 name = "noct-app"
-version = "1.0.5"
+version = "0.1.0"
 dependencies = [
  "noct-core",
  "noct-db",
@@ -2925,7 +2925,7 @@ dependencies = [
 
 [[package]]
 name = "noct-core"
-version = "1.0.5"
+version = "0.1.0"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
@@ -2937,7 +2937,7 @@ dependencies = [
 
 [[package]]
 name = "noct-db"
-version = "1.0.5"
+version = "0.1.0"
 dependencies = [
  "noct-core",
  "rusqlite",
@@ -2951,7 +2951,7 @@ dependencies = [
 
 [[package]]
 name = "noct-native"
-version = "1.0.5"
+version = "0.1.0"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
@@ -2959,7 +2959,7 @@ dependencies = [
 
 [[package]]
 name = "noct-secrets"
-version = "1.0.5"
+version = "0.1.0"
 dependencies = [
  "apple-native-keyring-store",
  "chacha20poly1305",
@@ -2978,7 +2978,7 @@ dependencies = [
 
 [[package]]
 name = "noct-ui"
-version = "1.0.5"
+version = "0.1.0"
 dependencies = [
  "leptos",
  "noct-core",

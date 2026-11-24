@@ -1489,9 +1489,8 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
   `icons/icon.ico` (16 and 32 px only: the Windows installer icon is small; a larger .ico is a follow-up).
 - **Identifier.** `com.nocturne.codex` is kept: Tauri names the data folder after it, and the credential store's service
   starts with it. Changing it would orphan installed data and keys.
-- **Version.** The configuration says `1.0.5` (Cargo.toml, tauri.conf.json, package.json). The installers will be named
-  `NOCT_1.0.5_*`. The release notes are `docs/release-notes-0.1.0.md`, as asked. Publishing as 0.1.0 needs the version
-  changed in those three files (owner's decision, below).
+- **Version.** The configuration says `0.1.0` (Cargo.toml, tauri.conf.json, package.json; changed 2026-11-24), so the
+  installers are named `NOCT_0.1.0_*`, matching `docs/release-notes-0.1.0.md`. The Electron history keeps `1.0.5`.
 - **Not verified:** no run of the workflow (a `workflow_dispatch` workflow can be started only once it is on the default
   branch); the Windows and macOS bundles; the AppImage on a hosted runner; an install on any system.
 
