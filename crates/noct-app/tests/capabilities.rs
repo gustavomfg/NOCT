@@ -84,7 +84,10 @@ fn the_first_slice_is_the_commands_of_the_contract() {
             "workspace_add",
             "provider_chat_set_enabled",
             "models_list",
-            "models_list_cancel"
+            "models_list_cancel",
+            "suggestions_list",
+            "suggestions_analyze",
+            "suggestion_generate_change"
         ]
     );
 }

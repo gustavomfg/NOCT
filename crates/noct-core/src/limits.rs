@@ -163,6 +163,26 @@ pub mod provider_chat {
     pub const MAXIMUM_MODEL_CHARACTERS: usize = 128;
 }
 
+/// Limits of one project analysis (Revisar › Sugestões). The model's reply is untrusted: these bounds are tighter than the
+/// stored suggestion schema, and a suggestion over any of them is discarded, not cut.
+pub mod suggestion_analysis {
+    /// The most suggestions one analysis stores. Those after it are discarded.
+    pub const MAXIMUM_SUGGESTIONS: usize = 10;
+    /// The most characters of the description and of the reasoning.
+    pub const MAXIMUM_TEXT_CHARACTERS: usize = 4_000;
+    /// The most characters of the proposed changes.
+    pub const MAXIMUM_PROPOSED_CHANGES_CHARACTERS: usize = 16_000;
+    /// The most expected benefits, and the most characters of each.
+    pub const MAXIMUM_BENEFITS: usize = 10;
+    pub const MAXIMUM_BENEFIT_CHARACTERS: usize = 500;
+    /// The most affected files a suggestion may name.
+    pub const MAXIMUM_AFFECTED_FILES: usize = 20;
+    /// The most evidence items of a suggestion.
+    pub const MAXIMUM_EVIDENCE: usize = 10;
+    /// The most affected files whose text a generated change carries, as a chat answer proposes at most this many.
+    pub const MAXIMUM_CHANGE_FILES: usize = 5;
+}
+
 /// Limits of model descriptors. Port of `MODEL_LIMITS` in `shared/ai/model.ts`.
 pub mod model {
     pub const IDENTIFIER_CHARACTERS: u64 = 512;

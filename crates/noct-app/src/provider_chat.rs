@@ -268,7 +268,21 @@ pub fn record_proposals(
     workspace: &str,
     answer: &str,
 ) -> Proposals {
-    let blocks = noct_core::proposal_block::read_blocks(answer);
+    record_blocks(
+        persistence,
+        blocked,
+        workspace,
+        noct_core::proposal_block::read_blocks(answer),
+    )
+}
+
+/// Records blocks already read from an answer, as [`record_proposals`] does.
+pub fn record_blocks(
+    persistence: &crate::bootstrap::Persistence,
+    blocked: &[PathBuf],
+    workspace: &str,
+    blocks: noct_core::proposal_block::ProposedBlocks,
+) -> Proposals {
     let mut proposals = Proposals {
         changes: Vec::new(),
         refused: blocks.refused,

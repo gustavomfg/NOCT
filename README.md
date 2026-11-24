@@ -85,7 +85,7 @@ plans, approvals and validation results (`AGENTS.md`, "Product identity").
 
 | Path | Responsibility |
 | --- | --- |
-| `crates/noct-app` | The Tauri 2 shell. It opens the data folder and the log, registers its 37 commands, sets the window policy, and checks workspace access. |
+| `crates/noct-app` | The Tauri 2 shell. It opens the data folder and the log, registers its 40 commands, sets the window policy, and checks workspace access. |
 | `crates/noct-core` | The contracts, limits and types of the product, and the log redaction. |
 | `crates/noct-db` | SQLite persistence: the runtime, migrations 1 to 32, the repositories, backups and recovery snapshots, atomic writes, the file log and the operation observer. |
 | `crates/noct-native` | A separate rollback worker binary for filesystem operations. It has a Linux backend only. |
@@ -117,7 +117,7 @@ The phase table of [ADR 0001](docs/adr/0001-rust-migration.md) is the authority.
   not ported.
 - **Phase 5, AI:** partly done. The credential vault, the network policy, the OpenRouter transport, its model list, the chat
   and the changes an answer proposes are done. Other provider adapters and the tool loop are not ported.
-- **Phase 6, IPC and shell:** partly done. 37 commands, granted only to the `main` window.
+- **Phase 6, IPC and shell:** partly done. 40 commands, granted only to the `main` window.
 - **Phase 7, UI:** partly done. Revisar (the chat, with answers drawn as Markdown without HTML), Construir and Documentar
   (the approval of each proposed change, with undo), Ajustes, the project list in the sidebar, the model picker, the glass
   layer and the themes. Checked in Chromium with a mocked shell; the real window on Linux was seen by the owner, and is
@@ -274,7 +274,7 @@ The launcher is `scripts/run-rust-shell.mjs`. Its options are `--data-dir <absol
 - **Webview policy.** `withGlobalTauri` is `false`. The Content-Security-Policy is
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   Chromium checks it (`scripts/check-shell-csp.mjs`). No webview has enforced it yet.
-- **Commands.** 37 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
+- **Commands.** 40 commands are declared in `crates/noct-app/src/command_names.rs`, and `build.rs` turns them into the
   application manifest. `crates/noct-app/capabilities/default.json` grants them to the `main` window only. Tests with Tauri's
   mock runtime refuse a command that is not granted and a request from a second window.
 - **Navigation.** The main window accepts navigation only to the packaged interface, and to the development server in

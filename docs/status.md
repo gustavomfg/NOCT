@@ -1549,3 +1549,16 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - **Code comments:** about 100 files under `crates/` name the TypeScript module they were ported from. They are
   provenance, not dead code.
 - **Owner:** private vulnerability reporting is off on the repository (`SECURITY.md` points to it).
+
+## Suggestions restored: analysis and generated change (2026-11-24) [security-review]
+
+- `suggestions_analyze` passes the chat's checks (switch, authorized project, consent, OpenRouter model, key), sends the
+  chat's context (sensitive and ignored files excluded, caps kept) and runs on the chat's `ChatControl`
+  (`provider_chat_cancel` stops it). The reply never reaches the window; only a character count does.
+- The reply is untrusted: `noct_core::suggestion_analysis::read_reply` refuses a missing, invalid or truncated snapshot (nothing
+  stored), keeps at most 10 suggestions, discards one over a bound or with a repeated identity, and drops any affected file
+  that fails `check_relative_path`, is sensitive or is ignored. Storage is the existing reconciliation (schema 32 unchanged).
+- `suggestions_status` only changes the status. `suggestion_generate_change` requires an accepted suggestion, reads its
+  affected files through `resolve_target`/`read_base`, and records only blocks for those files as pending changes through
+  the existing journal; nothing is written to the project before approval in Construir.
+- `suggestions_list` reads a project's suggestions (every status, at most 200) after the authorization check.

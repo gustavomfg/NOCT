@@ -41,6 +41,9 @@
     "allow-workspace-add",
     "allow-provider-chat-set-enabled",
     "allow-models-list",
-    "allow-models-list-cancel"
+    "allow-models-list-cancel",
+    "allow-suggestions-list",
+    "allow-suggestions-analyze",
+    "allow-suggestion-generate-change"
   ]
 }

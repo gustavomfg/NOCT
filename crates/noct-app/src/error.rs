@@ -72,6 +72,8 @@ pub enum CommandError {
     ModelsCancelled,
     /// A read of the model list is already running.
     ModelsBusy,
+    SuggestionNotAccepted,
+    SuggestionWithoutFiles,
 }
 
 impl CommandError {
@@ -108,6 +110,8 @@ impl CommandError {
             Self::ModelsTooLarge => "models-too-large",
             Self::ModelsCancelled => "models-cancelled",
             Self::ModelsBusy => "models-busy",
+            Self::SuggestionNotAccepted => "suggestion-not-accepted",
+            Self::SuggestionWithoutFiles => "suggestion-without-files",
         }
     }
 
@@ -166,6 +170,12 @@ impl CommandError {
             Self::ModelsTooLarge => "A lista de modelos do OpenRouter é grande demais.",
             Self::ModelsCancelled => "A busca da lista de modelos foi cancelada.",
             Self::ModelsBusy => "A lista de modelos já está sendo buscada.",
+            Self::SuggestionNotAccepted => {
+                "Aceite a sugestão antes de gerar a alteração. Nada foi enviado."
+            }
+            Self::SuggestionWithoutFiles => {
+                "A sugestão não indica arquivos do projeto que possam ser alterados. Nada foi enviado."
+            }
         }
     }
 }

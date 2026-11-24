@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggestion-generate-change"
+description = "Enables the suggestion_generate_change command without any pre-configured scope."
+commands.allow = ["suggestion_generate_change"]
+
+[[permission]]
+identifier = "deny-suggestion-generate-change"
+description = "Denies the suggestion_generate_change command without any pre-configured scope."
+commands.deny = ["suggestion_generate_change"]

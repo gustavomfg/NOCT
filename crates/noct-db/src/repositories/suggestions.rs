@@ -80,6 +80,29 @@ impl<'a> Suggestions<'a> {
         Ok(Page { items, has_more })
     }
 
+    /// The suggestions of a project in every status, most recently updated first, at most `limit` of them. The
+    /// Sugestões tab reads them, and filters by status itself.
+    pub fn for_workspace(&self, workspace_id: &str, limit: i64) -> Result<Vec<Suggestion>> {
+        let rows = self.read(
+            &format!("{SELECT} WHERE workspace_id=?1 ORDER BY updated_at DESC LIMIT ?2"),
+            params![workspace_id, limit],
+        )?;
+        self.decode(rows)
+    }
+
+    /// The conversation of the project's most recent suggestion, so a new analysis is reconciled with the earlier ones.
+    pub fn latest_conversation(&self, workspace_id: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT conversation_id FROM suggestions WHERE workspace_id=?1 \
+                 AND conversation_id IN (SELECT id FROM conversations) ORDER BY updated_at DESC LIMIT 1",
+                params![workspace_id],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
     /// A suggestion by identifier, optionally only within its conversation.
     pub fn get(&self, id: &str, conversation_id: Option<&str>) -> Result<Option<Suggestion>> {
         let rows = match conversation_id.filter(|value| !value.is_empty()) {
