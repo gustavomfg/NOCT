@@ -51,7 +51,17 @@ Each line must say `OK` (or, on Windows, the two hashes must be equal). If one d
 ### Linux
 
 - **.deb** (Debian, Ubuntu 22.04 or later): `sudo apt install ./NOCT_<version>_amd64.deb`
-- **AppImage** (other distributions): make it executable, then run it.
+- **tar.gz** (other distributions; recommended if the AppImage is slow): `NOCT_<version>_linux-x86_64.tar.gz` holds the
+  program as `noct`, an icon and an example desktop entry. Install the system packages first: `webkit2gtk-4.1` and `gtk3`
+  on Arch, `libwebkit2gtk-4.1-0` and `libgtk-3-0` on Debian and Ubuntu (the folder's `LEIA-ME.txt` has the same list).
+
+  ```bash
+  tar -xzf NOCT_<version>_linux-x86_64.tar.gz
+  cd NOCT_<version>_linux-x86_64
+  ./noct
+  ```
+- **AppImage** (alternative): make it executable, then run it. On some systems its embedded WebKit runs without hardware
+  acceleration, and the window is slow.
 
   ```bash
   chmod +x NOCT_<version>_amd64.AppImage
@@ -142,7 +152,8 @@ Their evidence and their runnable form are at `electron-final`. Nothing in this 
 The ADR's criterion for phase 8 is "signed packages validated on three platforms". In the repository:
 
 - **Packaging is configured, not signed.** `crates/noct-app/tauri.conf.json` names the targets (deb, AppImage, NSIS,
-  dmg) and the icons; `build-installers.yml` builds them by hand, unsigned. No run of it is recorded yet.
+  dmg) and the icons; `build-installers.yml` builds them by hand, unsigned, and adds the portable Linux `tar.gz`
+  (`scripts/package-linux-portable.sh`). No run of it is recorded yet.
 - **No updater.** No updater crate is in `Cargo.lock`.
 - **No signing configuration** exists in the Rust crates or in `tauri.conf.json`.
 - **No holder for the signing keys.** ADR 0001, open decision 1, is not decided.

@@ -1586,3 +1586,16 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - Memory: an analysis carries up to 30 earlier suggestions (title, status, last reason; at most 3 KiB) as data. A refusal may
   carry a one-line reason in `result` through `suggestions_status`. Schema 32 is unchanged.
 - `check:ui` knew neither `suggestions_list` (the lamp's count, since `d5e1e01`) nor `context_tree`; its mock now answers both.
+
+## Portable Linux package (2026-11-25)
+
+- `build-installers.yml` (Linux job) also writes `NOCT_<version>_linux-x86_64.tar.gz` with `scripts/package-linux-portable.sh`:
+  the release binary as `noct`, `icon.png`, an example `noct.desktop` and a `LEIA-ME.txt` with the system packages (Arch:
+  `webkit2gtk-4.1 gtk3`; Debian and Ubuntu: `libwebkit2gtk-4.1-0 libgtk-3-0`). It is in the run's artifacts and in
+  `SHA256SUMS`. Nothing is signed, and no updater artifact changes. It is the Linux build for systems where the AppImage's
+  embedded WebKit runs without hardware acceleration.
+- The Linux job checks the three files. Its checks were joined with `&&` on one line, which `bash -e` does not stop on, so a
+  missing file did not fail the step; each check is now a line of its own.
+- Checked here: the script ran on the release binary of this machine. The archive has the executable mode, the root owner and
+  the three files; the binary links `webkit2gtk-4.1`, `gtk-3`, `soup-3` and `javascriptcoregtk-4.1`, which the list covers.
+  Not checked: a run of the workflow on GitHub, and the package on another distribution.

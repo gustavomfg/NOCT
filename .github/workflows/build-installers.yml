@@ -8,7 +8,8 @@ name: build-installers
 # and the token it receives can only read the repository. The release with signed updater artifacts is shell-release.yml.
 #
 # What each job builds:
-# - Linux, on Ubuntu 22.04 (the oldest supported Linux, so the packages run on it and on newer systems): .deb and AppImage.
+# - Linux, on Ubuntu 22.04 (the oldest supported Linux, so the packages run on it and on newer systems): .deb, AppImage and
+#   a portable .tar.gz with the bare binary (scripts/package-linux-portable.sh).
 # - Windows: the NSIS installer (.exe).
 # - macOS: a .dmg for Apple silicon (aarch64) and one for Intel (x86_64), both built on the Apple silicon runner.
 #
@@ -100,6 +101,13 @@ jobs:
           if [ -n "$TARGET" ]; then args+=(--target "$TARGET"); fi
           cargo tauri build "${args[@]}"
 
+      - name: Make the portable Linux package
+        # The release binary as `noct`, with the icon, an example desktop entry and a LEIA-ME. Nothing is signed.
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          scripts/package-linux-portable.sh target/release/noct-app crates/noct-app/icons/icon.png installers
+
       - name: Collect the installers
         shell: bash
         env:
@@ -112,7 +120,11 @@ jobs:
             \( -name '*.deb' -o -name '*.AppImage' -o -name '*-setup.exe' -o -name '*.dmg' \))
           # The two macOS builds name their .dmg by architecture already; the check below catches a missing installer.
           case "$NAME" in
-            linux-*) test -n "$(find installers -name '*.deb')" && test -n "$(find installers -name '*.AppImage')" ;;
+            linux-*)
+              test -n "$(find installers -name '*.deb')"
+              test -n "$(find installers -name '*.AppImage')"
+              test -n "$(find installers -name '*.tar.gz')"
+              ;;
             windows-*) test -n "$(find installers -name '*-setup.exe')" ;;
             macos-*) test "$(find installers -name '*.dmg' | wc -l)" -eq 1 ;;
           esac

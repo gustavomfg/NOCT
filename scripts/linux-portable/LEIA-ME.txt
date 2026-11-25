@@ -1,0 +1,19 @@
+NOCT - pacote Linux portátil
+
+Conteúdo
+- noct: o programa (binário de release).
+- icon.png: o ícone, para o atalho.
+- noct.desktop: exemplo de atalho do menu. Antes de usar, troque os dois caminhos
+  pela pasta onde você extraiu este pacote.
+
+Dependências do sistema
+- Arch Linux: sudo pacman -S webkit2gtk-4.1 gtk3
+- Debian ou Ubuntu (22.04 ou mais novo): sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
+
+Como rodar
+1. Extraia o arquivo: tar -xzf NOCT_<versão>_linux-x86_64.tar.gz
+2. Entre na pasta: cd NOCT_<versão>_linux-x86_64
+3. Rode: ./noct
+
+Nada é instalado pelo pacote e o arquivo não é assinado pelo sistema. Confira o SHA256
+no arquivo SHA256SUMS antes de usar.
