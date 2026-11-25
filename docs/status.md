@@ -1586,3 +1586,36 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - Memory: an analysis carries up to 30 earlier suggestions (title, status, last reason; at most 3 KiB) as data. A refusal may
   carry a one-line reason in `result` through `suggestions_status`. Schema 32 is unchanged.
 - `check:ui` knew neither `suggestions_list` (the lamp's count, since `d5e1e01`) nor `context_tree`; its mock now answers both.
+
+## Portable Linux package (2026-11-25)
+
+- `build-installers.yml` (Linux job) also writes `NOCT_<version>_linux-x86_64.tar.gz` with `scripts/package-linux-portable.sh`:
+  the release binary as `noct`, `icon.png`, an example `noct.desktop` and a `LEIA-ME.txt` with the system packages (Arch:
+  `webkit2gtk-4.1 gtk3`; Debian and Ubuntu: `libwebkit2gtk-4.1-0 libgtk-3-0`). It is in the run's artifacts and in
+  `SHA256SUMS`. Nothing is signed, and no updater artifact changes. It is the Linux build for systems where the AppImage's
+  embedded WebKit runs without hardware acceleration.
+- The Linux job checks the three files. Its checks were joined with `&&` on one line, which `bash -e` does not stop on, so a
+  missing file did not fail the step; each check is now a line of its own.
+- Checked here: the script ran on the release binary of this machine. The archive has the executable mode, the root owner and
+  the three files; the binary links `webkit2gtk-4.1`, `gtk-3`, `soup-3` and `javascriptcoregtk-4.1`, which the list covers.
+  Not checked: a run of the workflow on GitHub, and the package on another distribution.
+
+## Chat findings say what became of them (2026-11-25)
+
+- Cause of the silence: `store_findings` returned 0 for every case that stored nothing (no block, a block that does not read,
+  every finding refused by a bound or repeated, a store or project error), and the shell sent an event only when it saved
+  at least one. Nothing told the person why.
+- Every complete answer now sends one `findings` event before `done`, with a status and two counts: `off` (the switch in
+  Ajustes is off), `absent` (no block), `invalid` (the block does not read), `empty` (`[]`), `discarded` (every finding refused
+  by a bound or repeated), `saved` (`saved` stored, `discarded` refused) and `failed` (the project or the store refused). Only
+  the status and the counts travel; the words under the answer are the interface's.
+- The line under the answer (`chat-findings-status`) always says which one it was. "Abrir Sugestões" appears only when findings
+  were saved, and only then the list and the lamp are read again (`suggestions_version`).
+- The instruction asks for the block whenever the answer names a concrete problem, even when the text already describes it,
+  and shows a minimal finding. A test reads that example with the validator of a reply, so the example is a stored finding.
+- Checked here: `noct-core` tests (the example reads), `noct-app/tests/findings_report.rs` (each status, and a project that is
+  not saved fails), `noct-ui` tests (the frame, the words of each status, the run's lifecycle) and the Chromium check (two
+  scenarios: no block, and saved with one refused; 34 of 34 passed). Not checked: a real provider reply, and how often models
+  follow the stronger instruction; that needs a call with a real key.
+- Not marked `[security-review]`: no validation, storage or capability changed. The window receives a status and two counts,
+  never the model's text.

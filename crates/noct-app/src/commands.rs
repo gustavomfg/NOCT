@@ -44,7 +44,7 @@ use crate::provider_chat::{
 };
 use crate::provider_transport::{Limits, SystemResolver};
 use crate::services;
-use crate::suggestion_analysis::{self, SuggestionEvent};
+use crate::suggestion_analysis::{self, FindingsReport, FindingsStatus, SuggestionEvent};
 use crate::workspace_scope::default_blocked_roots;
 
 // The commands below are measured under the names the TypeScript runtime gives the same reads and writes
@@ -480,39 +480,42 @@ pub async fn provider_chat_send(
         })
         .await;
         if complete {
-            let (recorded, saved) = tauri::async_runtime::spawn_blocking(move || {
+            let (recorded, report) = tauri::async_runtime::spawn_blocking(move || {
                 let recorded = provider_chat::record_proposals(
                     &persistence,
                     &default_blocked_roots(),
                     &workspace,
                     &answer,
                 );
-                // The findings go to Sugestões only from a complete answer, and only while the switch is on.
-                let saved = if findings {
-                    lock(&persistence.store)
-                        .and_then(|store| {
-                            suggestion_analysis::store_findings(
-                                &store,
-                                &default_blocked_roots(),
-                                &workspace,
-                                &answer,
-                                &sent,
-                            )
-                        })
-                        .unwrap_or(0)
+                // The findings go to Sugestões only from a complete answer, and only while the switch is on. The window
+                // is told what became of them in every case, so a finding that is not saved is never silent.
+                let report = if findings {
+                    match lock(&persistence.store) {
+                        Ok(store) => suggestion_analysis::store_findings(
+                            &store,
+                            &default_blocked_roots(),
+                            &workspace,
+                            &answer,
+                            &sent,
+                        ),
+                        Err(_) => FindingsReport::of(FindingsStatus::Failed),
+                    }
                 } else {
-                    0
+                    FindingsReport::of(FindingsStatus::Off)
                 };
-                (recorded, saved)
+                (recorded, report)
             })
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|_| {
+                (
+                    Default::default(),
+                    FindingsReport::of(FindingsStatus::Failed),
+                )
+            });
             if let Some(event) = recorded.event() {
                 let _ = on_event.send(event);
             }
-            if saved > 0 {
-                let _ = on_event.send(ChatEvent::Findings { saved });
-            }
+            let _ = on_event.send(ChatEvent::Findings(report));
             let _ = on_event.send(ChatEvent::Done);
         }
     })

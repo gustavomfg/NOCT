@@ -55,10 +55,8 @@ pub enum Frame {
         changes: Vec<ProposedChange>,
         refused: usize,
     },
-    /// The findings of the answer the shell saved in Sugestões.
-    Findings {
-        saved: usize,
-    },
+    /// What became of the findings of the answer, sent after a complete answer whatever happened to them.
+    Findings(FindingsOutcome),
     Done,
     Failed {
         code: String,
@@ -71,6 +69,87 @@ pub enum Frame {
 pub struct ProposedChange {
     pub id: String,
     pub path: String,
+}
+
+/// What became of the findings of an answer, as the shell reports them. The status and the counts are the shell's; the
+/// words under the answer are the interface's, chosen by the status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindingsOutcome {
+    pub status: FindingsStatus,
+    pub saved: usize,
+    pub discarded: usize,
+}
+
+impl FindingsOutcome {
+    /// Whether findings were stored in Sugestões, so the list there must be read again.
+    pub fn saved_any(&self) -> bool {
+        self.status == FindingsStatus::Saved && self.saved > 0
+    }
+}
+
+/// The status of the findings of an answer, as the shell names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FindingsStatus {
+    Off,
+    Absent,
+    Invalid,
+    Empty,
+    Discarded,
+    Saved,
+    Failed,
+}
+
+/// The line under an answer that says what became of its findings. Every status has words, so nothing is silent. The words
+/// carry the counts only, never the text of the model.
+pub fn findings_words(outcome: &FindingsOutcome) -> String {
+    let plural = |count: usize, one: &str, many: &str| {
+        if count == 1 {
+            format!("1 {one}")
+        } else {
+            format!("{count} {many}")
+        }
+    };
+    let refused = |count: usize| {
+        format!(
+            "{}, por limite ou repetição.",
+            plural(count, "achado rejeitado", "achados rejeitados")
+        )
+    };
+    match outcome.status {
+        FindingsStatus::Off => {
+            "Achados não salvos: o salvamento está desligado em Ajustes.".to_string()
+        }
+        FindingsStatus::Absent => {
+            "O modelo não devolveu achados estruturados. Nada foi enviado para Sugestões."
+                .to_string()
+        }
+        FindingsStatus::Invalid => {
+            "Achados rejeitados: o bloco não lê como achados válidos. Nada foi enviado para Sugestões."
+                .to_string()
+        }
+        FindingsStatus::Empty => "O bloco veio vazio: nenhum achado para Sugestões.".to_string(),
+        FindingsStatus::Discarded => format!(
+            "{} Nada foi enviado para Sugestões.",
+            refused(outcome.discarded)
+        ),
+        FindingsStatus::Saved => {
+            let saved = plural(
+                outcome.saved,
+                "achado enviado para Sugestões.",
+                "achados enviados para Sugestões.",
+            );
+            if outcome.discarded == 0 {
+                saved
+            } else {
+                format!("{saved} {}", refused(outcome.discarded))
+            }
+        }
+        FindingsStatus::Failed => {
+            "Não foi possível enviar os achados para Sugestões. Nada foi salvo.".to_string()
+        }
+    }
 }
 
 /// Reads one event from the text the channel handed on. An event that is not one of the known kinds is ignored.
@@ -179,8 +258,8 @@ pub struct Session {
     saved: bool,
     /// The changes the answer proposed and the blocks refused, once the shell has recorded them.
     proposals: Option<(Vec<ProposedChange>, usize)>,
-    /// How many findings of the answer the shell saved in Sugestões.
-    findings: usize,
+    /// What became of the findings of the answer, once the shell has said.
+    findings: Option<FindingsOutcome>,
 }
 
 impl Session {
@@ -192,7 +271,7 @@ impl Session {
         self.workspace = workspace.to_string();
         self.answer.clear();
         self.proposals = None;
-        self.findings = 0;
+        self.findings = None;
         self.saved = false;
         self.run
     }
@@ -208,7 +287,7 @@ impl Session {
                 self.phase = Phase::Answering;
             }
             Frame::Proposed { changes, refused } => self.proposals = Some((changes, refused)),
-            Frame::Findings { saved } => self.findings = saved,
+            Frame::Findings(outcome) => self.findings = Some(outcome),
             Frame::Done => self.phase = Phase::Done,
             Frame::Failed { code } => {
                 self.phase = Phase::Failed(stream_failure_words(&code).to_string());
@@ -263,9 +342,9 @@ impl Session {
         self.proposals.as_ref()
     }
 
-    /// How many findings of the answer were saved in Sugestões.
-    pub fn findings(&self) -> usize {
-        self.findings
+    /// What became of the findings of the answer, or `None` while the shell has not said.
+    pub fn findings(&self) -> Option<&FindingsOutcome> {
+        self.findings.as_ref()
     }
 
     pub fn workspace(&self) -> &str {
@@ -334,6 +413,79 @@ mod tests {
         );
         assert_eq!(parse_frame(r#"{"kind":"command","text":"rm"}"#), None);
         assert_eq!(parse_frame("não é json"), None);
+    }
+
+    fn outcome(status: FindingsStatus, saved: usize, discarded: usize) -> FindingsOutcome {
+        FindingsOutcome {
+            status,
+            saved,
+            discarded,
+        }
+    }
+
+    #[test]
+    fn the_findings_frame_carries_the_status_and_the_counts() {
+        assert_eq!(
+            parse_frame(r#"{"kind":"findings","status":"saved","saved":2,"discarded":1}"#),
+            Some(Frame::Findings(outcome(FindingsStatus::Saved, 2, 1)))
+        );
+        assert_eq!(
+            parse_frame(r#"{"kind":"findings","status":"absent","saved":0,"discarded":0}"#),
+            Some(Frame::Findings(outcome(FindingsStatus::Absent, 0, 0)))
+        );
+    }
+
+    #[test]
+    fn every_findings_status_says_what_happened() {
+        assert_eq!(
+            findings_words(&outcome(FindingsStatus::Saved, 1, 0)),
+            "1 achado enviado para Sugestões."
+        );
+        assert_eq!(
+            findings_words(&outcome(FindingsStatus::Saved, 2, 1)),
+            "2 achados enviados para Sugestões. 1 achado rejeitado, por limite ou repetição."
+        );
+        assert_eq!(
+            findings_words(&outcome(FindingsStatus::Discarded, 0, 3)),
+            "3 achados rejeitados, por limite ou repetição. Nada foi enviado para Sugestões."
+        );
+        assert!(
+            findings_words(&outcome(FindingsStatus::Absent, 0, 0))
+                .contains("não devolveu achados estruturados")
+        );
+        assert!(
+            findings_words(&outcome(FindingsStatus::Invalid, 0, 0))
+                .contains("não lê como achados válidos")
+        );
+        assert!(
+            findings_words(&outcome(FindingsStatus::Off, 0, 0)).contains("desligado em Ajustes")
+        );
+        assert!(findings_words(&outcome(FindingsStatus::Empty, 0, 0)).contains("nenhum achado"));
+        assert!(
+            findings_words(&outcome(FindingsStatus::Failed, 0, 0)).contains("Não foi possível")
+        );
+    }
+
+    #[test]
+    fn only_saved_findings_ask_the_list_to_be_read_again() {
+        assert!(outcome(FindingsStatus::Saved, 1, 0).saved_any());
+        assert!(!outcome(FindingsStatus::Saved, 0, 0).saved_any());
+        assert!(!outcome(FindingsStatus::Discarded, 0, 2).saved_any());
+    }
+
+    #[test]
+    fn a_session_keeps_the_findings_of_its_run_only() {
+        let mut session = Session::default();
+        let first = session.start("/projeto");
+        session.frame(first, delta("Texto."));
+        session.frame(first, Frame::Findings(outcome(FindingsStatus::Saved, 1, 0)));
+        assert_eq!(
+            session.findings(),
+            Some(&outcome(FindingsStatus::Saved, 1, 0))
+        );
+        session.frame(first, Frame::Done);
+        session.start("/projeto");
+        assert_eq!(session.findings(), None);
     }
 
     #[test]

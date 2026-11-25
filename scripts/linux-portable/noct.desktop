@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NOCT
+Comment=Espaço de trabalho de engenharia local
+# Exemplo: troque os dois caminhos pela pasta onde você extraiu o pacote.
+Exec=/caminho/para/a/pasta-do-pacote/noct
+Icon=/caminho/para/a/pasta-do-pacote/icon.png
+Terminal=false
+Categories=Development;
