@@ -80,6 +80,9 @@ const NEED_CHAT_OFF = 'O chat está desligado. Nada é enviado.'
 const NEED_KEY = 'Falta a chave do OpenRouter.'
 const NEED_MODEL = 'Falta o modelo deste projeto.'
 const NEED_PERMISSION = 'Este projeto ainda não pode enviar arquivos.'
+// The line under an answer that says what became of its findings, copied from `findings_words` in chat.rs.
+const FINDINGS_ABSENT = 'O modelo não devolveu achados estruturados. Nada foi enviado para Sugestões.'
+const FINDINGS_SAVED = '2 achados enviados para Sugestões. 1 achado rejeitado, por limite ou repetição.'
 const CHAT_MODEL = 'deepseek/deepseek-chat-v3:free'
 // The project the mock's folder picker returns.
 const ADDED_PROJECT = { path: '/work/novo', name: 'novo', favorite: false, authorized: true, availability: 'available', createdAt: '2026-01-04T00:00:00.000Z', lastOpenedAt: '2026-01-04T00:00:00.000Z' }
@@ -287,6 +290,32 @@ const SCENARIOS = [
     theme: 'light',
     keyConfigured: true,
     chat: { kind: 'stream-fails', sequence: [[0, delta('pa')], [1, { kind: 'failed', code: 'stream-truncated' }]] },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-findings-without-a-block-say-so',
+    mode: 'chat',
+    theme: 'light',
+    keyConfigured: true,
+    chat: {
+      kind: 'findings',
+      sequence: [[0, delta('Há um bug, mas sem bloco.')], [1, { kind: 'findings', status: 'absent', saved: 0, discarded: 0 }], [2, DONE]],
+      words: FINDINGS_ABSENT,
+      opensSuggestions: false,
+    },
+    expectTheme: 'light',
+  },
+  {
+    name: 'chat-findings-saved-open-suggestions',
+    mode: 'chat',
+    theme: 'light',
+    keyConfigured: true,
+    chat: {
+      kind: 'findings',
+      sequence: [[0, delta('Dois problemas.')], [1, { kind: 'findings', status: 'saved', saved: 2, discarded: 1 }], [2, DONE]],
+      words: FINDINGS_SAVED,
+      opensSuggestions: true,
+    },
     expectTheme: 'light',
   },
 ]
@@ -830,6 +859,15 @@ async function chatFlow(page, scenario, check) {
       return composer.top - last.bottom
     })
     check(gap >= 20, `at the end, the last line is clear of the composer (${gap}px)`)
+    return
+  }
+  if (chat.kind === 'findings') {
+    // Whatever became of the findings, the answer says so under it; the list in Sugestões opens only when some were saved.
+    await page.getByTestId('chat-status').getByText(COMPLETE, { exact: true }).waitFor({ timeout: 8000 })
+    const words = page.getByTestId('chat-findings-status')
+    await words.waitFor({ timeout: 8000 })
+    check((await words.textContent())?.trim() === chat.words, 'the answer says what became of its findings')
+    check((await page.getByTestId('chat-findings').count()) === (chat.opensSuggestions ? 1 : 0), 'the findings line opens Sugestões only when findings were saved')
     return
   }
   if (chat.kind === 'refused') {

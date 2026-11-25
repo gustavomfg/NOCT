@@ -243,22 +243,100 @@ pub fn store_reply(
     })
 }
 
-/// Saves the findings of a complete chat answer in Sugestões, as new suggestions of the project, and returns how many
-/// were saved. The answer is untrusted and read by `read_findings`: an answer without a valid block saves nothing. A
-/// finding with the identity of an earlier suggestion keeps that suggestion's record and status.
+/// What became of the findings of one complete chat answer. The window words it by the status; no text of the model is in
+/// it, only the status and the counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FindingsStatus {
+    /// The switch in Ajustes is off: no block was asked for and nothing was saved.
+    Off,
+    /// The answer carries no findings block.
+    Absent,
+    /// The block does not read as findings.
+    Invalid,
+    /// The block is an empty list.
+    Empty,
+    /// The block reads, but every finding was refused by a bound or repeated another one.
+    Discarded,
+    /// The findings are stored in Sugestões; `saved` counts them.
+    Saved,
+    /// The findings could not be stored: the project or the store refused.
+    Failed,
+}
+
+/// The outcome of the findings of one complete answer: the status, how many were stored, and how many the bounds refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindingsReport {
+    pub status: FindingsStatus,
+    pub saved: usize,
+    pub discarded: usize,
+}
+
+impl FindingsReport {
+    /// A report that counts no findings: the status alone.
+    pub fn of(status: FindingsStatus) -> Self {
+        Self {
+            status,
+            saved: 0,
+            discarded: 0,
+        }
+    }
+}
+
+/// Saves the findings of a complete chat answer in Sugestões, as new suggestions of the project, and says what became of
+/// them. The answer is untrusted and read by `read_findings`; a block that does not read saves nothing. A finding with the
+/// identity of an earlier suggestion keeps that suggestion's record and status.
 pub fn store_findings(
     store: &Store,
     blocked: &[PathBuf],
     workspace: &str,
     answer: &str,
     sent: &[String],
-) -> Result<usize, CommandError> {
-    let Ok(AnalysisReading { suggestions, .. }) = read_findings(answer) else {
-        return Ok(0);
+) -> FindingsReport {
+    let reading = match read_findings(answer) {
+        Ok(reading) => reading,
+        Err(AnalysisRefusal::Absent) => return FindingsReport::of(FindingsStatus::Absent),
+        Err(AnalysisRefusal::Invalid) => return FindingsReport::of(FindingsStatus::Invalid),
     };
+    let AnalysisReading {
+        suggestions,
+        discarded,
+    } = reading;
     if suggestions.is_empty() {
-        return Ok(0);
+        let status = if discarded == 0 {
+            FindingsStatus::Empty
+        } else {
+            FindingsStatus::Discarded
+        };
+        return FindingsReport {
+            status,
+            saved: 0,
+            discarded,
+        };
     }
+    match save_suggestions(store, blocked, workspace, sent, suggestions) {
+        Ok(saved) => FindingsReport {
+            status: FindingsStatus::Saved,
+            saved,
+            discarded,
+        },
+        Err(_) => FindingsReport {
+            status: FindingsStatus::Failed,
+            saved: 0,
+            discarded,
+        },
+    }
+}
+
+/// Stores the findings through the same reconciliation as a review, and returns how many suggestions it holds for them.
+fn save_suggestions(
+    store: &Store,
+    blocked: &[PathBuf],
+    workspace: &str,
+    sent: &[String],
+    suggestions: Vec<SuggestionInput>,
+) -> Result<usize, CommandError> {
     services::authorized_workspace(store, blocked, workspace)?;
     let suggestions = verified(workspace, sent, suggestions);
     let conversation = match store

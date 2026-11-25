@@ -277,7 +277,9 @@ impl ChatState {
                 if matches!(frame, chat::Frame::Proposed { .. }) {
                     shared.changes_version.update(|n| *n += 1);
                 }
-                if matches!(frame, chat::Frame::Findings { .. }) {
+                if let chat::Frame::Findings(outcome) = &frame
+                    && outcome.saved_any()
+                {
                     shared.suggestions_version.update(|n| *n += 1);
                 }
                 session.update(|session| session.frame(run, frame));
@@ -523,22 +525,23 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 })
             }}
             {move || {
-                let saved = session.with(Session::findings);
-                (saved > 0).then(|| {
-                    let words = if saved == 1 {
-                        "1 achado salvo em Sugestões".to_string()
-                    } else {
-                        format!("{saved} achados salvos em Sugestões")
-                    };
+                session.with(|session| session.findings().copied()).map(|outcome| {
+                    let words = chat::findings_words(&outcome);
+                    let open = outcome.saved_any().then(|| {
+                        view! {
+                            <button
+                                class="findings-line"
+                                type="button"
+                                data-testid="chat-findings"
+                                on:click=move |_| state.shared.suggestions_requests.update(|n| *n += 1)
+                            >
+                                "Abrir Sugestões"
+                            </button>
+                        }
+                    });
                     view! {
-                        <button
-                            class="findings-line"
-                            type="button"
-                            data-testid="chat-findings"
-                            on:click=move |_| state.shared.suggestions_requests.update(|n| *n += 1)
-                        >
-                            {words}
-                        </button>
+                        <p class="note" role="status" data-testid="chat-findings-status">{words}</p>
+                        {open}
                     }
                 })
             }}

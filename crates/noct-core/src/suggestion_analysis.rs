@@ -115,16 +115,25 @@ pub fn read_findings(answer: &str) -> Result<AnalysisReading, AnalysisRefusal> {
     read_at_most(answer, MAXIMUM_CHAT_FINDINGS)
 }
 
-/// The lines the chat's instructions get when findings are saved: a block only for a concrete problem.
+/// A minimal finding in the shape the chat is asked for. The tests read it with the validator of a reply, so the example
+/// the model sees is one that is stored.
+const FINDINGS_EXAMPLE: &str = r#"[{"title":"Leitura sem tratamento de erro","description":"Uma falha ao ler o arquivo derruba o processo.","reasoning":"A linha 42 usa unwrap sobre a leitura.","category":"bug","severity":"medium","affectedFiles":["src/lib.rs"]}]"#;
+
+/// The lines the chat's instructions get when findings are saved. The block is asked for whenever the answer names a
+/// concrete problem: a problem described only in the text is not saved.
 pub fn findings_instructions() -> String {
     format!(
-        "\nSomente se você encontrar algo concreto no projeto (erro, risco, bug), termine a resposta com um único bloco \
-         ```nocturne-suggestions com no máximo {MAXIMUM_CHAT_FINDINGS} achados, em JSON válido, no formato: \
+        "\nSe a sua resposta apontar algo concreto no projeto (erro, risco, bug ou falha de teste), termine a resposta com \
+         um único bloco ```nocturne-suggestions, com no máximo {MAXIMUM_CHAT_FINDINGS} achados em JSON válido, mesmo que o \
+         problema já esteja descrito no texto. Sem o bloco, o achado não vai para Sugestões. Cada achado tem estes campos: \
          [{{\"title\":\"...\",\"description\":\"problema e impacto\",\"reasoning\":\"justificativa\",\
          \"category\":\"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility\",\
          \"severity\":\"info|low|medium|high|critical\",\"affectedFiles\":[\"caminho/relativo\"],\
          \"proposedChanges\":\"descrição da solução\",\"expectedBenefits\":[\"benefício\"],\
-         \"complexity\":\"low|medium|high\",\"risk\":\"low|medium|high\"}}]. Sem achado concreto, não escreva o bloco.\n"
+         \"complexity\":\"low|medium|high\",\"risk\":\"low|medium|high\"}}]. Exemplo mínimo, só para o formato (não copie \
+         o conteúdo):\n\
+         ```nocturne-suggestions\n{FINDINGS_EXAMPLE}\n```\n\
+         Sem achado concreto, não escreva o bloco.\n"
     )
 }
 
@@ -466,6 +475,15 @@ mod tests {
             "Antes."
         );
         assert_eq!(without_findings("Só texto.\n"), "Só texto.\n");
+    }
+
+    #[test]
+    fn the_findings_example_is_a_finding_the_reader_stores() {
+        let reply = format!("Resposta.\n```nocturne-suggestions\n{FINDINGS_EXAMPLE}\n```");
+        let reading = read_findings(&reply).expect("the example reads");
+        assert_eq!(reading.suggestions.len(), 1);
+        assert_eq!(reading.discarded, 0);
+        assert!(findings_instructions().contains(FINDINGS_EXAMPLE));
     }
 
     fn with_evidence(location: &str) -> SuggestionInput {

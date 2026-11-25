@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use crate::suggestion_analysis::FindingsReport;
 use noct_core::ai::ProviderSource;
 use noct_core::ai::bindings::OPENROUTER_PROVIDER_ID;
 use noct_core::ai::context::{self, ContextFile};
@@ -251,10 +252,9 @@ pub enum ChatEvent {
         changes: Vec<ProposedChange>,
         refused: usize,
     },
-    /// The findings of a complete answer saved in Sugestões. Sent once, before `Done`, only when at least one was saved.
-    Findings {
-        saved: usize,
-    },
+    /// What became of the findings of a complete answer. Sent once, before `Done`, after every complete answer, so the
+    /// window can say what happened, even when nothing was saved.
+    Findings(FindingsReport),
     Done,
     Failed {
         code: String,

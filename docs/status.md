@@ -1599,3 +1599,23 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - Checked here: the script ran on the release binary of this machine. The archive has the executable mode, the root owner and
   the three files; the binary links `webkit2gtk-4.1`, `gtk-3`, `soup-3` and `javascriptcoregtk-4.1`, which the list covers.
   Not checked: a run of the workflow on GitHub, and the package on another distribution.
+
+## Chat findings say what became of them (2026-11-25)
+
+- Cause of the silence: `store_findings` returned 0 for every case that stored nothing (no block, a block that does not read,
+  every finding refused by a bound or repeated, a store or project error), and the shell sent an event only when it saved
+  at least one. Nothing told the person why.
+- Every complete answer now sends one `findings` event before `done`, with a status and two counts: `off` (the switch in
+  Ajustes is off), `absent` (no block), `invalid` (the block does not read), `empty` (`[]`), `discarded` (every finding refused
+  by a bound or repeated), `saved` (`saved` stored, `discarded` refused) and `failed` (the project or the store refused). Only
+  the status and the counts travel; the words under the answer are the interface's.
+- The line under the answer (`chat-findings-status`) always says which one it was. "Abrir Sugestões" appears only when findings
+  were saved, and only then the list and the lamp are read again (`suggestions_version`).
+- The instruction asks for the block whenever the answer names a concrete problem, even when the text already describes it,
+  and shows a minimal finding. A test reads that example with the validator of a reply, so the example is a stored finding.
+- Checked here: `noct-core` tests (the example reads), `noct-app/tests/findings_report.rs` (each status, and a project that is
+  not saved fails), `noct-ui` tests (the frame, the words of each status, the run's lifecycle) and the Chromium check (two
+  scenarios: no block, and saved with one refused; 34 of 34 passed). Not checked: a real provider reply, and how often models
+  follow the stronger instruction; that needs a call with a real key.
+- Not marked `[security-review]`: no validation, storage or capability changed. The window receives a status and two counts,
+  never the model's text.
