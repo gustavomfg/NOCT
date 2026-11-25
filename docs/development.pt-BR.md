@@ -61,8 +61,8 @@ Vite são saídas locais reproduzíveis e ficam ignorados. Pacotes antigos podem
 ser removidos localmente; instaladores publicados permanecem nas releases do GitHub.
 
 Mantenha apenas imagens referenciadas em `docs/images/` e comparações ativas em
-`tests/renderer/__screenshots__/`. A marca original e suas três cópias usadas no
-aplicativo estão documentadas em [assets](../assets/README.md). Rascunhos de
+`tests/renderer/__screenshots__/`. Os ícones do aplicativo estão documentados em
+[assets](../assets/README.md). Rascunhos de
 planejamento superados ficam no [arquivo histórico](archive/README.md).
 
 `.nocturne/`, credenciais, bancos e configurações locais do editor não são caches

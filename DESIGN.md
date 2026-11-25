@@ -193,7 +193,7 @@ components:
 
 A precise desktop workspace whose hierarchy comes from alignment, readable text, and useful content. Neutral charcoal surfaces, pale primary controls, quiet separators, and restrained peach details support long engineering sessions. The light theme follows the same neutral structure with dark primary controls.
 
-Zed, Linear, and Raycast inform the compact desktop grammar. Nocturne retains its own small generated raster N in ivory and muted peach in the brand and assistant identity. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. The request anchors the working area, plans and decisions sit alongside it, and project context can recede during reading or writing.
+Zed, Linear, and Raycast inform the compact desktop grammar. The brand is the name NOCT written in text; there is no raster mark. The user rejected the illustrated workshop and owl; the confirmed identity has no mascot or large illustration. The request anchors the working area, plans and decisions sit alongside it, and project context can recede during reading or writing.
 
 **Key Characteristics:**
 
@@ -229,7 +229,7 @@ The palette is neutral charcoal in dark mode and clean gray in light mode, with 
 
 **Code and Shortcut Font:** Geist Mono, with the existing platform monospace fallbacks.
 
-The interface uses conventional, compact letterforms. Medium weights establish hierarchy without heavy promotional headings; pixel art is confined to the small identity mark.
+The interface uses conventional, compact letterforms. Medium weights establish hierarchy without heavy promotional headings; no pixel art or raster mark is used.
 
 - **Display:** the effective display token comes from the studio stylesheet, overriding the earlier base value. It is used by the start heading with tight leading and slight negative tracking.
 - **Headline:** settings page headings and major section titles.
@@ -238,7 +238,7 @@ The interface uses conventional, compact letterforms. Medium weights establish h
 - **Label:** compact navigation, metadata, modes, and controls. Small, caption, label, and code roles share the established legibility floor (13px).
 - **Code:** code blocks, inline code, paths where already monospace, and keyboard shortcuts. Do not introduce pixel fonts.
 
-**The Small Mark Rule.** Keep the generated pixel-art N image at the small brand and assistant sizes. Do not expand it into a mascot, scene, or large illustration.
+**The Text Brand Rule.** The sidebar writes the name NOCT in text. Do not add a mascot, scene, or large illustration.
 
 ## Layout
 
@@ -260,13 +260,13 @@ Working regions are flat. Neutral surface steps and separators carry most depth;
 
 **The Flat Workspace Rule.** Use tonal layers and quiet separators for working regions. Keep the composer, command rows, and primary actions flat; reserve structural elevation for overlays and drawers.
 
-Motion uses the existing short state transitions and easing. Focus appears immediately; hover, focus, and press preserve geometry. Keep reduced-motion overrides, including the theme-transition fallback. Do not animate an empty state or the brand mark to attract attention.
+Motion uses the existing short state transitions and easing. Focus appears immediately; hover, focus, and press preserve geometry. Keep reduced-motion overrides, including the theme-transition fallback. Do not animate an empty state or the brand name to attract attention.
 
 ## Shapes
 
 Use the actual radius scale in the frontmatter. Small controls, mode choices, and task-history rows use the compact small radius; the project selector, user messages, provider choices, and request command rows use the medium radius; the composer uses the large radius. The extra-large token currently resolves to the same corner size as large. The legacy pill token resolves to the small radius in the studio layer, so a token name does not imply a capsule silhouette.
 
-The mark is a generated raster N with interlocking ivory and muted-peach strokes, preserved as the canonical PNG in assets/logo/nocturne-logo.png. It occupies a transparent brand box (28px); the assistant mark is drawn at (24px) inside a (28px) identity slot. The light theme darkens the same mark through its existing filter. Use the generated image directly; preserve its alpha, proportions, and native edge detail rather than redrawing the artwork in code. Small instances use normal image sampling. Status dots retain circular geometry.
+Status dots retain circular geometry.
 
 ## Components
 
@@ -315,7 +315,7 @@ Settings retain the shared field and navigation grammar. The active connection i
 - Do use the shared semantic tokens and inspect both dark and light themes.
 - Do keep interface text at or above the 13px floor and actionable pointer targets at or above 32px.
 - Do preserve immediate visible focus, keyboard navigation, dialog focus containment and restoration, and reduced-motion behavior.
-- Do keep the small generated N mark crisp and the interface text in Geist, with Geist Mono for code and shortcuts.
+- Do keep the interface text in Geist, with Geist Mono for code and shortcuts.
 - Do preserve canonical responsive drawers, independent scrolling, bounded histories, and stable control geometry.
 - Do keep the selected mode description visible and associated with the current mode control.
 - Do keep the request separate from sending, and decision navigation separate from approval.

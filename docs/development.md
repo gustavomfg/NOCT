@@ -61,8 +61,8 @@ reproducible local output and stay ignored. Old packages can be removed locally;
 published installers remain attached to their versioned GitHub releases.
 
 Keep only referenced images in `docs/images/` and active comparison fixtures in
-`tests/renderer/__screenshots__/`. The canonical brand source and the three
-application image copies are described in [assets](../assets/README.md).
+`tests/renderer/__screenshots__/`. The application icons are described in
+[assets](../assets/README.md).
 Superseded planning drafts live in [the historical archive](archive/README.md).
 
 `.nocturne/`, credentials, databases and local editor settings are not build
