@@ -38,6 +38,10 @@ pub struct Shared {
     pub build_requests: RwSignal<u64>,
     /// A press of "Revisar em Documentar" under an answer: the window opens Documentar.
     pub docs_requests: RwSignal<u64>,
+    /// A press of the findings line under an answer: Revisar opens Sugestões.
+    pub suggestions_requests: RwSignal<u64>,
+    /// Counts the times the suggestions may have changed; Sugestões and the lamp read them again each time.
+    pub suggestions_version: RwSignal<u64>,
 }
 
 impl Shared {

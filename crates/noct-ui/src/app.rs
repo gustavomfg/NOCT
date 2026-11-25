@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use crate::browser_guard;
 use crate::changes_panel;
 use crate::chat_panel;
+use crate::context_picker;
 use crate::dom;
 use crate::ipc;
 use crate::model_picker;
@@ -63,6 +64,8 @@ pub fn App() -> impl IntoView {
         changes_version: RwSignal::new(0),
         build_requests: RwSignal::new(0),
         docs_requests: RwSignal::new(0),
+        suggestions_requests: RwSignal::new(0),
+        suggestions_version: RwSignal::new(0),
     };
     let settings_open = shared.settings_open;
 
@@ -85,10 +88,22 @@ pub fn App() -> impl IntoView {
     let chat = chat_panel::ChatState::new(shared);
     chat.read_status();
     chat.watch_consent();
+    let context = context_picker::ContextState::new(shared);
+    context.watch();
     // Revisar has two tabs: the conversation and the project's suggestions.
     let suggestions = suggestions_panel::SuggestionsState::new(shared);
     let review_tab = RwSignal::new(ReviewTab::Conversation);
     suggestions.watch();
+    // The findings line under an answer opens Sugestões.
+    Effect::new(move |previous: Option<u64>| {
+        let count = shared.suggestions_requests.get();
+        if previous.is_some_and(|previous| previous != count) {
+            set_mode.set(Mode::Review);
+            review_tab.set(ReviewTab::Suggestions);
+            shared.close_settings();
+        }
+        count
+    });
     let in_chat = move || {
         mode.get() == Mode::Review
             && !settings_open.get()
@@ -298,7 +313,7 @@ pub fn App() -> impl IntoView {
                                 match mode.get() {
                                     Mode::Review => match review_tab.get() {
                                         ReviewTab::Conversation => chat_panel::thread(chat).into_any(),
-                                        ReviewTab::Suggestions => suggestions_panel::panel(suggestions).into_any(),
+                                        ReviewTab::Suggestions => suggestions_panel::panel(suggestions, context).into_any(),
                                     },
                                     Mode::Build => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
                                     Mode::Docs => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
@@ -307,8 +322,12 @@ pub fn App() -> impl IntoView {
                         }}
                     </div>
                 </main>
-                {move || in_chat().then(|| chat_panel::composer(chat))}
+                {move || in_chat().then(|| view! {
+                    <div class="ctx-dock">{context_picker::summary(context, "ctx-open-chat")}</div>
+                    {chat_panel::composer(chat)}
+                })}
             </div>
+            {context_picker::dialog(context)}
         </div>
     }
 }

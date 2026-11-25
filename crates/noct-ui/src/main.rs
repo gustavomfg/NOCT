@@ -5,6 +5,7 @@ mod browser_guard;
 mod changes_panel;
 mod chat;
 mod chat_panel;
+mod context_picker;
 mod diff;
 mod dom;
 mod ipc;

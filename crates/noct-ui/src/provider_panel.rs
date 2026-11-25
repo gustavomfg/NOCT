@@ -108,6 +108,29 @@ pub fn model_group(shared: Shared) -> impl IntoView {
             .chat
             .with(|view| matches!(view, ProviderView::Ready(status) if status.enabled))
     };
+    let findings_busy = RwSignal::new(false);
+    let findings_on = move || {
+        shared
+            .chat
+            .with(|view| matches!(view, ProviderView::Ready(status) if status.findings))
+    };
+    let toggle_findings = move || {
+        let next = !findings_on();
+        findings_busy.set(true);
+        chat_error.set(None);
+        ipc::call_with(
+            chat::SET_FINDINGS,
+            &chat::switch_payload(next),
+            move |outcome| {
+                findings_busy.set(false);
+                match provider::settle::<ChatStatus>(outcome) {
+                    ProviderView::Ready(status) => shared.chat.set(ProviderView::Ready(status)),
+                    ProviderView::Failed(failure) => chat_error.set(Some(failure.message)),
+                    ProviderView::Loading => {}
+                }
+            },
+        );
+    };
     let toggle_chat = move || {
         let next = !chat_on();
         chat_busy.set(true);
@@ -456,6 +479,28 @@ pub fn model_group(shared: Shared) -> impl IntoView {
                         aria-checked=move || chat_on().to_string()
                         disabled=move || chat_busy.get() || !matches!(shared.chat.get(), ProviderView::Ready(_))
                         on:click=move |_| toggle_chat()
+                    ></button>
+                </div>
+                <div class="item">
+                    <div class="item__txt">
+                        <div class="item__name">"Salvar achados do chat em Sugestões"</div>
+                        <div class="item__desc">
+                            {move || if findings_on() {
+                                "Ligado. Erros, riscos e bugs que o chat encontrar viram sugestões novas do projeto."
+                            } else {
+                                "Desligado. O chat não grava achados."
+                            }}
+                        </div>
+                    </div>
+                    <button
+                        class="switch"
+                        type="button"
+                        role="switch"
+                        aria-label="Salvar achados do chat em Sugestões"
+                        data-testid="findings-switch"
+                        aria-checked=move || findings_on().to_string()
+                        disabled=move || findings_busy.get() || !matches!(shared.chat.get(), ProviderView::Ready(_))
+                        on:click=move |_| toggle_findings()
                     ></button>
                 </div>
                 {move || {

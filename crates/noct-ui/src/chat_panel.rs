@@ -277,6 +277,9 @@ impl ChatState {
                 if matches!(frame, chat::Frame::Proposed { .. }) {
                     shared.changes_version.update(|n| *n += 1);
                 }
+                if matches!(frame, chat::Frame::Findings { .. }) {
+                    shared.suggestions_version.update(|n| *n += 1);
+                }
                 session.update(|session| session.frame(run, frame));
             }
         }) else {
@@ -323,7 +326,8 @@ impl ChatState {
             (
                 session.run(),
                 session.workspace().to_string(),
-                session.answer().to_string(),
+                // Saved as the screen shows it: the findings block went to Sugestões.
+                noct_core::suggestion_analysis::without_findings(session.answer()),
             )
         });
         if !answer.with_untracked(Session::can_save) || self.save_busy.get_untracked() {
@@ -456,7 +460,9 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     // block that grows. A proposal block is shown as its one line, as before.
     let blocks = Memo::new(move |_| {
         session.with(|session| {
-            markdown::keyed(&noct_core::proposal_block::shown_answer(session.answer()))
+            markdown::keyed(&noct_core::proposal_block::shown_answer(
+                &noct_core::suggestion_analysis::without_findings(session.answer()),
+            ))
         })
     });
     // Only whether there is text decides that the answer area exists, so a new piece does not draw it again.
@@ -514,6 +520,26 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
             {move || {
                 session.with(|session| session.proposals().cloned()).map(|(changes, refused)| {
                     proposals_view(state.shared, changes, refused)
+                })
+            }}
+            {move || {
+                let saved = session.with(Session::findings);
+                (saved > 0).then(|| {
+                    let words = if saved == 1 {
+                        "1 achado salvo em Sugestões".to_string()
+                    } else {
+                        format!("{saved} achados salvos em Sugestões")
+                    };
+                    view! {
+                        <button
+                            class="findings-line"
+                            type="button"
+                            data-testid="chat-findings"
+                            on:click=move |_| state.shared.suggestions_requests.update(|n| *n += 1)
+                        >
+                            {words}
+                        </button>
+                    }
                 })
             }}
             <p class="note" role="status" data-testid="chat-status">
@@ -824,7 +850,9 @@ pub fn consent_card(state: ChatState) -> impl IntoView {
                             <p class="body">"Para responder a esta pergunta, o NOCT envia:"</p>
                             <ul>
                                 <li>"Sua pergunta. As respostas anteriores desta janela não são enviadas."</li>
-                                <li>"Até 128 KiB de texto dos arquivos do topo do projeto, sem arquivos sensíveis, como .env, chaves e certificados."</li>
+                                <li>"Até 128 KiB de texto dos arquivos escolhidos (por padrão, os do topo do projeto), sem arquivos sensíveis, como .env, chaves e certificados."</li>
+                                <li>"A lista de nomes e tamanhos dos arquivos do projeto, até 2.000, sem conteúdo e sem os arquivos sensíveis."</li>
+                                <li>"Na análise de Sugestões, os títulos, o status e o motivo das sugestões anteriores do projeto."</li>
                             </ul>
                             <div class="actions">
                                 <button
@@ -1000,10 +1028,7 @@ fn suggestions_view(state: ChatState) -> impl IntoView {
             "Encontrar arquivos e funções",
         ),
         ("Riscos de segurança", "Pontos para revisar primeiro"),
-        (
-            "O que mudou recentemente",
-            "Pelos arquivos do topo do projeto",
-        ),
+        ("O que mudou recentemente", "Pelos arquivos escolhidos"),
     ];
     let title = match sidebar::current_name(state.shared) {
         Some(name) => format!("O que você quer entender em {name}?"),

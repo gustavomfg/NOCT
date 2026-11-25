@@ -69,7 +69,7 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list', 'file_changes_list']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list', 'file_changes_list', 'suggestions_list', 'context_tree']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
 const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add', 'file_change_approve', 'file_change_reject', 'file_change_undo']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
@@ -396,6 +396,16 @@ function installMock(config) {
     if (command === 'workspace_add') {
       added.push(config.addedProject)
       return config.addedProject
+    }
+    // Sugestões (the lamp's count) and the files a call carries are read for the current project.
+    if (command === 'suggestions_list') return []
+    if (command === 'context_tree') {
+      return {
+        entries: [{ path: 'README.md', bytes: 2048, blocked: false }, { path: '.env', bytes: 12, blocked: true }],
+        truncated: false,
+        selected: ['README.md'],
+        custom: false,
+      }
     }
     if (command === 'conversations_create') return { id: 'conv-1', title: 'alpha', workspace: payload.input, createdAt: '2026-01-03T00:00:00.000Z' }
     if (command === 'ai_save_assistant') {
@@ -1422,7 +1432,7 @@ try {
         const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set', ...CHAT_COMMANDS].includes(call.command))
         check(
           reads.every((call) =>
-            ['provider_consent_status', 'models_bindings_get'].includes(call.command)
+            ['provider_consent_status', 'models_bindings_get', 'suggestions_list', 'context_tree'].includes(call.command)
               ? CONSENT_PAYLOAD.test(JSON.stringify(call.payload))
               : JSON.stringify(call.payload) === PAYLOAD_OF[call.command],
           ),

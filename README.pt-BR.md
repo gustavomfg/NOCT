@@ -84,7 +84,7 @@ aplicativo registra planos, aprovações e resultados de validação (`AGENTS.md
 
 | Caminho | Responsabilidade |
 | --- | --- |
-| `crates/noct-app` | O shell Tauri 2. Abre a pasta de dados e o log, registra seus 40 comandos, define a política da janela e confere o acesso aos workspaces. |
+| `crates/noct-app` | O shell Tauri 2. Abre a pasta de dados e o log, registra seus 41 comandos, define a política da janela e confere o acesso aos workspaces. |
 | `crates/noct-core` | Os contratos, limites e tipos do produto, e a redação do log. |
 | `crates/noct-db` | Persistência SQLite: o runtime, as migrações 1 a 32, os repositórios, backups e instantâneos de recuperação, escritas atômicas, o log em arquivo e o observador de operações. |
 | `crates/noct-native` | Um binário separado, o worker de rollback de operações de arquivo. Tem backend só para Linux. |
@@ -117,7 +117,7 @@ A tabela de fases da [ADR 0001](docs/adr/0001-rust-migration.md) é a referênci
 - **Fase 5, IA:** em parte. O cofre de credenciais, a política de rede, o transporte do OpenRouter, a lista de modelos dele,
   o chat e as alterações que uma resposta propõe estão prontos. Outros adaptadores de provedores e o laço de ferramentas não
   foram portados.
-- **Fase 6, IPC e shell:** em parte. 40 comandos, liberados só para a janela `main`.
+- **Fase 6, IPC e shell:** em parte. 41 comandos, liberados só para a janela `main`.
 - **Fase 7, interface:** em parte. Revisar (o chat, com respostas desenhadas como Markdown sem HTML), Construir e
   Documentar (a aprovação de cada alteração proposta, com desfazer), Ajustes, a lista de projetos na barra lateral, o
   seletor de modelo, a camada de vidro e os temas. Conferida no Chromium com um shell simulado; a janela real no Linux foi
@@ -277,7 +277,7 @@ O lançador é `scripts/run-rust-shell.mjs`. Suas opções são `--data-dir <cam
 - **Política do webview.** `withGlobalTauri` é `false`. A Content-Security-Policy é
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost`.
   O Chromium a confere (`scripts/check-shell-csp.mjs`). Nenhum webview a aplica ainda em execução real.
-- **Comandos.** 40 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
+- **Comandos.** 41 comandos são declarados em `crates/noct-app/src/command_names.rs`, e `build.rs` os transforma no manifesto
   da aplicação. `crates/noct-app/capabilities/default.json` os libera só para a janela `main`. Os testes com o runtime de mock
   do Tauri recusam um comando não liberado e um pedido de uma segunda janela.
 - **Navegação.** A janela principal aceita navegação só para a interface empacotada, e para o servidor de desenvolvimento

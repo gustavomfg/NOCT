@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-chat-set-findings"
+description = "Enables the provider_chat_set_findings command without any pre-configured scope."
+commands.allow = ["provider_chat_set_findings"]
+
+[[permission]]
+identifier = "deny-provider-chat-set-findings"
+description = "Denies the provider_chat_set_findings command without any pre-configured scope."
+commands.deny = ["provider_chat_set_findings"]

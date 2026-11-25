@@ -155,3 +155,40 @@ pub fn select(candidates: &[ContextFile]) -> Selection {
     }
     selection
 }
+
+/// Whether a project file may be sent: inside the project, not ignored and not sensitive. The window shows the others as
+/// blocked, and a saved selection may not name them.
+pub fn is_sendable_path(relative: &str) -> bool {
+    is_inside_project(relative)
+        && !is_ignored_relative_path(relative)
+        && !is_potentially_sensitive_path(relative)
+}
+
+/// One entry of the project tree: a file with its size. No content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeEntry {
+    pub path: String,
+    pub bytes: u64,
+}
+
+/// The tree as a call carries it: one line per sendable file, `path (N B)`, at most `MAXIMUM_TREE_ENTRIES` lines.
+pub fn tree_text(entries: &[TreeEntry]) -> String {
+    let mut text = String::new();
+    for entry in entries
+        .iter()
+        .filter(|entry| is_sendable_path(&entry.path))
+        .take(limits::MAXIMUM_TREE_ENTRIES)
+    {
+        text.push_str(&format!("{} ({} B)\n", entry.path, entry.bytes));
+    }
+    text
+}
+
+/// The text of a file with its line numbers, `   12| line`, so the model can name the lines it cites.
+pub fn numbered(text: &str) -> String {
+    let mut numbered = String::with_capacity(text.len() + text.len() / 8);
+    for (index, line) in text.lines().enumerate() {
+        numbered.push_str(&format!("{:>5}| {line}\n", index + 1));
+    }
+    numbered
+}

@@ -61,6 +61,9 @@ extern "C" {
     #[wasm_bindgen(method)]
     fn focus(this: &Element);
 
+    #[wasm_bindgen(method, getter)]
+    fn id(this: &Element) -> String;
+
     #[wasm_bindgen(method, getter = offsetTop)]
     fn offset_top(this: &Element) -> f64;
 
@@ -268,4 +271,11 @@ pub fn focus(id: &str) {
     if let Some(element) = element_by_id(id) {
         element.focus();
     }
+}
+
+/// The id of the element that has the keyboard focus, or an empty text.
+pub fn focused_id() -> String {
+    query_selector(":focus")
+        .map(|element| element.id())
+        .unwrap_or_default()
 }
