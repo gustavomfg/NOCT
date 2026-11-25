@@ -50,6 +50,10 @@ fn the_bundle_names_the_targets_and_icons_of_the_three_systems() {
         icons.iter().any(|icon| icon.ends_with(".ico")),
         "Windows takes the ICO"
     );
+    assert!(
+        icons.iter().any(|icon| icon.ends_with(".icns")),
+        "macOS takes the ICNS, so the bundle does not convert a PNG"
+    );
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     for icon in icons {
         assert!(
