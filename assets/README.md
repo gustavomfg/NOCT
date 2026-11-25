@@ -1,14 +1,8 @@
-# NOCT brand assets
+# NOCT application icons
 
-`logo/nocturne-logo.png` is the canonical generated raster logo: an ivory and muted-peach pixel-art N with interlocking strokes on a transparent background. It was produced with the built-in Imagegen tool. The exact prompt and source are recorded in `logo/nocturne-logo.provenance.json`.
+The interface shows no raster logo: the sidebar writes the name in text.
 
-Use this image as the only source of the mark. Do not redraw its contours in SVG, CSS or individual rectangles. Preserve the native alpha and proportions. Small UI instances use normal image sampling so the high-resolution artwork remains readable.
+- `icon/noct-icon-1024.png`: the source of the application icon, 1024 px, RGBA with 8 bits per channel: a light crescent moon on a dark rounded tile, drawn by a script.
+- `../crates/noct-app/icons/`: every size made from it with `cargo tauri icon assets/icon/noct-icon-1024.png` (the PNGs, `icon.ico` for Windows and `icon.icns` for macOS); the Android and iOS sets are not kept. Make them again from the source, never edit them by hand.
 
-## Application copies
-
-- `../crates/noct-app/icons/icon.png`: 512px application tile, used by the installers (Linux, macOS) and the window.
-- `../crates/noct-app/icons/icon.ico`: the Windows icon (16, 24, 32, 48, 64, 128 and 256 px, made from `icon.png`), used by the executable and the installer.
-
-The interface itself shows no raster logo: the sidebar writes the name in text.
-
-The tile keeps the pale artwork visible in browser tabs and launchers. These are the copies consumed by the application and packaging; unused size exports and duplicate tiles have been removed. Raster exports only resize or place the original image on its background; they do not alter the illustration. Each PNG embeds its prompt or source origin. Keep the logo small in navigation and assistant identity; no large decorative illustration is used in the application.
+`tauri.conf.json` (`bundle.icon`) names the PNGs, `icon.icns` and `icon.ico`, and `crates/noct-app/tests/installers.rs` requires them.
