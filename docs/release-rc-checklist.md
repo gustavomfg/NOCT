@@ -48,8 +48,8 @@ replace the protected stable-release or cross-platform backfill workflows.
 - [ ] Verify the complete 16-asset `v1.0.1` inventory, including both macOS
       blockmaps, the Windows blockmap, all three updater metadata files and
       all three checksum manifests.
-- [ ] Verify the GitHub release body matches `docs/releases/v1.0.1.md` and that
-      `v1.0.0` remains unchanged.
+- [ ] Verify the GitHub release body matches the `v1.0.1` release notes (in the tag
+      `electron-final`, not on this branch) and that `v1.0.0` remains unchanged.
 
 Native recovery consent and signing/notarization are release gates, not bypasses
 to automate in production.

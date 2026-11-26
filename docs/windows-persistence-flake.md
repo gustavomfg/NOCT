@@ -11,7 +11,8 @@ TypeScript test files on 5 second timeouts, and once on an `ENOTEMPTY` while rem
 - `tests/startupRecovery.test.ts`
 
 The same commit passed when the job ran again. The same files had passed on `e8e5c23`. The failure is recorded in
-[`rust-merge-plan.md`](rust-merge-plan.md). Its cause was not established then, and it is not established now.
+the merge plan of PR #23 (`rust-merge-plan.md`, removed from this branch; the tag `electron-final` has it). Its cause was
+not established then, and it is not established now.
 
 These files test the Electron product. They are not part of the Rust shell.
 

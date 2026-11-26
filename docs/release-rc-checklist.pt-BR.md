@@ -53,8 +53,8 @@ os workflows protegidos de release estável e backfill multiplataforma.
 - [ ] Verifique o inventário completo de 16 assets da `v1.0.1`, incluindo os
       dois blockmaps do macOS, o blockmap do Windows, as três metadata do
       atualizador e os três manifestos de checksum.
-- [ ] Verifique que o corpo da release do GitHub corresponde a
-      `docs/releases/v1.0.1.md` e que `v1.0.0` permanece inalterada.
+- [ ] Verifique que o corpo da release do GitHub corresponde às notas da
+      `v1.0.1` (na tag `electron-final`, não neste branch) e que `v1.0.0` permanece inalterada.
 
 Consentimento nativo de recovery e assinatura/notarização são gates de release;
 eles não devem ser contornados no produto para automatizar testes.

@@ -20,8 +20,8 @@ The captures come from the interface check in Chromium, with a mocked shell and 
 from the real window. [docs/images/README.md](docs/images/README.md) says how they were made.
 
 This file describes the branch after the removal of the previous product. Each statement names what it rests on. The
-results of the local checks and of CI for the final commit are in [docs/status.md](docs/status.md). The removal, with
-the decision for each group of files, is in [docs/ts-removal-plan.md](docs/ts-removal-plan.md).
+results of the local checks and of CI for the final commit are in [docs/status.md](docs/status.md). The removal is
+recorded there too; the previous product is kept at the tag `electron-final`.
 
 ## Install
 
@@ -100,7 +100,7 @@ plans, approvals and validation results (`AGENTS.md`, "Product identity").
 | `crates/noct-db` | SQLite persistence: the runtime, migrations 1 to 32, the repositories, backups and recovery snapshots, atomic writes, the file log and the operation observer. |
 | `crates/noct-native` | A separate rollback worker binary for filesystem operations. It has a Linux backend only. |
 | `crates/noct-secrets` | The provider credential vault: an encrypted document, a non-secret index, and a master key in the operating system credential store. The shell opens it to keep the OpenRouter key. |
-| `crates/noct-ui` | The Leptos interface, compiled to WebAssembly by Trunk. The Geist fonts are vendored under the SIL Open Font License 1.1. |
+| `crates/noct-ui` | The Leptos interface, compiled to WebAssembly by Trunk. |
 | `native/` | The source of the C++ rollback worker. CI does not compile it. |
 | `scripts/` | The launcher, the UI and CSP checks in Chromium, the shell release helper, and the Node tests of those scripts. |
 | `docs/` | Architecture decisions, the status of the branch, and the runbooks. |
@@ -378,8 +378,6 @@ caching of the Rust shell workflow.
   Its status is "Proposed".
 - [ADR 0002: envelope encryption of provider credentials](docs/adr/0002-envelope-provider-credentials.md). Accepted.
   It partly supersedes decision 6 of ADR 0001.
-- [Removal of the previous product from this branch](docs/ts-removal-plan.md). The inventory, the decision for each
-  group, and what each step checked.
 - [Status of the branch](docs/status.md). The report of each round, with its results and its open items.
 - [Running the Rust shell locally](docs/rust-shell.md). The run modes, what is verified, the manual check, the gaps in CI,
   and the known approximations.
