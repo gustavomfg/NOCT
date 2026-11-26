@@ -52,33 +52,33 @@ colors:
   light-overlay: "rgb(20 21 28 / 42%)"
 typography:
   display:
-    fontFamily: "'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
     fontSize: "28px"
     fontWeight: 550
     lineHeight: 1.25
     letterSpacing: "-.03em"
   headline:
-    fontFamily: "'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
     fontSize: "20px"
     fontWeight: 550
     lineHeight: 1.25
   title:
-    fontFamily: "'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
     fontSize: "16px"
     fontWeight: 550
     lineHeight: 1.4
   body:
-    fontFamily: "'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 450
     lineHeight: 1.65
   label:
-    fontFamily: "'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
     fontSize: "13px"
     fontWeight: 500
     lineHeight: 1.4
   code:
-    fontFamily: "'Geist Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace"
+    fontFamily: "ui-monospace, Menlo, Consolas, monospace"
     fontSize: "13px"
     fontWeight: 450
     lineHeight: 1.65
@@ -225,9 +225,9 @@ The palette is neutral charcoal in dark mode and clean gray in light mode, with 
 
 ## Typography
 
-**Display and Body Font:** Geist Variable, with Geist and the existing sans-serif system fallbacks.
+**Display and Body Font:** Inter, with the existing system sans-serif fallbacks.
 
-**Code and Shortcut Font:** Geist Mono, with the existing platform monospace fallbacks.
+**Code and Shortcut Font:** the platform monospace stack (`ui-monospace, Menlo, Consolas, monospace`).
 
 The interface uses conventional, compact letterforms. Medium weights establish hierarchy without heavy promotional headings; no pixel art or raster mark is used.
 
@@ -315,7 +315,7 @@ Settings retain the shared field and navigation grammar. The active connection i
 - Do use the shared semantic tokens and inspect both dark and light themes.
 - Do keep interface text at or above the 13px floor and actionable pointer targets at or above 32px.
 - Do preserve immediate visible focus, keyboard navigation, dialog focus containment and restoration, and reduced-motion behavior.
-- Do keep the interface text in Geist, with Geist Mono for code and shortcuts.
+- Do keep the interface text in Inter, with the platform monospace for code and shortcuts.
 - Do preserve canonical responsive drawers, independent scrolling, bounded histories, and stable control geometry.
 - Do keep the selected mode description visible and associated with the current mode control.
 - Do keep the request separate from sending, and decision navigation separate from approval.
