@@ -102,6 +102,7 @@ pub fn open_with_profile(
         },
     )
     .map_err(BootstrapError::Database)?;
+    crate::agent_profiles::ensure(&store).map_err(BootstrapError::Database)?;
     let saved = store.settings().get().map_err(BootstrapError::Database)?;
     diagnostics.set_enabled(from_saved(&saved).diagnostic_mode == Some(true));
     Ok(Persistence {

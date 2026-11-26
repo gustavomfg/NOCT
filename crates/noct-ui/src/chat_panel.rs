@@ -458,6 +458,11 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     let copy_note = turn.copy_note;
     let phase = move || session.with(|session| session.phase().clone());
     let answer = move || session.with(|session| session.answer().to_string());
+    // The agent that answered and its model, as the shell named them; before the shell names them, the project's model.
+    let head = move || match session.with(|session| session.agent().cloned()) {
+        Some((name, model)) => format!("{name} · {model}"),
+        None => state.model_label(),
+    };
     // The answer as Markdown blocks, each keyed by its position and content, so a streaming answer redraws only the
     // block that grows. A proposal block is shown as its one line, as before.
     let blocks = Memo::new(move |_| {
@@ -484,7 +489,7 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
         <div class="msg-ai">
             <div class="msg-ai__head">
                 <span class="avatar" aria-hidden="true">"N"</span>
-                <span>{move || state.model_label()}</span>
+                <span>{move || head()}</span>
                 {move || match phase() {
                     Phase::Asking => " · enviando",
                     _ => "",

@@ -167,6 +167,13 @@ pub mod provider_chat {
     pub const MAXIMUM_MODEL_CHARACTERS: usize = 128;
 }
 
+/// Limits of the agents of the modes (Ajustes › Agentes).
+pub mod agents {
+    /// The most bytes of the instruction of one agent, after its line endings are normalized to `\n`. The instruction is
+    /// text placed at the start of the chat's system prompt; the rules that follow it are the shell's.
+    pub const MAXIMUM_INSTRUCTION_BYTES: usize = 4 * 1024;
+}
+
 /// Limits of one project analysis (Revisar › Sugestões). The model's reply is untrusted: these bounds are tighter than the
 /// stored suggestion schema, and a suggestion over any of them is discarded, not cut.
 pub mod suggestion_analysis {

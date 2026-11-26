@@ -1620,3 +1620,33 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
   follow the stronger instruction; that needs a call with a real key.
 - Not marked `[security-review]`: no validation, storage or capability changed. The window receives a status and two counts,
   never the model's text.
+
+## Agents as profiles of the modes (2026-11-26) [security-review]
+
+- Each mode has one agent in Ajustes › Agentes. The name follows the mode. The instruction is text of up to 4 KiB, with line
+  endings normalized and control characters refused. The model is the project's when empty, or an identifier that passes
+  `validated_model_id`. The three agents are one settings value, `agentProfiles`, a JSON list, written with the defaults on the
+  first run. A stored value that does not pass the checks reads as the default of its mode, and the next save writes a valid list.
+- The Review agent's default instruction is the sentence the chat already had. The rules the shell adds after it are fixed in
+  `provider_chat::RULES`. `the_default_agent_sends_the_prompt_the_chat_always_sent` compares the prompt with the former text.
+- The chat sends the instruction and the model of the Review agent. The answer names the agent and its model through an `agent`
+  frame, sent once before the first delta. Analysis and change generation keep their prompts and the project's model.
+- Commands `agents_list`, `agents_set` (mode, instruction, model) and `agents_restore` (mode) are in `command_names`, the main
+  window's capability, and the contract test. A refused value is `InvalidInput` and saves nothing.
+- Trust boundary: the instruction goes into the provider's system prompt, so the window now chooses part of what the provider is
+  asked. What the shell permits does not depend on it. An agent has no permission field, and a stored profile with an unknown
+  field is ignored. The proposals of a complete answer still pass the same checks (blocks, paths, sensitive names) before they
+  are recorded as pending.
+- Known gaps, not changed in this round:
+  - The Review chat records a complete answer's `noct-change` blocks as pending changes, as before. The task asked that Review
+    only read and produce findings. `AGENTS.md` allows Review to record proposed changes as pending, so the two disagree; this
+    round keeps the behavior and leaves the decision to the owner.
+  - In Documentar only Markdown changes are listed. That is a filter of the interface. The shell does not refuse a
+    non-Markdown change for the Docs mode when it is approved.
+  - The Build and Docs agents are stored and editable, but nothing calls them yet.
+- Checked: `noct-core/tests/agents.rs` (19 tests), `noct-app/tests/agents_flow.rs` (6), the chat flow tests (the default prompt,
+  an instruction changing only the start, the agent's model), `noct-ui` native tests (the agent frame, the panel's rules),
+  `capabilities.rs` (the contract list), `cargo test --workspace` (906 passed), wasm clippy, `trunk build --release`,
+  `npm test` (37/37), `check:csp`, and `check:ui` (34 of 34, with the agents flow on the ready scenarios). Not checked: a real
+  OpenRouter call with an agent's instruction or model, and the agent's name in the answer's header in a real window. The
+  Chromium mock does not send the `agent` frame; the session test covers it.

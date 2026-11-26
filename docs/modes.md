@@ -32,3 +32,19 @@ PDF exports are derived copies and are not incremental source-document updates.
 
 Advanced autonomous build, documentation and orchestration features are outside
 the current 1.0 contract.
+
+## Agents of the modes
+
+Each mode has one agent, listed in Ajustes › Agentes. An agent has a name that follows its mode, an instruction (text, up to
+4 KiB) and a model. An empty model means the project's model. "Restaurar padrão" puts an agent back to its default instruction
+and the project's model.
+
+- The Review agent answers the chat. Its default instruction is the sentence the chat has always used. The rules the shell adds
+  after the instruction (no commands, no writes, the answer format, at most five files) are not part of it and cannot be edited.
+  As in Review Mode itself, a complete answer may leave its proposed changes as pending, for the person to approve.
+- The Build and Docs agents can be edited and are stored, but no call uses them yet. Change generation still runs from Review,
+  with its own prompt.
+- Permissions belong to the mode and the shell enforces them. An instruction or a model cannot widen them, and an agent has no
+  field for permissions.
+- Known gap: in Docs only Markdown changes are listed, and this filter is in the interface. The shell does not refuse another
+  kind of change when it is approved.

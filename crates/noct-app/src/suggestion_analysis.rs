@@ -108,6 +108,7 @@ pub fn prepare_analysis(
             question: request(analysis.focus),
         },
         enabled,
+        None,
     )
 }
 
@@ -404,6 +405,7 @@ pub fn prepare_generate(
             question: suggestion.title.clone(),
         },
         enabled,
+        None,
     )?;
     Ok(GenerateTarget {
         prepared,

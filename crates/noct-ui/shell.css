@@ -1660,6 +1660,33 @@ button {
   font-size: 13px;
 }
 
+/* An agent of Ajustes › Agentes: its name, its instruction and its model in one column, with its actions under them. */
+.agent {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.agent-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-instruction {
+  width: 100%;
+  min-height: 7.5rem;
+  resize: vertical;
+}
+
+.agent-model {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-model[hidden] {
+  display: none;
+}
+
 .select:disabled,
 .field:disabled {
   color: var(--muted);

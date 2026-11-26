@@ -47,6 +47,11 @@ pub const SET_FINDINGS: &str = "provider_chat_set_findings";
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Frame {
+    /// The agent that answers and the model it uses, sent once before the first delta, so the answer can name them.
+    Agent {
+        name: String,
+        model: String,
+    },
     Delta {
         text: String,
     },
@@ -260,6 +265,8 @@ pub struct Session {
     proposals: Option<(Vec<ProposedChange>, usize)>,
     /// What became of the findings of the answer, once the shell has said.
     findings: Option<FindingsOutcome>,
+    /// The agent that answers and its model, as the shell named them for this question.
+    agent: Option<(String, String)>,
 }
 
 impl Session {
@@ -272,6 +279,7 @@ impl Session {
         self.answer.clear();
         self.proposals = None;
         self.findings = None;
+        self.agent = None;
         self.saved = false;
         self.run
     }
@@ -282,6 +290,7 @@ impl Session {
             return;
         }
         match frame {
+            Frame::Agent { name, model } => self.agent = Some((name, model)),
             Frame::Delta { text } => {
                 self.answer.push_str(&text);
                 self.phase = Phase::Answering;
@@ -347,6 +356,11 @@ impl Session {
         self.findings.as_ref()
     }
 
+    /// The agent of this question and its model, once the shell has named them.
+    pub fn agent(&self) -> Option<&(String, String)> {
+        self.agent.as_ref()
+    }
+
     pub fn workspace(&self) -> &str {
         &self.workspace
     }
@@ -363,6 +377,21 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_agent_frame_names_the_agent_and_its_model_for_one_question_only() {
+        let frame = parse_frame(r#"{"kind":"agent","name":"Revisão","model":"vendor/m"}"#)
+            .expect("the agent frame parses");
+        let mut session = Session::default();
+        let run = session.start("/projeto");
+        session.frame(run, frame);
+        assert_eq!(
+            session.agent(),
+            Some(&("Revisão".to_string(), "vendor/m".to_string()))
+        );
+        session.start("/projeto");
+        assert_eq!(session.agent(), None, "a new question names no agent yet");
+    }
 
     fn delta(text: &str) -> Frame {
         Frame::Delta {

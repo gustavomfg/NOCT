@@ -22,13 +22,15 @@ Uma pergunta só é enviada se todas as verificações passarem, nesta ordem:
 2. a pergunta tem texto e até 8000 caracteres;
 3. o projeto está salvo, disponível e **autorizado** (um projeto restaurado precisa ser escolhido de novo);
 4. o projeto tem **consentimento** para o OpenRouter na versão atual do texto de consentimento;
-5. o projeto tem um **modelo padrão** do OpenRouter;
+5. há um **modelo** do OpenRouter: o do agente Revisão, se ele tiver um próprio, ou o modelo padrão do projeto;
 6. há uma **chave** salva no cofre do sistema.
 
 Só então o projeto é lido e a chamada é feita. O envio contém:
 
 - a pergunta;
-- o nome do modelo padrão;
+- o nome do modelo usado: o do agente Revisão, se ele tiver um próprio, ou o do projeto;
+- a instrução do agente Revisão (até 4 KiB, como texto), no início do prompt de sistema, seguida das regras fixas do chat
+  que o shell acrescenta. A instrução não altera o que o chat pode fazer; ver [agentes dos modos](modes.md#agents-of-the-modes);
 - os arquivos de texto do **topo** do projeto que `noct_core::ai::context::select` aceita: pastas ignoradas, nomes
   sensíveis, arquivos acima de 32 KiB e o total acima de 128 KiB ficam de fora; só UTF-8 é lido; subpastas não são lidas;
   links simbólicos não são seguidos.

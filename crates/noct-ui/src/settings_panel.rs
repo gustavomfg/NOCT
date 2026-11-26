@@ -4,6 +4,7 @@
 
 use leptos::prelude::*;
 
+use crate::agents_panel;
 use crate::dom;
 use crate::provider_panel;
 use crate::select::{self, Choice};
@@ -84,6 +85,7 @@ pub fn settings_panel(
 
             {provider_panel::model_group(shared)}
             {provider_panel::permissions_group(shared)}
+            {agents_panel::agents_group()}
 
             <div class="group">
                 <div class="group__title">"Aparência"</div>

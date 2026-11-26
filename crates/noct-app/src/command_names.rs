@@ -45,6 +45,9 @@ pub const SUGGESTION_GENERATE_CHANGE: &str = "suggestion_generate_change";
 pub const PROVIDER_CHAT_SET_FINDINGS: &str = "provider_chat_set_findings";
 pub const CONTEXT_TREE: &str = "context_tree";
 pub const CONTEXT_SELECTION_SET: &str = "context_selection_set";
+pub const AGENTS_LIST: &str = "agents_list";
+pub const AGENTS_SET: &str = "agents_set";
+pub const AGENTS_RESTORE: &str = "agents_restore";
 
 pub const ALL: &[&str] = &[
     SETTINGS_GET,
@@ -90,4 +93,7 @@ pub const ALL: &[&str] = &[
     PROVIDER_CHAT_SET_FINDINGS,
     CONTEXT_TREE,
     CONTEXT_SELECTION_SET,
+    AGENTS_LIST,
+    AGENTS_SET,
+    AGENTS_RESTORE,
 ];
