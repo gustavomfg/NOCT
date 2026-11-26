@@ -15,6 +15,7 @@ API, avisos e afirmações de segurança são mantidos iguais nos dois arquivos.
 - [Modos Review, Build e Docs](modes.pt-BR.md)
 - [Segundo Cérebro](second-brain.pt-BR.md) e [Awareness](awareness.pt-BR.md)
 - [Code Intelligence — Fase 2](code-intelligence.pt-BR.md)
+- [Engineering intelligence](engineering-intelligence.pt-BR.md)
 - [Backup, restauração e recuperação](backup-and-recovery.pt-BR.md)
 - [Retenção de dados e limites de recuperação](data-retention.pt-BR.md)
 - [Atualizações](updates.pt-BR.md)
@@ -29,14 +30,19 @@ API, avisos e afirmações de segurança são mantidos iguais nos dois arquivos.
 - [Desenvolvimento](development.pt-BR.md)
 - [Detalhes do Docs Mode](docs-mode.pt-BR.md)
 - [Recuperação do Build](build-recovery.pt-BR.md)
+- [Migrações do banco](database-migrations.md)
+- [Tratamento de erros](error-handling.md)
+- [Desempenho e orçamentos](performance.md)
+- [Fronteira de rollback no sistema de arquivos](rollback-filesystem-boundary.md)
+- [Evidências do workspace](workspace-evidence.md)
 - [Contribuindo](../CONTRIBUTING.pt-BR.md)
 - [Código de Conduta](../CODE_OF_CONDUCT.pt-BR.md)
 
 ## Documentação interna/de mantenedores
 
 Prontidão da release, GitHub Actions, migrações do banco, contrato de Provider,
-orçamentos de desempenho, identidade do produto, auditoria de segurança,
-planos e notas históricas de release permanecem no repositório para rastreio de
+orçamentos de desempenho, identidade do produto, auditoria de segurança e o
+arquivo histórico permanecem no repositório para rastreio de
 engenharia. Não são promessas de suporte ao usuário e nem todos precisam de
 tradução.
 
@@ -48,9 +54,9 @@ O [guia de GitHub Actions e releases](github-actions.md) descreve o processo
 atual para um mantenedor. O [documento de prontidão da 1.0.2](release-readiness-1.0.2.md)
 registra a validação histórica do candidato; não é o runbook atual.
 
-As [notas da versão 1.0.5](releases/v1.0.5.pt-BR.md) registram o corpo da
-release; as [notas históricas da versão 1.0.1](releases/v1.0.1.pt-BR.md)
-e o [checklist do candidato](release-rc-checklist.pt-BR.md) permanecem como
-registros da linha estável publicada.
+As notas de release da linha Electron (até a 1.0.5) não ficam mais neste
+branch; estão na tag `electron-final`. O [checklist do candidato](release-rc-checklist.pt-BR.md)
+permanece como registro da linha estável publicada. As notas da linha Rust ficam
+em [releases](releases/).
 
 Os rascunhos superados da primeira release ficam no [arquivo histórico](archive/README.md).

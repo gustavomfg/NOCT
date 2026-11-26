@@ -1,5 +1,5 @@
-//! The IPC contracts of the first slice, checked on the Rust side against the samples that
-//! `scripts/generate-ipc-samples.mjs` writes from the TypeScript side. The settings inputs are the ones
+//! The IPC contracts of the first slice, checked on the Rust side against the samples written
+//! from the TypeScript side at the tag `electron-final`. The settings inputs are the ones
 //! zod accepts and refuses; the outputs are the ones the TypeScript types accept and refuse.
 
 use noct_core::contracts::Conversation;

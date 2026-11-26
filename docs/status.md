@@ -1059,7 +1059,7 @@ claimed. The push-side saving is that Windows and macOS no longer run on each pu
 
 The owner decided that `migration/rust` keeps only the Rust product. `main` is not changed. The previous product is kept
 at the annotated tag `electron-final`, on commit `c8c378b` (tag object `e5b49be`), published to `origin`. The inventory and
-the decision for each group are in [ts-removal-plan.md](ts-removal-plan.md).
+the decision for each group were in `docs/ts-removal-plan.md`, removed on 2026-11-26 (last change `d76762a`).
 
 ### Commits
 
@@ -1467,7 +1467,7 @@ Nothing is changed by this note. Before the merge, choose one:
 Only `verify:release-metadata` was run for this note. The other Electron checks were not run for it.
 
 The blockers before a merge, the checks on PR #23, and the rules for both products to coexist until the TypeScript cleanup are in
-[`rust-merge-plan.md`](rust-merge-plan.md).
+`rust-merge-plan.md`, removed on 2026-11-26 (the tag `electron-final` has its last version).
 
 ## First release and repository cleanup (2026-11-23)
 
@@ -1531,13 +1531,14 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
 - **Removed as dead:** `build/icon.png` (a copy of the app icon for electron-builder), `.impeccable/surfaces/src-app-tsx.md`
   (the React surface), the Electron/Vite/TS lines of `.gitignore` and `.editorconfig`. Updated: `assets/README.md`,
   `PRODUCT.md`, `IDENTITY-MIGRATION.md`, `CONTRIBUTING*`, `SECURITY*`, `CHANGELOG.md`.
+- **Removed in the cleanup of 2026-11-26:** the Electron-line release notes in `docs/releases/` (eleven files, up to `v1.0.5`; the folder keeps a `README.md`, because `shell-release.yml` requires `docs/releases/<tag>.md` for each `rust-v*` tag), `docs/Docs-roadmap/` (two PDFs of the product named Studio), `docs/New_Design/mockup-vidro.html`, `docs/release-readiness-1.0.md`, `docs/security-review-beta1.md`, `docs/rust-merge-plan.md`, `docs/rust-row-gate-workflow.md` and `docs/ts-removal-plan.md` (this last one is not in `electron-final`; its last change is `d76762a`). The Electron product up to `1.0.5` stays in the tag `electron-final`. Also removed: the Geist fonts under `crates/noct-ui/assets` (no build copied them; the interface names Inter), `.impeccable/` (design-tool state, now ignored), and the `.gitignore` entries of tools the project does not use (`.npm`, `dist-native`, `release`, `coverage`, `.nyc_output`, `*.ntvs*`, `*.njsproj`, `*.sln`). Comments that cited removed generator scripts now name the tag `electron-final` as the source of the fixtures. Kept: `docs/npm-audit-triage.md`, because the npm tree still has `playwright`. Open: `DESIGN.md` still specifies Geist as the interface font.
 
 ### Leftovers of the previous product that stay (not clearly dead)
 
 - **Documents that describe the Electron product:** `docs/architecture*.md`, `docs/installation*.md`,
   `docs/development*.md`, `docs/updates*.md`, `docs/providers*.md`, `docs/privacy*.md`, `docs/security*.md`,
   `docs/code-intelligence*.md`, `docs/compatibility*.md` (the platform floors are current), `docs/github-actions.md`,
-  `docs/ipc-inventory.md`, `docs/release-readiness-1.0*.md`, `docs/security-audit-1.0.md`, `docs/releases/v*.md`,
+  `docs/ipc-inventory.md`, `docs/release-readiness-1.0.2.md`, `docs/security-audit-1.0.md`,
   `docs/New_Design/*.html`. They are history or need a rewrite, not a deletion; `docs/README.md` already says some
   describe the previous product.
 - **Stale references:** `docs/shell-updater.md` named `tests/shellRelease.test.ts` and `tests/shellLatestJson.test.ts`;

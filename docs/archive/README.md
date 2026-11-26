@@ -12,5 +12,6 @@ Use [architecture](../architecture.md), [provider contracts](../provider-contrac
 [product identity](../product-identity.md) and the
 [current release procedure](../github-actions.md) for the supported behavior.
 
-Published release notes remain in [releases](../releases/). Old screenshots and
+The release notes of the Electron line are in the tag `electron-final`; the
+notes of the Rust line go in [releases](../releases/). Old screenshots and
 removed implementation files can be recovered from the corresponding Git tags.

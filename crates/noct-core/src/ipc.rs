@@ -5,7 +5,7 @@
 //! The inputs are checked the way the zod schema `settingsSchema` checks them: an unknown key is an
 //! error, an explicit `null` is an error, and an absent optional key is `None`. The outputs have no
 //! zod schema; they follow the TypeScript types in `shared/types.ts`. The samples in `tests/fixtures/ipc`
-//! are written by `scripts/generate-ipc-samples.mjs`, and `tests/ipc_contracts.rs` checks this module
+//! were written from the TypeScript side at the tag `electron-final`, and `tests/ipc_contracts.rs` checks this module
 //! against them: zod decides the inputs and the TypeScript compiler decides the outputs.
 
 use std::collections::BTreeMap;

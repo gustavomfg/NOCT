@@ -20,8 +20,8 @@ As capturas vêm da checagem da interface no Chromium, com um shell simulado e p
 real. [docs/images/README.md](docs/images/README.md) diz como foram feitas.
 
 Este arquivo descreve o branch depois da remoção do produto anterior. Cada afirmação diz no que se apoia. Os resultados
-das checagens locais e do CI do commit final estão em [docs/status.md](docs/status.md). A remoção, com a decisão para cada
-grupo de arquivos, está em [docs/ts-removal-plan.md](docs/ts-removal-plan.md).
+das checagens locais e do CI do commit final estão em [docs/status.md](docs/status.md). A remoção também está registrada
+lá; o produto anterior fica na tag `electron-final`.
 
 ## Instalar
 
@@ -89,7 +89,7 @@ aplicativo registra planos, aprovações e resultados de validação (`AGENTS.md
 | `crates/noct-db` | Persistência SQLite: o runtime, as migrações 1 a 32, os repositórios, backups e instantâneos de recuperação, escritas atômicas, o log em arquivo e o observador de operações. |
 | `crates/noct-native` | Um binário separado, o worker de rollback de operações de arquivo. Tem backend só para Linux. |
 | `crates/noct-secrets` | O cofre de credenciais dos provedores: um documento cifrado, um índice sem segredos e uma chave-mestra no cofre de credenciais do sistema operacional. O shell o abre para guardar a chave do OpenRouter. |
-| `crates/noct-ui` | A interface Leptos, compilada para WebAssembly pelo Trunk. As fontes Geist estão incluídas no repositório sob a SIL Open Font License 1.1. |
+| `crates/noct-ui` | A interface Leptos, compilada para WebAssembly pelo Trunk. |
 | `native/` | O código-fonte do worker de rollback em C++. O CI não o compila. |
 | `scripts/` | O lançador, as checagens de CSP e da interface no Chromium, o auxiliar de release do shell e os testes Node desses scripts. |
 | `docs/` | Decisões de arquitetura, o estado do branch e os roteiros. |
@@ -373,8 +373,6 @@ do shell em Rust.
   abertas. Seu estado é "Proposed".
 - [ADR 0002: cifragem de envelope das credenciais de provedores](docs/adr/0002-envelope-provider-credentials.md). Aceita.
   Substitui em parte a decisão 6 da ADR 0001.
-- [Remoção do produto anterior deste branch](docs/ts-removal-plan.md). O inventário, a decisão para cada grupo e o que cada
-  etapa conferiu.
 - [Estado do branch](docs/status.md). O relatório de cada rodada, com seus resultados e pendências.
 - [Como rodar o shell Rust localmente](docs/rust-shell.md). Os modos de execução, o que foi verificado, a verificação manual,
   as lacunas do CI e as aproximações conhecidas.

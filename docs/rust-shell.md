@@ -157,11 +157,10 @@ The check fails on a regression of the hover: with a `translateY` added to the h
 scenarios fail in both themes.
 
 **Not verified:** any of this in a real webview; the colours and the glass against the captures of the design,
-because the captures that `design.md` names (`docs/design/painel-*.png`) are not in the repository.
+because the captures of the design are not in the repository.
 
 **Style:** classes only. The policy grants no inline style. The interface loads no stylesheet of the React
-application: `shell.css` has its own tokens, taken from the design. The Geist fonts vendored under
-`crates/noct-ui/assets` are no longer copied by the build; the interface names Inter and falls back to the
+application: `shell.css` has its own tokens, taken from the design. The interface names Inter and falls back to the
 system face.
 
 ## Conversations
@@ -170,18 +169,6 @@ The shell has `conversations_list`, a paginated command, and the interface does 
 follows does not give conversations a place in the sidebar, and a conversation list would be a new screen, which is
 a product decision. It waits for the owner. When it is added it must use the paginated reply and keep the loading,
 empty and error states of the projects.
-
-## Vendored fonts and their licence
-
-`crates/noct-ui/assets/@fontsource-variable/geist` and `crates/noct-ui/assets/@fontsource-variable/geist-mono` hold
-the Geist and Geist Mono variable fonts as WOFF2 files, vendored from the `@fontsource-variable` npm packages. Each
-folder has its `LICENSE` next to the files. It is the SIL Open Font License, Version 1.1, with the copyright line
-"Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)".
-
-Checked on this machine: both `LICENSE` files are byte-identical to those of the installed packages, and every WOFF2
-file is byte-identical to the file of the same name in its package. Nothing in the interface refers to these files
-(`shell.css`, `index.html` and `crates/noct-ui/src` do not name Geist), so they reach no window today. The licence
-travels with them if they are used.
 
 ## The glass layer
 
@@ -291,8 +278,8 @@ On Windows and macOS nine steps ran and eleven Linux-only steps were skipped, as
 - No window is opened on any system. The window is checked by hand on Linux, and not on Windows or macOS.
 - WebView2 (Windows) and WKWebView (macOS) are not exercised by any job.
 - The release shell is compiled on Windows and macOS, but it is not run there.
-- The row gate is run on Ubuntu only, by `row-gate.yml`, and the shell matrix does not run it on Windows or macOS. The
-  design of the job is in [the row gate workflow](rust-row-gate-workflow.md).
+- The TypeScript row gate and its release-line bases no longer run on this branch: `row-gate.yml` was removed. The gate
+  stays at the tag `electron-final`.
 - The Windows restrictive file permissions: the POSIX modes of the database, the logs and the atomic writes apply on
   Linux and macOS only, as the tests in `crates/noct-db` gate them. On Windows the Rust code applies no ACL, so
   Windows gives new files the access rules of their folder. The TypeScript application has the same limit: its

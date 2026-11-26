@@ -1,8 +1,0 @@
-# Local visual review evidence; the interface check lives in scripts/check-shell-ui.mjs.
-/review/
-/mocks/
-/build/
-/references/
-
-# Generated detector cache
-/hook.cache.json
