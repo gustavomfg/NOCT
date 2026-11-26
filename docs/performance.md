@@ -16,11 +16,6 @@ O renderer mede:
 - contagens agregadas de renderização para o shell, chat, composer, container do
   agent inspector e superfície de atividades.
 
-O cenário de renderer em `tests/renderer/renderer.spec.ts` exercita eventos de
-atividade durante uma execução e compara as contagens do container com as da
-superfície de atividades. Isso mantém a separação observável sem enviar
-conteúdo de prompt, resposta ou arquivos ao diagnóstico.
-
 Os orçamentos de referência ficam em `shared/constants.ts`:
 
 - inicialização: 5 segundos;
