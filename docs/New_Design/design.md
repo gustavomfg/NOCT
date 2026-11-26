@@ -1,7 +1,6 @@
 # Design do NOCT
 
-Referência visual: `docs/design/mockup.html` (abre com duplo clique) e as capturas
-`docs/design/{review,build,docs}-{light,dark}.png`. O mockup NÃO é código de produção.
+Referência visual: `docs/New_Design/mockup.html` (abre com duplo clique). O mockup NÃO é código de produção.
 
 ## Princípios
 
@@ -92,7 +91,7 @@ Os valores exatos estão no `mockup.html`, que é a fonte da verdade.
 
 ## Vidro (decisão: oficial, mas como camada opcional, a ser testada em webview real)
 
-Referência: `docs/design/mockup-vidro-painel.html` e `docs/design/painel-*.png`.
+Referência: `docs/New_Design/mockup-vidro-painel.html`.
 A janela do app continua OPACA (`#0b0b0e`); o vidro é CSS dentro da página, sobre um fundo de degradê.
 
 - Ativação por atributo: `<html data-glass="on|off">`. Padrão `on`. Com `off` (ou sem suporte, ou

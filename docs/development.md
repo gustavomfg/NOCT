@@ -55,13 +55,11 @@ preload APIs and documentation aligned when changing a native capability.
 
 ## Generated files and repository layout
 
-Builds (`dist/`, `dist-electron/`, `dist-native/`), local packages (`release/`),
-renderer captures (`output/`), test reports and the Vite dependency cache are
-reproducible local output and stay ignored. Old packages can be removed locally;
+Builds (`dist/`, the Trunk output of `crates/noct-ui`), test reports and the Rust
+`target/` directory are reproducible local output and stay ignored. Old packages can be removed locally;
 published installers remain attached to their versioned GitHub releases.
 
-Keep only referenced images in `docs/images/` and active comparison fixtures in
-`tests/renderer/__screenshots__/`. The application icons are described in
+Keep only referenced images in `docs/images/`. The application icons are described in
 [assets](../assets/README.md).
 Superseded planning drafts live in [the historical archive](archive/README.md).
 
