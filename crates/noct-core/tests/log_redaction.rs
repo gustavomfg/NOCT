@@ -1,6 +1,6 @@
 //! The log redaction, checked against the TypeScript logger. `fixtures/log-redaction.json` holds the
-//! outputs of `redactLogText` and `redactLogValue` for fixed inputs, written by
-//! `scripts/generate-log-redaction-fixture.mjs`; the port must reproduce every one of them.
+//! outputs of `redactLogText` and `redactLogValue` for fixed inputs, written from the
+//! TypeScript logger at the tag `electron-final`; the port must reproduce every one of them.
 
 use noct_core::log_redaction::{MAX_TEXT_UNITS, redact_text, redact_value};
 use serde_json::{Value, json};

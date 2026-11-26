@@ -1,7 +1,7 @@
 //! Redaction of the application log. Port of `redactLogText` and `redactLogValue` in
 //! `electron/logging/Logger.ts`: the rules, their order and their limits are the TypeScript ones.
-//! `tests/fixtures/log-redaction.json` holds the TypeScript outputs the port must reproduce, written by
-//! `scripts/generate-log-redaction-fixture.mjs`.
+//! `tests/fixtures/log-redaction.json` holds the TypeScript outputs the port must reproduce, written from the
+//! TypeScript logger at the tag `electron-final`.
 //!
 //! Three details follow JavaScript, because the same log is read by both sides:
 //! - `/i` folds ASCII letters only. The patterns are lowercase and the input is matched in an
@@ -60,7 +60,7 @@ static KEY_VALUE_SENSITIVE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Provider keys and private key headers, matched case-sensitively in the text as it is. The headers
-/// cover every algorithm and `ENCRYPTED PRIVATE KEY`; `scripts/generate-log-redaction-fixture.mjs`
+/// cover every algorithm and `ENCRYPTED PRIVATE KEY`; `tests/fixtures/log-redaction.json`
 /// records where that differs from TypeScript.
 static SENSITIVE_TOKENS: LazyLock<Regex> = LazyLock::new(|| {
     compile(&format!(

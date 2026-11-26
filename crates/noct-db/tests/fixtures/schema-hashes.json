@@ -1,5 +1,5 @@
 {
-  "generatedBy": "scripts/generate-schema-fixtures.mjs",
+  "generatedBy": "the TypeScript migrations at the tag electron-final (c8c378b)",
   "latest": 32,
   "hashes": {
     "fresh": "2805e27092722d8cf58d24a4c20f3aec006b187c4ea4288e50df120a21f8f013",

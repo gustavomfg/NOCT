@@ -1,7 +1,7 @@
 //! Schema parity with the TypeScript migrations.
 //!
-//! `fixtures/schema-hashes.json` is produced by `scripts/generate-schema-fixtures.mjs`,
-//! which runs the real `electron/database/migrations.ts` under better-sqlite3. Each
+//! `fixtures/schema-hashes.json` was produced by running the TypeScript migrations of the tag
+//! `electron-final` under better-sqlite3. Each
 //! fingerprint covers the user version, every schema object and every column. A
 //! mismatch means the Rust migrations no longer produce the schema the TypeScript
 //! application produces, so user data would diverge between the two implementations.
