@@ -32,3 +32,23 @@ PDF exports are derived copies and are not incremental source-document updates.
 
 Advanced autonomous build, documentation and orchestration features are outside
 the current 1.0 contract.
+
+## Agents of the modes
+
+Each mode has one agent, listed in Ajustes › Agentes. An agent has a name that follows its mode, an instruction (text, up to
+4 KiB) and a model. An empty model means the project's model. "Restaurar padrão" puts an agent back to its default instruction
+and the project's model.
+
+- Revisar's agent answers the chat in Revisar. Its default instruction is the sentence the chat has always used. The rules the
+  shell adds after the instruction are not part of it and cannot be edited. Revisar never records a change: an answer there is
+  text and findings, and nothing becomes pending.
+- Construir's and Documentar's agents answer the chat in those modes, from the conversation button in the top bar. A complete
+  answer may propose changes; each one waits for the person's approval, and the shell records it under the rule of its mode:
+  - Construir: any path that the shared path rules accept.
+  - Documentar: Markdown files only (`.md` or `.markdown`). The shell refuses any other path, and the answer shows why.
+- "Gerar alteração", in the suggestions of Revisar, is an implementation step: its change waits in Construir under Construir's
+  rule. It does not use an agent's instruction.
+- Permissions belong to the mode and the shell enforces them. An instruction or a model cannot widen them, and an agent has no
+  field for permissions.
+- Known gap: approving a change in Documentar is not refused by the shell when the change is not Markdown. The list in
+  Documentar shows Markdown only, and that filter is in the interface.

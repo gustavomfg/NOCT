@@ -16,12 +16,9 @@ O renderer mede:
 - contagens agregadas de renderização para o shell, chat, composer, container do
   agent inspector e superfície de atividades.
 
-O cenário de renderer em `tests/renderer/renderer.spec.ts` exercita eventos de
-atividade durante uma execução e compara as contagens do container com as da
-superfície de atividades. Isso mantém a separação observável sem enviar
-conteúdo de prompt, resposta ou arquivos ao diagnóstico.
-
-Os orçamentos de referência ficam em `shared/constants.ts`:
+Os orçamentos de referência ficam em `noct_core::limits::renderer_performance_budgets`
+(`crates/noct-core/src/limits.rs`). O teste `constants_parity` os compara com o fixture
+`crates/noct-core/tests/fixtures/ts-reference/constants.ts.txt`:
 
 - inicialização: 5 segundos;
 - abertura de conversa: 2 segundos;

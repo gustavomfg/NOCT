@@ -69,12 +69,14 @@ const SHELL_ERROR = { code: 'persistence', message: 'Não foi possível acessar 
 const PROJECTS_UNAVAILABLE = 'A pasta não existe.'
 const NEEDS_AUTHORIZATION = 'Não autorizado. Escolha a pasta de novo para usá-la.'
 const MORE_PROJECTS = 'Há mais projetos do que esta lista mostra.'
-const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list', 'file_changes_list', 'suggestions_list', 'context_tree']
+const READ_COMMANDS = ['settings_get', 'workspaces_list', 'provider_key_status', 'provider_consent_status', 'models_bindings_get', 'provider_chat_status', 'models_list', 'file_changes_list', 'suggestions_list', 'context_tree', 'agents_list']
 // The provider commands that change something. The provider flow checks each one; the strict list below allows them.
 const PROVIDER_WRITES = ['provider_key_save', 'provider_key_remove', 'provider_consent_grant', 'provider_consent_revoke', 'models_set_default_model', 'provider_chat_set_enabled', 'workspace_add', 'file_change_approve', 'file_change_reject', 'file_change_undo']
 // The shell's refusal of an identifier that is not an OpenRouter model id, as the interface shows it.
 // The chat's commands. The question and the save are the only writes of the chat, and each is a command the person started.
 const CHAT_COMMANDS = ['provider_chat_send', 'provider_chat_cancel', 'conversations_create', 'ai_save_assistant']
+// The agents' writes: the person saves or restores one agent in Ajustes › Agentes.
+const AGENT_WRITES = ['agents_set', 'agents_restore']
 // The words the chat shows, copied from crates/noct-ui/src/chat.rs. The check compares them, so a change there is seen here.
 const NEED_CHAT_OFF = 'O chat está desligado. Nada é enviado.'
 const NEED_KEY = 'Falta a chave do OpenRouter.'
@@ -136,7 +138,7 @@ const TEST_KEY = 'sk-or-v1-check-only-0123456789'
 const CONSENT_PAYLOAD = /^\{"input":\{"workspace":"\/work\/[a-z]+"\}\}$/
 const EXAMPLE_NAMES = ['frx', 'ovra']
 // The payload of each read: `settings_get` takes none; `workspaces_list` takes the first page at the largest limit.
-const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}', file_changes_list: '{"input":"/work/alpha"}' }
+const PAYLOAD_OF = { settings_get: '{}', workspaces_list: '{"input":{"limit":500}}', provider_key_status: '{}', provider_chat_status: '{}', models_list: '{}', agents_list: '{}', file_changes_list: '{"input":"/work/alpha"}' }
 // The changes of the Construir scenario: one edit and one new file, both waiting for a decision.
 const CHANGES = [
   { id: 'c1', workspace: '/work/alpha', path: 'src/main.rs', status: 'pending', base: 'título\nlinha antiga\nfim\n', content: 'título\nlinha nova\nfim\n' },
@@ -209,9 +211,10 @@ const SCENARIOS = [
     chat: {
       kind: 'proposes',
       sequence: [
-        [0, delta('Sugiro:\n````noct-change path=src/x.rs\nfn x() {}\n````\n')],
-        [1, { kind: 'proposed', changes: [{ id: 'c9', path: 'src/x.rs' }], refused: 1 }],
-        [2, DONE],
+        [0, { kind: 'agent', name: 'Construção', model: 'openai/gpt-4o' }],
+        [1, delta('Sugiro:\n````noct-change path=src/x.rs\nfn x() {}\n````\n')],
+        [2, { kind: 'proposed', changes: [{ id: 'c9', path: 'src/x.rs' }], refused: 1 }],
+        [3, DONE],
       ],
     },
     expectTheme: 'light',
@@ -358,6 +361,14 @@ function installMock(config) {
   // The settings the shell holds: a save changes them, and the next read or save shows the change.
   const saved = { ...config.settings }
   // The key state and the consent of each project. The key itself is never kept, and never returned.
+  // The agents of the modes, as the shell starts them. The texts are the shell's defaults (noct_core::agents).
+  const AGENT_DEFAULTS = {
+    review: 'Você responde perguntas sobre o projeto. Use o contexto abaixo e diga quando ele não bastar.',
+    build: 'Você gera a alteração de uma sugestão aceita no projeto.',
+    docs: 'Você gera a alteração de uma sugestão aceita no projeto.',
+  }
+  const AGENT_NAMES = { review: 'Revisão', build: 'Construção', docs: 'Documentação' }
+  const agentsState = ['review', 'build', 'docs'].map((mode) => ({ mode, name: AGENT_NAMES[mode], instruction: AGENT_DEFAULTS[mode], model: null }))
   const providerState = {
     configured: config.scenario.keyConfigured === true,
     granted: Object.fromEntries((config.scenario.granted ?? []).map((path) => [path, true])),
@@ -427,6 +438,13 @@ function installMock(config) {
       return config.addedProject
     }
     // Sugestões (the lamp's count) and the files a call carries are read for the current project.
+    if (command === 'agents_list') return agentsState.map((agent) => ({ ...agent }))
+    if (command === 'agents_set' || command === 'agents_restore') {
+      const agent = agentsState.find((item) => item.mode === payload.input.mode)
+      if (command === 'agents_set') Object.assign(agent, { instruction: payload.input.instruction, model: payload.input.model ?? null })
+      else Object.assign(agent, { instruction: AGENT_DEFAULTS[agent.mode], model: null })
+      return agentsState.map((item) => ({ ...item }))
+    }
     if (command === 'suggestions_list') return []
     if (command === 'context_tree') {
       return {
@@ -544,6 +562,33 @@ function installMock(config) {
       })
     },
   }
+}
+
+// The agents of the modes in Ajustes. The three are listed; a save names its agent and sends the text as typed, and a
+// restore names its agent and puts the default back. The other agents are not touched.
+async function agentsFlow(page, check) {
+  const calls = () => page.evaluate(() => window.__noctCalls ?? [])
+  const agents = page.getByTestId('agents')
+  const review = agents.getByTestId('agent-review')
+  await review.waitFor({ timeout: 8000 })
+  const listed = await agents.getByTestId(/^agent-(review|build|docs)$/).count()
+  check(listed === 3, 'the three agents are listed in Ajustes')
+  await review.locator('textarea').fill('Responda em tópicos.')
+  await review.getByRole('button', { name: 'Salvar', exact: true }).click()
+  await review.getByText('Agente salvo.', { exact: true }).waitFor({ timeout: 8000 })
+  const saves = (await calls()).filter((call) => call.command === 'agents_set')
+  check(
+    saves.length === 1 && saves[0].payload.input.mode === 'review' && saves[0].payload.input.instruction === 'Responda em tópicos.' && saves[0].payload.input.model === null,
+    'a save names its agent and sends the instruction as typed, with the project model',
+  )
+  await review.getByRole('button', { name: 'Restaurar padrão', exact: true }).click()
+  await review.getByText('Padrão restaurado.', { exact: true }).waitFor({ timeout: 8000 })
+  const restores = (await calls()).filter((call) => call.command === 'agents_restore')
+  check(restores.length === 1 && restores[0].payload.input.mode === 'review', 'a restore names its agent only')
+  check(
+    (await review.locator('textarea').inputValue()) === 'Você responde perguntas sobre o projeto. Use o contexto abaixo e diga quando ele não bastar.',
+    'a restore puts the default instruction back in the field',
+  )
 }
 
 // The provider section of Ajustes. The key field is write-only: it is a password field, it is emptied when the key is
@@ -692,7 +737,10 @@ async function providerFlow(page, scenario, check) {
 // keeps the text so far and ignores what follows; a save keeps the answer in a conversation of the project, and only when
 // the person asks; each failure says what happened and that nothing was saved.
 async function chatFlow(page, scenario, check) {
-  await page.getByRole('button', { name: 'Revisar', exact: true }).click()
+  // A proposal comes from a question in Construir: a Revisão answer records no change, so the others ask in Revisar.
+  const asksInBuild = scenario.chat?.kind === 'proposes'
+  await page.getByRole('button', { name: asksInBuild ? 'Construir' : 'Revisar', exact: true }).click()
+  if (asksInBuild) await page.getByTestId('open-conversation').click()
   const calls = () => page.evaluate(() => window.__noctCalls ?? [])
   const question = page.locator('#chat-question')
   await question.waitFor({ timeout: 8000 })
@@ -702,7 +750,7 @@ async function chatFlow(page, scenario, check) {
   const answer = page.getByTestId('chat-answer')
   const save = page.getByTestId('chat-save')
   // Before the first question, a project with a key shows its name and four suggestions.
-  if (scenario.keyConfigured) {
+  if (scenario.keyConfigured && !asksInBuild) {
     await page.getByRole('heading', { level: 1 }).filter({ hasText: 'alpha' }).waitFor({ timeout: 8000 })
     check((await page.locator('.suggest button').count()) === 4, 'the empty conversation offers four suggestions')
   }
@@ -792,7 +840,12 @@ async function chatFlow(page, scenario, check) {
   const sent = (await calls()).find((call) => call.command === 'provider_chat_send')
   check(
     sent?.payload.input.workspace === CHAT_PROJECT && sent.payload.input.question === CHAT_QUESTION,
-    'the question names its project and its text, and nothing else',
+    'the question names its project and its text',
+  )
+  check(
+    Object.keys(sent?.payload.input ?? {}).sort().join() === 'mode,question,workspace' &&
+      sent.payload.input.mode === (asksInBuild ? 'build' : 'review'),
+    'the question names its mode, and nothing else',
   )
   check(/^__CHANNEL__:\d+$/.test(sent?.payload.onEvent ?? ''), 'the answer comes on a channel')
   check(!JSON.stringify(sent?.payload ?? {}).includes('sk-or'), 'no key is in the question')
@@ -805,6 +858,8 @@ async function chatFlow(page, scenario, check) {
     check(text.includes('1 alteração proposta') && text.includes('src/x.rs'), 'the answer names the change it proposed')
     check((await page.getByTestId('chat-proposals-refused').textContent())?.includes('1 bloco'), 'a refused block is counted')
     check((await answer.textContent())?.includes('[alteração proposta: src/x.rs]'), 'the block is shown as one line, not the whole file')
+    const named = await page.getByText('Construção · openai/gpt-4o', { exact: true }).count()
+    check(named === 1, 'the answer names the agent that gave it and its model')
     check(!((await answer.textContent()) ?? '').includes('fn x()'), 'the text of the file is not in the conversation')
     check(!(await calls()).some((call) => call.command.startsWith('file_change_')), 'nothing is approved from the conversation')
     await page.getByTestId('open-build').click()
@@ -1115,6 +1170,7 @@ try {
       // The states of the settings read are shown in Ajustes, so it is opened first.
       await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
       if (scenario.provider) await providerFlow(page, scenario, check)
+      if (scenario.provider && scenario.mode === 'ready') await agentsFlow(page, check)
       if (scenario.mode === 'chat') await chatFlow(page, scenario, check)
       const values = page.getByTestId('settings-values')
       const themeButton = page.getByRole('button', { name: /^Usar tema (escuro|claro)$/ })
@@ -1464,10 +1520,10 @@ try {
         const count = (command) => calls.filter((call) => call.command === command).length
         check(calls.length >= 2, 'the interface calls the shell for settings and projects')
         check(
-          calls.every((call) => [...READ_COMMANDS, 'settings_set', ...PROVIDER_WRITES, ...CHAT_COMMANDS].includes(call.command)),
+          calls.every((call) => [...READ_COMMANDS, 'settings_set', ...PROVIDER_WRITES, ...CHAT_COMMANDS, ...AGENT_WRITES].includes(call.command)),
           'only the read commands, the setting saves, the provider writes and the chat commands are called',
         )
-        const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set', ...CHAT_COMMANDS].includes(call.command))
+        const reads = calls.filter((call) => ![...PROVIDER_WRITES, 'settings_set', ...CHAT_COMMANDS, ...AGENT_WRITES].includes(call.command))
         check(
           reads.every((call) =>
             ['provider_consent_status', 'models_bindings_get', 'suggestions_list', 'context_tree'].includes(call.command)

@@ -47,6 +47,9 @@
     "allow-suggestion-generate-change",
     "allow-provider-chat-set-findings",
     "allow-context-tree",
-    "allow-context-selection-set"
+    "allow-context-selection-set",
+    "allow-agents-list",
+    "allow-agents-set",
+    "allow-agents-restore"
   ]
 }

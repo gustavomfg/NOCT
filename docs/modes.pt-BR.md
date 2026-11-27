@@ -33,3 +33,24 @@ são cópias derivadas e não atualizações incrementais do documento-fonte.
 
 Recursos avançados de automação autônoma, build e orquestração ficam fora do
 contrato atual da 1.0.
+
+## Agentes dos modos
+
+Cada modo tem um agente, listado em Ajustes › Agentes. Um agente tem um nome que segue o modo, uma instrução (texto, até 4 KiB)
+e um modelo. Modelo vazio significa o modelo do projeto. "Restaurar padrão" devolve o agente à instrução padrão e ao modelo do
+projeto.
+
+- O agente de Revisar responde o chat em Revisar. Sua instrução padrão é a frase que o chat sempre usou. As regras que o shell
+  acrescenta depois da instrução não fazem parte dela e não podem ser editadas. Revisar nunca grava alteração: a resposta ali é
+  texto e achados, e nada fica pendente.
+- Os agentes de Construir e Documentar respondem o chat nesses modos, pelo botão de conversa da barra superior. Uma resposta
+  completa pode propor alterações; cada uma espera a aprovação da pessoa, e o shell a registra pela regra do seu modo:
+  - Construir: qualquer caminho que as regras de caminho compartilhadas aceitam.
+  - Documentar: somente arquivos Markdown (`.md` ou `.markdown`). O shell recusa qualquer outro caminho, e a resposta mostra o
+    motivo.
+- "Gerar alteração", nas sugestões de Revisar, é uma etapa de implementação: a alteração espera em Construir, sob a regra de
+  Construir. Ela não usa a instrução de um agente.
+- As permissões pertencem ao modo e o shell as aplica. Uma instrução ou um modelo não as amplia, e um agente não tem campo de
+  permissão.
+- Limitação conhecida: aprovar uma alteração em Documentar não é recusada pelo shell quando a alteração não é Markdown. A lista
+  de Documentar mostra só Markdown, e esse filtro está na interface.

@@ -1,5 +1,6 @@
 //! NOCT interface entry point. Trunk compiles this crate to WebAssembly.
 
+mod agents_panel;
 mod app;
 mod browser_guard;
 mod changes_panel;

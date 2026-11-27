@@ -22,13 +22,15 @@ Uma pergunta só é enviada se todas as verificações passarem, nesta ordem:
 2. a pergunta tem texto e até 8000 caracteres;
 3. o projeto está salvo, disponível e **autorizado** (um projeto restaurado precisa ser escolhido de novo);
 4. o projeto tem **consentimento** para o OpenRouter na versão atual do texto de consentimento;
-5. o projeto tem um **modelo padrão** do OpenRouter;
+5. há um **modelo** do OpenRouter: o do agente do modo em que a pergunta foi feita, se ele tiver um próprio, ou o modelo padrão do projeto;
 6. há uma **chave** salva no cofre do sistema.
 
 Só então o projeto é lido e a chamada é feita. O envio contém:
 
 - a pergunta;
-- o nome do modelo padrão;
+- o nome do modelo usado: o do agente do modo, se ele tiver um próprio, ou o do projeto;
+- a instrução do agente do modo (até 4 KiB, como texto), no início do prompt de sistema, seguida das regras fixas desse modo
+  que o shell acrescenta. A instrução não altera o que o chat pode fazer; ver [agentes dos modos](modes.md#agents-of-the-modes);
 - os arquivos de texto do **topo** do projeto que `noct_core::ai::context::select` aceita: pastas ignoradas, nomes
   sensíveis, arquivos acima de 32 KiB e o total acima de 128 KiB ficam de fora; só UTF-8 é lido; subpastas não são lidas;
   links simbólicos não são seguidos.
@@ -38,7 +40,11 @@ enviados à interface, nos erros nem nos logs.
 
 ## Somente leitura
 
-O chat não executa comandos e não escreve arquivos do projeto. A resposta é mostrada na tela. Ela só é guardada quando a
+O chat não executa comandos e não escreve arquivos do projeto. Em **Revisar**, a resposta é só texto e achados: nada fica
+pendente. Em **Construir** e **Documentar**, os blocos de uma resposta completa viram alterações pendentes, sob a regra do modo
+(ver [modos](modes.md#agents-of-the-modes)); cada uma espera a aprovação da pessoa, e nada é gravado antes disso.
+
+A resposta é mostrada na tela. Ela só é guardada quando a
 pessoa clica em **Salvar resposta**, que cria (ou reaproveita, por projeto) uma conversa com `conversations_create` e
 grava o texto da resposta com `ai_save_assistant`. A pergunta não é guardada por esse caminho.
 
@@ -47,10 +53,10 @@ grava o texto da resposta com `ai_save_assistant`. A pergunta não é guardada p
 | Comando | Entrada | Resposta |
 | --- | --- | --- |
 | `provider_chat_status` | nenhuma | `{ enabled }`; `false` nesta versão |
-| `provider_chat_send` | `{ input: { workspace, question }, onEvent }` | nada, quando a chamada começou; os eventos chegam no canal |
+| `provider_chat_send` | `{ input: { workspace, question, mode }, onEvent }`, com `mode` `review`, `build` ou `docs` | nada, quando a chamada começou; os eventos chegam no canal |
 | `provider_chat_cancel` | nenhuma | nada |
 
-Os eventos do canal são `delta` (com `text`), `done` e `failed` (com `code`). Uma chamada termina com exatamente um
+Os eventos do canal são `agent` (com `name` e `model`), `delta` (com `text`), `proposed` (com `changes`, `refused` e `notice`), `findings`, `done` e `failed` (com `code`). Uma chamada termina com exatamente um
 `done` ou um `failed`, salvo cancelamento. Uma resposta cancelada não envia mais eventos. Só uma pergunta roda por vez; uma
 segunda recebe `chat-busy`.
 
@@ -67,7 +73,7 @@ segunda recebe `chat-busy`.
 
 ## Interface
 
-A seção fica em **Revisar**, abaixo dos achados de exemplo. A resposta chega em ordem mesmo quando os eventos chegam fora
+A conversa fica em **Revisar**. Em **Construir** e **Documentar**, o botão de conversa na barra superior abre a mesma conversa, com o agente desse modo. O nome do agente e o modelo aparecem no cabeçalho de cada resposta. A resposta chega em ordem mesmo quando os eventos chegam fora
 de ordem (a interface reordena pelo índice). Cancelar mantém o texto já recebido, não o salva, e ignora o que chegar depois.
 
 ## Testes
@@ -76,6 +82,7 @@ de ordem (a interface reordena pelo índice). Cancelar mantém o texto já receb
   binários e limite de tamanho), corpo sem chave, streaming, truncamento, JSON inválido, redirecionamento, IP privado, erro
   sem chave, cancelamento e exclusão mútua.
 - `crates/noct-app/tests/provider_transport.rs`: transporte contra servidor de loopback (19 testes).
+- `crates/noct-app/tests/mode_permissions.rs`: uma regra de permissão por modo (Revisar não grava; Documentar só aceita Markdown; Construir mantém as recusas de caminho).
 - `crates/noct-ui/src/chat.rs`: sessão de uma pergunta, execuções antigas, cancelamento e salvamento (testes nativos).
 - `scripts/check-shell-ui.mjs`: cenário `chat-off-by-default` e cinco cenários com o canal simulado (ordem, salvamento,
   cancelamento, recusa e falha).

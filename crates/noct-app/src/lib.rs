@@ -4,6 +4,7 @@
 //! The shell is a library so that its tests run the code the binary runs. See
 //! docs/adr/0001-rust-migration.md for the phase plan.
 
+pub mod agent_profiles;
 pub mod bootstrap;
 pub mod command_names;
 pub mod commands;
@@ -73,6 +74,9 @@ pub fn command_handler<R: Runtime>()
         commands::provider_chat_set_findings,
         commands::context_tree,
         commands::context_selection_set,
+        commands::agents_list,
+        commands::agents_set,
+        commands::agents_restore,
     ]
 }
 

@@ -33,6 +33,8 @@ pub struct Turn {
 #[derive(Clone, Copy)]
 pub struct ChatState {
     shared: Shared,
+    /// The mode the question is asked in: `review`, `build` or `docs`. The app keeps it on the mode it shows.
+    mode: RwSignal<&'static str>,
     question: RwSignal<String>,
     turns: RwSignal<Vec<Turn>>,
     next_id: RwSignal<u64>,
@@ -55,6 +57,7 @@ impl ChatState {
     pub fn new(shared: Shared) -> Self {
         Self {
             shared,
+            mode: RwSignal::new("review"),
             question: RwSignal::new(String::new()),
             turns: RwSignal::new(Vec::new()),
             next_id: RwSignal::new(0),
@@ -290,7 +293,8 @@ impl ChatState {
             });
             return;
         };
-        let payload = chat::send_payload(&workspace, &question, &channel);
+        let payload =
+            chat::send_payload(&workspace, &question, self.mode.get_untracked(), &channel);
         ipc::call_with(chat::SEND, &payload, move |outcome| {
             if let Err(failure) = ipc::reply(outcome) {
                 session.update(|session| session.refused(run, failure.message));
@@ -312,6 +316,11 @@ impl ChatState {
 
     /// Starts a new conversation: the turns on screen are cleared, and the next save creates a conversation of its own. A
     /// question still running is stopped first, so nothing arrives into the new conversation.
+    /// Keeps the mode the next question is asked in, as the window shows it: `review`, `build` or `docs`.
+    pub fn set_mode(self, mode: &'static str) {
+        self.mode.set(mode);
+    }
+
     pub fn new_conversation(self) {
         if self.busy() {
             self.cancel();
@@ -458,6 +467,11 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
     let copy_note = turn.copy_note;
     let phase = move || session.with(|session| session.phase().clone());
     let answer = move || session.with(|session| session.answer().to_string());
+    // The agent that answered and its model, as the shell named them; before the shell names them, the project's model.
+    let head = move || match session.with(|session| session.agent().cloned()) {
+        Some((name, model)) => format!("{name} · {model}"),
+        None => state.model_label(),
+    };
     // The answer as Markdown blocks, each keyed by its position and content, so a streaming answer redraws only the
     // block that grows. A proposal block is shown as its one line, as before.
     let blocks = Memo::new(move |_| {
@@ -484,7 +498,7 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
         <div class="msg-ai">
             <div class="msg-ai__head">
                 <span class="avatar" aria-hidden="true">"N"</span>
-                <span>{move || state.model_label()}</span>
+                <span>{move || head()}</span>
                 {move || match phase() {
                     Phase::Asking => " · enviando",
                     _ => "",
@@ -520,8 +534,8 @@ fn turn_view(state: ChatState, turn: Turn) -> impl IntoView {
                 _ => ().into_any(),
             }}
             {move || {
-                session.with(|session| session.proposals().cloned()).map(|(changes, refused)| {
-                    proposals_view(state.shared, changes, refused)
+                session.with(|session| session.proposals().cloned()).map(|(changes, refused, notice)| {
+                    proposals_view(state.shared, changes, refused, notice)
                 })
             }}
             {move || {
@@ -592,6 +606,7 @@ fn proposals_view(
     shared: Shared,
     changes: Vec<chat::ProposedChange>,
     refused: usize,
+    notice: Option<String>,
 ) -> impl IntoView {
     let count = changes.len();
     // Markdown files wait in Documentar and the others in Construir; each place present gets its button.
@@ -619,6 +634,7 @@ fn proposals_view(
                     </ul>
                 }
             })}
+            {notice.map(|text| view! { <p class="note" data-testid="chat-proposals-notice">{text}</p> })}
             {(refused > 0).then(|| {
                 view! {
                     <p class="note" data-testid="chat-proposals-refused">

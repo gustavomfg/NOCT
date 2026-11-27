@@ -1,6 +1,7 @@
 //! Shared NOCT contracts and canonical limits. Migration target for `shared/`.
 
 pub mod agent;
+pub mod agents;
 pub mod ai;
 pub mod brain_memory;
 pub mod change_control;
