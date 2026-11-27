@@ -10,7 +10,9 @@ use noct_app::agent_profiles::{self, SETTINGS_KEY};
 use noct_app::bootstrap::{self, Persistence};
 use noct_app::error::CommandError;
 use noct_core::agent::AgentMode;
-use noct_core::agents::{CHANGE_INSTRUCTION, REVIEW_INSTRUCTION, RestoreRequest, UpdateRequest};
+use noct_core::agents::{
+    BUILD_INSTRUCTION, DOCS_INSTRUCTION, REVIEW_INSTRUCTION, RestoreRequest, UpdateRequest,
+};
 use noct_core::limits::agents::MAXIMUM_INSTRUCTION_BYTES;
 
 fn open(scratch: &Scratch) -> Persistence {
@@ -33,8 +35,8 @@ fn the_first_run_stores_the_three_defaults() {
     let views = agent_profiles::list(&guard).expect("the agents are listed");
     assert_eq!(views.len(), 3);
     assert_eq!(views[0].instruction, REVIEW_INSTRUCTION);
-    assert_eq!(views[1].instruction, CHANGE_INSTRUCTION);
-    assert_eq!(views[2].instruction, CHANGE_INSTRUCTION);
+    assert_eq!(views[1].instruction, BUILD_INSTRUCTION);
+    assert_eq!(views[2].instruction, DOCS_INSTRUCTION);
     assert!(
         guard
             .settings()

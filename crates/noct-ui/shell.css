@@ -2271,6 +2271,12 @@ button {
   color: var(--accent);
 }
 
+/* Construir and Documentar: the conversation button in the top bar has the same pressed state as the lamp. */
+.topbar-chat.is-active {
+  background: var(--sel);
+  color: var(--accent);
+}
+
 .lamp__count {
   position: absolute;
   top: 3px;

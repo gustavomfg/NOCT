@@ -11,6 +11,7 @@ use serde_json::Value;
 
 use crate::agent::AgentMode;
 use crate::ai::openrouter::validated_model_id;
+use crate::file_change::is_markdown;
 use crate::limits::agents::MAXIMUM_INSTRUCTION_BYTES;
 use crate::validation::ContractError;
 
@@ -21,9 +22,11 @@ pub const MODES: [AgentMode; 3] = [AgentMode::Review, AgentMode::Build, AgentMod
 pub const REVIEW_INSTRUCTION: &str =
     "Você responde perguntas sobre o projeto. Use o contexto abaixo e diga quando ele não bastar.";
 
-/// The instruction of Construção and Documentação: the first line of the prompt of "Gerar alteração", which is the only
-/// prompt that writes a change today.
-pub const CHANGE_INSTRUCTION: &str = "Você gera a alteração de uma sugestão aceita no projeto.";
+/// The instruction of the Construção agent, which answers the chat in Construir.
+pub const BUILD_INSTRUCTION: &str = "Você ajuda a construir o projeto. Explique o que mudar e, quando for o caso, proponha alterações pequenas, uma por arquivo, que a pessoa aprova uma a uma.";
+
+/// The instruction of the Documentação agent, which answers the chat in Documentar.
+pub const DOCS_INSTRUCTION: &str = "Você ajuda a documentar o projeto. Explique o que escrever e, quando for o caso, proponha o texto novo de arquivos Markdown, que a pessoa aprova uma a uma.";
 
 /// The name of a mode's agent. It comes from the mode, so no stored value sets it.
 pub fn name_of(mode: AgentMode) -> &'static str {
@@ -38,7 +41,47 @@ pub fn name_of(mode: AgentMode) -> &'static str {
 pub fn default_instruction(mode: AgentMode) -> &'static str {
     match mode {
         AgentMode::Review => REVIEW_INSTRUCTION,
-        AgentMode::Build | AgentMode::Docs => CHANGE_INSTRUCTION,
+        AgentMode::Build => BUILD_INSTRUCTION,
+        AgentMode::Docs => DOCS_INSTRUCTION,
+    }
+}
+
+/// What a mode may leave pending. The shell applies it wherever a change is recorded: a chat answer, or a generated
+/// change. No instruction or model is an input to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeRule {
+    /// Revisão records nothing. Its answer is text and findings.
+    NoChanges,
+    /// Construção proposes a change to any path that the shared path rules accept.
+    AnyPath,
+    /// Documentação proposes only Markdown files.
+    MarkdownOnly,
+}
+
+/// The rule of a mode.
+pub fn change_rule(mode: AgentMode) -> ChangeRule {
+    match mode {
+        AgentMode::Review => ChangeRule::NoChanges,
+        AgentMode::Build => ChangeRule::AnyPath,
+        AgentMode::Docs => ChangeRule::MarkdownOnly,
+    }
+}
+
+/// The notice of a change that Revisão would have recorded. It is never shown in practice, because Revisão records nothing.
+pub const REVIEW_NOTICE: &str = "Revisar não cria alterações: a resposta mostra texto e achados.";
+
+/// The notice of a change that Documentação refuses because its path is not Markdown.
+pub const MARKDOWN_ONLY_NOTICE: &str =
+    "Documentar só aceita alterações em arquivos Markdown (.md ou .markdown); esta foi recusada.";
+
+/// Whether the rule of `mode` accepts a change to `path`. A refusal carries the notice to show. The shared path rules are
+/// applied afterwards, by the same check for every mode.
+pub fn check_change(mode: AgentMode, path: &str) -> Result<(), &'static str> {
+    match change_rule(mode) {
+        ChangeRule::NoChanges => Err(REVIEW_NOTICE),
+        ChangeRule::AnyPath => Ok(()),
+        ChangeRule::MarkdownOnly if is_markdown(path) => Ok(()),
+        ChangeRule::MarkdownOnly => Err(MARKDOWN_ONLY_NOTICE),
     }
 }
 

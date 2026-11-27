@@ -2,8 +2,8 @@
 
 use noct_core::agent::AgentMode;
 use noct_core::agents::{
-    AgentView, Agents, CHANGE_INSTRUCTION, REVIEW_INSTRUCTION, default_instruction, name_of,
-    validated_instruction, validated_model,
+    AgentView, Agents, BUILD_INSTRUCTION, DOCS_INSTRUCTION, REVIEW_INSTRUCTION,
+    default_instruction, name_of, validated_instruction, validated_model,
 };
 use noct_core::limits::agents::MAXIMUM_INSTRUCTION_BYTES;
 
@@ -23,8 +23,8 @@ fn the_defaults_are_one_agent_per_mode_with_the_prompt_each_mode_already_had() {
     assert_eq!(views[1].name, "Construção");
     assert_eq!(views[2].name, "Documentação");
     assert_eq!(views[0].instruction, REVIEW_INSTRUCTION);
-    assert_eq!(views[1].instruction, CHANGE_INSTRUCTION);
-    assert_eq!(views[2].instruction, CHANGE_INSTRUCTION);
+    assert_eq!(views[1].instruction, BUILD_INSTRUCTION);
+    assert_eq!(views[2].instruction, DOCS_INSTRUCTION);
     assert!(views.iter().all(|view| view.model.is_none()));
 }
 
@@ -32,7 +32,8 @@ fn the_defaults_are_one_agent_per_mode_with_the_prompt_each_mode_already_had() {
 fn a_name_and_a_default_follow_the_mode_and_nothing_else() {
     assert_eq!(name_of(AgentMode::Docs), "Documentação");
     assert_eq!(default_instruction(AgentMode::Review), REVIEW_INSTRUCTION);
-    assert_eq!(default_instruction(AgentMode::Build), CHANGE_INSTRUCTION);
+    assert_eq!(default_instruction(AgentMode::Build), BUILD_INSTRUCTION);
+    assert_eq!(default_instruction(AgentMode::Docs), DOCS_INSTRUCTION);
 }
 
 #[test]
@@ -100,7 +101,7 @@ fn an_update_sets_the_instruction_and_the_model_of_its_mode_only() {
     let review = agents.get(AgentMode::Review);
     assert_eq!(review.instruction, "Responda em tópicos.");
     assert_eq!(review.model.as_deref(), Some("openai/gpt-4o"));
-    assert_eq!(agents.get(AgentMode::Build).instruction, CHANGE_INSTRUCTION);
+    assert_eq!(agents.get(AgentMode::Build).instruction, BUILD_INSTRUCTION);
     assert_eq!(agents.get(AgentMode::Build).model, None);
 }
 

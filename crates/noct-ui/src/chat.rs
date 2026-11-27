@@ -55,10 +55,13 @@ pub enum Frame {
     Delta {
         text: String,
     },
-    /// The changes the answer proposed, recorded by the shell as pending, and the blocks it refused.
+    /// The changes the answer proposed, recorded by the shell as pending, the blocks it refused, and the notice of the
+    /// mode's rule when it refused one.
     Proposed {
         changes: Vec<ProposedChange>,
         refused: usize,
+        #[serde(default)]
+        notice: Option<String>,
     },
     /// What became of the findings of the answer, sent after a complete answer whatever happened to them.
     Findings(FindingsOutcome),
@@ -162,10 +165,14 @@ pub fn parse_frame(text: &str) -> Option<Frame> {
     serde_json::from_str(text).ok()
 }
 
-/// The argument of a question: the project, the text and the channel, which the shell's command takes as `onEvent`.
-pub fn send_payload(workspace: &str, question: &str, channel: &str) -> String {
-    json!({ "input": { "workspace": workspace, "question": question }, "onEvent": channel })
-        .to_string()
+/// The argument of a question: the project, the text, the mode it is asked in, and the channel, which the shell's command
+/// takes as `onEvent`. The mode is `review`, `build` or `docs`: it picks the agent and the rule of the answer.
+pub fn send_payload(workspace: &str, question: &str, mode: &str, channel: &str) -> String {
+    json!({
+        "input": { "workspace": workspace, "question": question, "mode": mode },
+        "onEvent": channel
+    })
+    .to_string()
 }
 
 /// The argument that creates a conversation in a project.
@@ -261,8 +268,8 @@ pub struct Session {
     workspace: String,
     answer: String,
     saved: bool,
-    /// The changes the answer proposed and the blocks refused, once the shell has recorded them.
-    proposals: Option<(Vec<ProposedChange>, usize)>,
+    /// The changes the answer proposed, the blocks refused and the notice of the mode's rule, once the shell has recorded them.
+    proposals: Option<(Vec<ProposedChange>, usize, Option<String>)>,
     /// What became of the findings of the answer, once the shell has said.
     findings: Option<FindingsOutcome>,
     /// The agent that answers and its model, as the shell named them for this question.
@@ -295,7 +302,11 @@ impl Session {
                 self.answer.push_str(&text);
                 self.phase = Phase::Answering;
             }
-            Frame::Proposed { changes, refused } => self.proposals = Some((changes, refused)),
+            Frame::Proposed {
+                changes,
+                refused,
+                notice,
+            } => self.proposals = Some((changes, refused, notice)),
             Frame::Findings(outcome) => self.findings = Some(outcome),
             Frame::Done => self.phase = Phase::Done,
             Frame::Failed { code } => {
@@ -347,7 +358,7 @@ impl Session {
     }
 
     /// The changes the answer proposed, and how many blocks were refused.
-    pub fn proposals(&self) -> Option<&(Vec<ProposedChange>, usize)> {
+    pub fn proposals(&self) -> Option<&(Vec<ProposedChange>, usize, Option<String>)> {
         self.proposals.as_ref()
     }
 
@@ -404,11 +415,13 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&send_payload(
             "/projetos/app",
             "o que mudou?",
+            "build",
             "__CHANNEL__:7",
         ))
         .unwrap();
         assert_eq!(value["input"]["workspace"], "/projetos/app");
         assert_eq!(value["input"]["question"], "o que mudou?");
+        assert_eq!(value["input"]["mode"], "build");
         assert_eq!(value["onEvent"], "__CHANNEL__:7");
         assert!(
             value.get("key").is_none(),

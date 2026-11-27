@@ -7,11 +7,12 @@
 //!
 //! The reply is untrusted. An analysis is read by `noct_core::suggestion_analysis::read_reply`, and only a complete reply
 //! with a valid snapshot is stored, through the same reconciliation as `suggestions_create`. "Gerar alteração" never
-//! writes to the project: the blocks of its reply become pending changes through `provider_chat::record_proposals`, and
+//! writes to the project: the blocks of its reply become pending changes through `provider_chat::record_blocks` under the rule of Construção, and
 //! only blocks for the suggestion's affected files are kept. Each still waits for approval in Construir.
 
 use std::path::{Path, PathBuf};
 
+use noct_core::agent::AgentMode;
 use noct_core::file_change::check_relative_path;
 use noct_core::limits::suggestion_analysis::MAXIMUM_CHANGE_FILES;
 use noct_core::proposal_block::{ProposedBlocks, read_blocks};
@@ -106,6 +107,7 @@ pub fn prepare_analysis(
         ChatRequest {
             workspace: analysis.workspace.clone(),
             question: request(analysis.focus),
+            mode: AgentMode::Review,
         },
         enabled,
         None,
@@ -403,6 +405,7 @@ pub fn prepare_generate(
         ChatRequest {
             workspace: conversation.workspace,
             question: suggestion.title.clone(),
+            mode: AgentMode::Build,
         },
         enabled,
         None,

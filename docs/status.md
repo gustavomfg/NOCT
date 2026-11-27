@@ -1650,3 +1650,29 @@ The blockers before a merge, the checks on PR #23, and the rules for both produc
   `npm test` (37/37), `check:csp`, and `check:ui` (34 of 34, with the agents flow on the ready scenarios). Not checked: a real
   OpenRouter call with an agent's instruction or model, and the agent's name in the answer's header in a real window. The
   Chromium mock does not send the `agent` frame; the session test covers it.
+
+## Mode permissions in the shell, and the agents answer in their modes (2026-11-27) [security-review]
+
+- The shell applies each mode's rule when an answer records its changes. `noct_core::agents::change_rule`: Revisar records
+  nothing (`provider_chat::record_proposals` returns an empty result before it reads the blocks); Construir keeps every path
+  refusal that already existed; Documentar accepts only `noct_core::file_change::is_markdown` paths and refuses the rest with
+  `MARKDOWN_ONLY_NOTICE`. The notice reaches the window in `chat` `proposed`, as `notice`. No instruction or model is an input
+  of the rule. Three tests in `crates/noct-app/tests/mode_permissions.rs` cover one rule each.
+- The chat request names its mode (`review`, `build`, `docs`), and the shell picks that mode's agent. The answer's header shows
+  the agent's name and model. The default Revisão prompt changed: it no longer asks for `noct-change` blocks, because Revisão
+  records none. The Construção and Documentação agents have their own chat defaults, not the change-generation sentence.
+- Construir and Documentar get a conversation button in the top bar. It opens the same conversation, with the mode's agent.
+  Findings stay a Revisão feature: an answer in another mode does not save suggestions.
+- "Gerar alteração" (Sugestões, in Revisar) records its change under Construção's rule. This is a choice of this round: the
+  button still sits in Revisar, but the change it creates is an implementation step and waits in Construir. Moving the button
+  out of Revisar is a separate interface change.
+- Changed from the 2026-11-26 section: its gap "the Review chat records blocks as pending" is closed; its gap "Build and Docs
+  agents are not called" is closed; its gap "Docs `.md` only in the interface" is closed for proposals, and stays open for
+  approvals (below).
+- Known gap: the shell does not refuse the approval of a non-Markdown change inside Documentar. The shell does not store which
+  mode proposed a change, so `file_change_approve` cannot tell where the approval comes from.
+- Known gap: `file_change_propose`, the command the window could call directly, takes no mode and keeps Construção's rule. The
+  interface does not call it.
+- Checked: `noct-app/tests/mode_permissions.rs` (3), `provider_chat_flow.rs` (25, with the mode and the new default prompt),
+  `agents_flow.rs` (6), `noct-ui` native tests (89), and the Chromium check of the proposal flow (now asked in Construir, with the
+  agent's name). Not checked: a real OpenRouter call from Construir or Documentar.

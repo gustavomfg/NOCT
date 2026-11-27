@@ -211,9 +211,10 @@ const SCENARIOS = [
     chat: {
       kind: 'proposes',
       sequence: [
-        [0, delta('Sugiro:\n````noct-change path=src/x.rs\nfn x() {}\n````\n')],
-        [1, { kind: 'proposed', changes: [{ id: 'c9', path: 'src/x.rs' }], refused: 1 }],
-        [2, DONE],
+        [0, { kind: 'agent', name: 'Construção', model: 'openai/gpt-4o' }],
+        [1, delta('Sugiro:\n````noct-change path=src/x.rs\nfn x() {}\n````\n')],
+        [2, { kind: 'proposed', changes: [{ id: 'c9', path: 'src/x.rs' }], refused: 1 }],
+        [3, DONE],
       ],
     },
     expectTheme: 'light',
@@ -736,7 +737,10 @@ async function providerFlow(page, scenario, check) {
 // keeps the text so far and ignores what follows; a save keeps the answer in a conversation of the project, and only when
 // the person asks; each failure says what happened and that nothing was saved.
 async function chatFlow(page, scenario, check) {
-  await page.getByRole('button', { name: 'Revisar', exact: true }).click()
+  // A proposal comes from a question in Construir: a Revisão answer records no change, so the others ask in Revisar.
+  const asksInBuild = scenario.chat?.kind === 'proposes'
+  await page.getByRole('button', { name: asksInBuild ? 'Construir' : 'Revisar', exact: true }).click()
+  if (asksInBuild) await page.getByTestId('open-conversation').click()
   const calls = () => page.evaluate(() => window.__noctCalls ?? [])
   const question = page.locator('#chat-question')
   await question.waitFor({ timeout: 8000 })
@@ -746,7 +750,7 @@ async function chatFlow(page, scenario, check) {
   const answer = page.getByTestId('chat-answer')
   const save = page.getByTestId('chat-save')
   // Before the first question, a project with a key shows its name and four suggestions.
-  if (scenario.keyConfigured) {
+  if (scenario.keyConfigured && !asksInBuild) {
     await page.getByRole('heading', { level: 1 }).filter({ hasText: 'alpha' }).waitFor({ timeout: 8000 })
     check((await page.locator('.suggest button').count()) === 4, 'the empty conversation offers four suggestions')
   }
@@ -836,7 +840,12 @@ async function chatFlow(page, scenario, check) {
   const sent = (await calls()).find((call) => call.command === 'provider_chat_send')
   check(
     sent?.payload.input.workspace === CHAT_PROJECT && sent.payload.input.question === CHAT_QUESTION,
-    'the question names its project and its text, and nothing else',
+    'the question names its project and its text',
+  )
+  check(
+    Object.keys(sent?.payload.input ?? {}).sort().join() === 'mode,question,workspace' &&
+      sent.payload.input.mode === (asksInBuild ? 'build' : 'review'),
+    'the question names its mode, and nothing else',
   )
   check(/^__CHANNEL__:\d+$/.test(sent?.payload.onEvent ?? ''), 'the answer comes on a channel')
   check(!JSON.stringify(sent?.payload ?? {}).includes('sk-or'), 'no key is in the question')
@@ -849,6 +858,8 @@ async function chatFlow(page, scenario, check) {
     check(text.includes('1 alteração proposta') && text.includes('src/x.rs'), 'the answer names the change it proposed')
     check((await page.getByTestId('chat-proposals-refused').textContent())?.includes('1 bloco'), 'a refused block is counted')
     check((await answer.textContent())?.includes('[alteração proposta: src/x.rs]'), 'the block is shown as one line, not the whole file')
+    const named = await page.getByText('Construção · openai/gpt-4o', { exact: true }).count()
+    check(named === 1, 'the answer names the agent that gave it and its model')
     check(!((await answer.textContent()) ?? '').includes('fn x()'), 'the text of the file is not in the conversation')
     check(!(await calls()).some((call) => call.command.startsWith('file_change_')), 'nothing is approved from the conversation')
     await page.getByTestId('open-build').click()

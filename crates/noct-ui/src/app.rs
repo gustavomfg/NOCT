@@ -93,7 +93,11 @@ pub fn App() -> impl IntoView {
     // Revisar has two tabs: the conversation and the project's suggestions.
     let suggestions = suggestions_panel::SuggestionsState::new(shared);
     let review_tab = RwSignal::new(ReviewTab::Conversation);
+    // Construir and Documentar show their changes, and the conversation of the mode is one tab away.
+    let work_tab = RwSignal::new(WorkTab::Changes);
     suggestions.watch();
+    // The question is asked in the mode on screen, so its agent and its rule are that mode's.
+    Effect::new(move |_| chat.set_mode(mode_key(mode.get())));
     // The findings line under an answer opens Sugestões.
     Effect::new(move |previous: Option<u64>| {
         let count = shared.suggestions_requests.get();
@@ -105,9 +109,11 @@ pub fn App() -> impl IntoView {
         count
     });
     let in_chat = move || {
-        mode.get() == Mode::Review
-            && !settings_open.get()
-            && review_tab.get() == ReviewTab::Conversation
+        !settings_open.get()
+            && match mode.get() {
+                Mode::Review => review_tab.get() == ReviewTab::Conversation,
+                Mode::Build | Mode::Docs => work_tab.get() == WorkTab::Conversation,
+            }
     };
 
     // A change in Ajustes is saved at once, with the one setting that changed, and the area then shows the settings the
@@ -170,6 +176,7 @@ pub fn App() -> impl IntoView {
         let count = shared.build_requests.get();
         if previous.is_some_and(|previous| previous != count) {
             set_mode.set(Mode::Build);
+            work_tab.set(WorkTab::Changes);
             shared.close_settings();
         }
         count
@@ -178,6 +185,7 @@ pub fn App() -> impl IntoView {
         let count = shared.docs_requests.get();
         if previous.is_some_and(|previous| previous != count) {
             set_mode.set(Mode::Docs);
+            work_tab.set(WorkTab::Changes);
             shared.close_settings();
         }
         count
@@ -185,6 +193,7 @@ pub fn App() -> impl IntoView {
 
     let pressed = move |target: Mode| (!settings_open.get() && mode.get() == target).to_string();
     let open_mode = move |chosen: Mode| {
+        work_tab.set(WorkTab::Changes);
         set_mode.set(chosen);
         shared.close_settings();
     };
@@ -256,7 +265,7 @@ pub fn App() -> impl IntoView {
                     </div>
                     </div>
                     <div class=move || {
-                        if settings_open.get() || mode.get() != Mode::Review {
+                        if settings_open.get() {
                             "topbar__end is-hidden"
                         } else {
                             "topbar__end"
@@ -271,33 +280,60 @@ pub fn App() -> impl IntoView {
                         >
                             {pencil_icon()}
                         </button>
-                        <button
-                            class=move || {
-                                if review_tab.get() == ReviewTab::Suggestions {
-                                    "icon-btn row lamp is-active"
-                                } else {
-                                    "icon-btn row lamp"
+                        {move || (mode.get() == Mode::Review).then(|| view! {
+                            <button
+                                class=move || {
+                                    if review_tab.get() == ReviewTab::Suggestions {
+                                        "icon-btn row lamp is-active"
+                                    } else {
+                                        "icon-btn row lamp"
+                                    }
                                 }
-                            }
-                            type="button"
-                            aria-label="Sugestões"
-                            title="Sugestões"
-                            data-testid="open-suggestions"
-                            aria-pressed=move || (review_tab.get() == ReviewTab::Suggestions).to_string()
-                            on:click=move |_| review_tab.update(|tab| {
-                                *tab = if *tab == ReviewTab::Suggestions {
-                                    ReviewTab::Conversation
-                                } else {
-                                    ReviewTab::Suggestions
+                                type="button"
+                                aria-label="Sugestões"
+                                title="Sugestões"
+                                data-testid="open-suggestions"
+                                aria-pressed=move || (review_tab.get() == ReviewTab::Suggestions).to_string()
+                                on:click=move |_| review_tab.update(|tab| {
+                                    *tab = if *tab == ReviewTab::Suggestions {
+                                        ReviewTab::Conversation
+                                    } else {
+                                        ReviewTab::Suggestions
+                                    }
+                                })
+                            >
+                                {lamp_icon()}
+                                {move || suggestions.open_count().filter(|count| *count > 0).map(|count| {
+                                    let shown = if count > 99 { "99+".to_string() } else { count.to_string() };
+                                    view! { <span class="lamp__count" aria-hidden="true">{shown}</span> }
+                                })}
+                            </button>
+                        })}
+                        {move || (mode.get() != Mode::Review).then(|| view! {
+                            <button
+                                class=move || {
+                                    if work_tab.get() == WorkTab::Conversation {
+                                        "icon-btn row topbar-chat is-active"
+                                    } else {
+                                        "icon-btn row topbar-chat"
+                                    }
                                 }
-                            })
-                        >
-                            {lamp_icon()}
-                            {move || suggestions.open_count().filter(|count| *count > 0).map(|count| {
-                                let shown = if count > 99 { "99+".to_string() } else { count.to_string() };
-                                view! { <span class="lamp__count" aria-hidden="true">{shown}</span> }
-                            })}
-                        </button>
+                                type="button"
+                                aria-label="Conversa"
+                                title="Conversa"
+                                data-testid="open-conversation"
+                                aria-pressed=move || (work_tab.get() == WorkTab::Conversation).to_string()
+                                on:click=move |_| work_tab.update(|tab| {
+                                    *tab = if *tab == WorkTab::Conversation {
+                                        WorkTab::Changes
+                                    } else {
+                                        WorkTab::Conversation
+                                    }
+                                })
+                            >
+                                {chat_icon()}
+                            </button>
+                        })}
                     </div>
                 </header>
 
@@ -315,8 +351,14 @@ pub fn App() -> impl IntoView {
                                         ReviewTab::Conversation => chat_panel::thread(chat).into_any(),
                                         ReviewTab::Suggestions => suggestions_panel::panel(suggestions, context).into_any(),
                                     },
-                                    Mode::Build => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
-                                    Mode::Docs => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
+                                    Mode::Build => match work_tab.get() {
+                                        WorkTab::Conversation => chat_panel::thread(chat).into_any(),
+                                        WorkTab::Changes => changes_panel::panel(shared, changes_panel::Scope::Build).into_any(),
+                                    },
+                                    Mode::Docs => match work_tab.get() {
+                                        WorkTab::Conversation => chat_panel::thread(chat).into_any(),
+                                        WorkTab::Changes => changes_panel::panel(shared, changes_panel::Scope::Docs).into_any(),
+                                    },
                                 }
                             }
                         }}
@@ -329,6 +371,22 @@ pub fn App() -> impl IntoView {
             </div>
             {context_picker::dialog(context)}
         </div>
+    }
+}
+
+/// What Construir and Documentar show: their changes, or the conversation of the mode, which the top bar opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkTab {
+    Changes,
+    Conversation,
+}
+
+/// The mode as the shell names it in a question: the agent and the rule of the answer follow it.
+fn mode_key(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Review => "review",
+        Mode::Build => "build",
+        Mode::Docs => "docs",
     }
 }
 
@@ -361,6 +419,14 @@ fn crumb_view(shared: Shared, mode: Mode, settings_open: bool) -> AnyView {
         Mode::Docs => "Documentar",
     };
     view! { <b>{project}</b> " · " {mode_label} }.into_any()
+}
+
+fn chat_icon() -> impl IntoView {
+    view! {
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+        </svg>
+    }
 }
 
 fn pencil_icon() -> impl IntoView {

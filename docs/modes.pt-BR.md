@@ -40,13 +40,17 @@ Cada modo tem um agente, listado em Ajustes › Agentes. Um agente tem um nome q
 e um modelo. Modelo vazio significa o modelo do projeto. "Restaurar padrão" devolve o agente à instrução padrão e ao modelo do
 projeto.
 
-- O agente de Revisão responde o chat. Sua instrução padrão é a frase que o chat sempre usou. As regras que o shell acrescenta
-  depois da instrução (sem comandos, sem gravação, formato da resposta, no máximo cinco arquivos) não fazem parte dela e não
-  podem ser editadas. Como no próprio modo Revisar, uma resposta completa pode deixar alterações propostas como pendentes, para
-  a pessoa aprovar.
-- Os agentes de Construção e Documentação podem ser editados e ficam guardados, mas nenhuma chamada os usa ainda. A geração de
-  alterações continua saindo de Revisar, com o prompt próprio.
+- O agente de Revisar responde o chat em Revisar. Sua instrução padrão é a frase que o chat sempre usou. As regras que o shell
+  acrescenta depois da instrução não fazem parte dela e não podem ser editadas. Revisar nunca grava alteração: a resposta ali é
+  texto e achados, e nada fica pendente.
+- Os agentes de Construir e Documentar respondem o chat nesses modos, pelo botão de conversa da barra superior. Uma resposta
+  completa pode propor alterações; cada uma espera a aprovação da pessoa, e o shell a registra pela regra do seu modo:
+  - Construir: qualquer caminho que as regras de caminho compartilhadas aceitam.
+  - Documentar: somente arquivos Markdown (`.md` ou `.markdown`). O shell recusa qualquer outro caminho, e a resposta mostra o
+    motivo.
+- "Gerar alteração", nas sugestões de Revisar, é uma etapa de implementação: a alteração espera em Construir, sob a regra de
+  Construir. Ela não usa a instrução de um agente.
 - As permissões pertencem ao modo e o shell as aplica. Uma instrução ou um modelo não as amplia, e um agente não tem campo de
   permissão.
-- Limitação conhecida: em Documentar só aparecem alterações Markdown, e esse filtro está na interface. O shell não recusa outro
-  tipo de alteração quando ela é aprovada.
+- Limitação conhecida: aprovar uma alteração em Documentar não é recusada pelo shell quando a alteração não é Markdown. A lista
+  de Documentar mostra só Markdown, e esse filtro está na interface.

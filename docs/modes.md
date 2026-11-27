@@ -39,12 +39,16 @@ Each mode has one agent, listed in Ajustes › Agentes. An agent has a name that
 4 KiB) and a model. An empty model means the project's model. "Restaurar padrão" puts an agent back to its default instruction
 and the project's model.
 
-- The Review agent answers the chat. Its default instruction is the sentence the chat has always used. The rules the shell adds
-  after the instruction (no commands, no writes, the answer format, at most five files) are not part of it and cannot be edited.
-  As in Review Mode itself, a complete answer may leave its proposed changes as pending, for the person to approve.
-- The Build and Docs agents can be edited and are stored, but no call uses them yet. Change generation still runs from Review,
-  with its own prompt.
+- Revisar's agent answers the chat in Revisar. Its default instruction is the sentence the chat has always used. The rules the
+  shell adds after the instruction are not part of it and cannot be edited. Revisar never records a change: an answer there is
+  text and findings, and nothing becomes pending.
+- Construir's and Documentar's agents answer the chat in those modes, from the conversation button in the top bar. A complete
+  answer may propose changes; each one waits for the person's approval, and the shell records it under the rule of its mode:
+  - Construir: any path that the shared path rules accept.
+  - Documentar: Markdown files only (`.md` or `.markdown`). The shell refuses any other path, and the answer shows why.
+- "Gerar alteração", in the suggestions of Revisar, is an implementation step: its change waits in Construir under Construir's
+  rule. It does not use an agent's instruction.
 - Permissions belong to the mode and the shell enforces them. An instruction or a model cannot widen them, and an agent has no
   field for permissions.
-- Known gap: in Docs only Markdown changes are listed, and this filter is in the interface. The shell does not refuse another
-  kind of change when it is approved.
+- Known gap: approving a change in Documentar is not refused by the shell when the change is not Markdown. The list in
+  Documentar shows Markdown only, and that filter is in the interface.
