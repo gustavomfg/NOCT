@@ -16,7 +16,9 @@ O renderer mede:
 - contagens agregadas de renderização para o shell, chat, composer, container do
   agent inspector e superfície de atividades.
 
-Os orçamentos de referência ficam em `shared/constants.ts`:
+Os orçamentos de referência ficam em `noct_core::limits::renderer_performance_budgets`
+(`crates/noct-core/src/limits.rs`). O teste `constants_parity` os compara com o fixture
+`crates/noct-core/tests/fixtures/ts-reference/constants.ts.txt`:
 
 - inicialização: 5 segundos;
 - abertura de conversa: 2 segundos;
